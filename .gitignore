@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+.pnpm-store/
+dist/
+.next/
+coverage/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+prisma/migrations/*/migration_lock.toml

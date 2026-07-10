@@ -1,0 +1,44 @@
+name: Pull request
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: meditation
+          POSTGRES_USER: meditation
+          POSTGRES_PASSWORD: meditation
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U meditation -d meditation"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://meditation:meditation@localhost:5432/meditation?schema=public
+      NODE_ENV: test
+      CLOCK_MODE: fake
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444
+        with:
+          node-version: 22.12.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm check
+      - run: pnpm --filter @meditation/database exec prisma migrate deploy

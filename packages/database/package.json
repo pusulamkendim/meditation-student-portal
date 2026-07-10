@@ -1,0 +1,17 @@
+{
+  "name": "@meditation/database",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "typecheck": "DATABASE_URL=${DATABASE_URL:-postgresql://meditation:meditation@localhost:5432/meditation?schema=public} prisma validate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.19.0",
+    "typescript": "^5.9.3"
+  }
+}
