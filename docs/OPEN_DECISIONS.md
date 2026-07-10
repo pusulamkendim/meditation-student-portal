@@ -603,6 +603,9 @@ Kabul edilenler:
 - Coolify deployment lifecycle ve runtime health'ten, GitHub Actions kalite kapıları,
   image üretimi ve deploy tetiklemesinden sorumlu olacak.
 - Staging ve production ayrı GitHub Environments, secret ve protection rule kullanacak.
+- Her environment `COOLIFY_WEBHOOK` ve yalnızca `deploy` yetkili `COOLIFY_TOKEN`
+  secret'larını taşıyacak; eksik/HTTPS olmayan değer veya başarısız HTTP çağrısı
+  release'i fail-closed durduracak.
 - Production deploy başarılı CI, korumalı branch/tag ve manuel reviewer onayı gerektirecek.
 - Third-party action sürümleri commit SHA ile sabitlenecek; fork PR'larına deployment
   secret'ları açılmayacak.

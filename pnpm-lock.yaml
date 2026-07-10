@@ -103,9 +103,6 @@ importers:
       '@meditation/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@meditation/testing':
-        specifier: workspace:*
-        version: link:../../packages/testing
       pino:
         specifier: ^9.9.5
         version: 9.14.0

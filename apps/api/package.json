@@ -8,7 +8,7 @@
     "dev": "pnpm --filter @meditation/core build && tsx watch src/main.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run --config ../../vitest.config.ts"
   },
   "dependencies": {
     "@meditation/core": "workspace:*",

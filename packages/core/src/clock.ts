@@ -2,6 +2,8 @@ export interface Clock {
   now(): Date;
 }
 
+export const CLOCK_TOKEN = Symbol('CLOCK_TOKEN');
+
 export class SystemClock implements Clock {
   now(): Date {
     return new Date();

@@ -1514,9 +1514,9 @@ interface Clock {
   ilerletir, zamanı gelen dispatcher/handler'ı doğrudan çalıştırır ve test queue işlerini
   beklemeden tüketir. Gerçek gecikmeli job davranışı yalnızca küçük bir adapter smoke
   testiyle doğrulanır.
-- API ve worker içeren E2E test ortamı aynı test clock kaynağını kullanır. Fake clock
-  kontrolü yalnızca test build/config'inde bulunur; staging veya production fake clock
-  ile başlatılırsa süreç startup failure verir.
+- API ve worker içeren E2E test ortamı aynı test clock kaynağını dependency injection
+  ile kullanır. Runtime config/environment üzerinden clock implementasyonu seçilemez;
+  uygulama bootstrap'ı `SystemClock`, test harness'i doğrudan `FakeClock` kaydeder.
 - Testler wall-clock sleep ile dakika/saat beklemez. Domain paketlerinde doğrudan sistem
   saati kullanımı lint/static check ile engellenir; process timezone'u sabitlenir ve
   iş timezone'u her testte açık IANA değeri olarak verilir.
@@ -1575,9 +1575,12 @@ Release pipeline:
 10. Gerekirse webhook cutover
 
 Staging ve production GitHub Environments ayrı secret, reviewer ve protection rule
-kullanır. Fork PR'larına secret verilmez. Production deploy yalnızca korumalı ana
-branch/tag'den, başarılı CI sonrasında ve manuel onayla çalışır. Coolify token'ı
-environment secret'tır; log, artifact veya image katmanına yazılmaz.
+kullanır. Her environment `COOLIFY_WEBHOOK` ve yalnızca `deploy` yetkili
+`COOLIFY_TOKEN` secret'larını taşır. Workflow boş secret, HTTPS olmayan webhook veya
+başarısız HTTP cevabında fail-closed durur. Fork PR'larına secret verilmez. Production
+deploy yalnızca korumalı ana branch/tag'den, başarılı CI ve staging tetiklemesinden
+sonra manuel environment onayıyla çalışır. Coolify token'ı log, artifact veya image
+katmanına yazılmaz.
 
 Migration başarısızsa yeni uygulama başlamaz. Destructive migration iki aşamalı
 expand/migrate/contract yaklaşımıyla yapılır.

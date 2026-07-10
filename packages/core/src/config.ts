@@ -1,4 +1,6 @@
 import { existsSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
@@ -13,23 +15,23 @@ export const applicationConfigSchema = z.object({
   DATABASE_URL: z.string().url(),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   DEFAULT_LOCALE: z.string().default('tr-TR'),
-  CLOCK_MODE: z.enum(['system', 'fake']).default('system'),
   ALLOWED_RECIPIENTS: z.string().default(''),
   ENABLE_EXPERIMENTAL_FEATURES: booleanFromEnvironment,
 });
 
 export type ApplicationConfig = z.infer<typeof applicationConfigSchema>;
 
+export function resolveMonorepoEnvPath(moduleUrl: string = import.meta.url): string {
+  return resolve(dirname(fileURLToPath(moduleUrl)), '../../..', '.env');
+}
+
 export function loadApplicationConfig(
   environment: NodeJS.ProcessEnv = process.env,
 ): ApplicationConfig {
-  if (environment === process.env && existsSync('.env')) {
-    process.loadEnvFile('.env');
+  const rootEnvPath = resolveMonorepoEnvPath();
+  if (environment === process.env && existsSync(rootEnvPath)) {
+    process.loadEnvFile(rootEnvPath);
   }
 
-  const config = applicationConfigSchema.parse(environment);
-  if (config.CLOCK_MODE === 'fake' && config.NODE_ENV !== 'test') {
-    throw new Error('CLOCK_MODE=fake is allowed only in the test environment.');
-  }
-  return config;
+  return applicationConfigSchema.parse(environment);
 }

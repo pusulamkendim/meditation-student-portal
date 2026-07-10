@@ -9,7 +9,6 @@ export default tseslint.config(
   prettier,
   {
     files: ['packages/core/src/**/*.ts', 'apps/*/src/**/*.ts'],
-    ignores: ['packages/core/src/clock.ts'],
     rules: {
       'no-restricted-properties': [
         'error',

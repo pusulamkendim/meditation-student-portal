@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -20,5 +20,56 @@ jobs:
           node-version: 22.12.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm check
       - run: pnpm build
-      - run: echo "Coolify deploy trigger will be added with production credentials."
+
+  deploy-staging:
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Validate Coolify staging secrets
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+        run: |
+          test -n "$COOLIFY_TOKEN" || { echo '::error::staging COOLIFY_TOKEN is missing'; exit 1; }
+          test -n "$COOLIFY_WEBHOOK" || { echo '::error::staging COOLIFY_WEBHOOK is missing'; exit 1; }
+          case "$COOLIFY_WEBHOOK" in
+            https://*) ;;
+            *) echo '::error::staging COOLIFY_WEBHOOK must use HTTPS'; exit 1 ;;
+          esac
+      - name: Trigger Coolify staging deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+        run: >-
+          curl --fail-with-body --silent --show-error
+          --request GET "$COOLIFY_WEBHOOK"
+          --header "Authorization: Bearer $COOLIFY_TOKEN"
+
+  deploy-production:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate Coolify production secrets
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+        run: |
+          test -n "$COOLIFY_TOKEN" || { echo '::error::production COOLIFY_TOKEN is missing'; exit 1; }
+          test -n "$COOLIFY_WEBHOOK" || { echo '::error::production COOLIFY_WEBHOOK is missing'; exit 1; }
+          case "$COOLIFY_WEBHOOK" in
+            https://*) ;;
+            *) echo '::error::production COOLIFY_WEBHOOK must use HTTPS'; exit 1 ;;
+          esac
+      - name: Trigger Coolify production deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+        run: >-
+          curl --fail-with-body --silent --show-error
+          --request GET "$COOLIFY_WEBHOOK"
+          --header "Authorization: Bearer $COOLIFY_TOKEN"
