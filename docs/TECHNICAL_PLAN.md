@@ -1659,6 +1659,10 @@ invariant'ları ve transaction içindeki outbox testleri geçer.
 
 ### M2 - System Events ve Standart Mesajlar
 
+**Durum:** Tamamlandı - 11 Temmuz 2026. Event registry, locale/template
+contract testleri, katalog migration'ı, atomik response owner/message intent/outbox
+orkestrasyonu ve fake kanal idempotency testi doğrulandı.
+
 - Code-seeded system event registry
 - Mesaj tanımı, kanal varyantı, sürüm ve provider binding modeli
 - BCP 47 locale çözümleme ve fallback kontrolleri

@@ -12,3 +12,4 @@ export class FakeChannelAdapter {
     return { providerMessageId: `fake-${this.sentMessages.length}` };
   }
 }
+export * from './fake-channel-adapter.js';

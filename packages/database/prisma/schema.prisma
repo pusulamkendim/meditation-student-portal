@@ -141,7 +141,34 @@ enum OutboxStatus {
 enum NotificationChannel {
   EMAIL
   WHATSAPP
+  TELEGRAM
   ADMIN_PANEL
+}
+
+enum MessageAudience {
+  STUDENT
+  ADMIN
+}
+
+enum StandardMessageVersionStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ProviderTemplateStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  PAUSED
+}
+
+enum ResponseOwner {
+  SYSTEM_STANDARD_MESSAGE
+  AGENT_CONTEXTUAL
+  ADMIN_HANDOFF
+  NO_REPLY
 }
 
 model SystemSetting {
@@ -493,6 +520,127 @@ model MessageIntent {
 
   @@index([status, dueAt])
   @@map("message_intents")
+}
+
+model SystemEventDefinition {
+  key               String          @id
+  audience          MessageAudience
+  channels          Json
+  variableSchema    Json            @map("variable_schema")
+  complianceClass   String          @map("compliance_class")
+  protected         Boolean         @default(false)
+  defaultTtlSeconds Int             @map("default_ttl_seconds")
+  registryVersion   Int             @default(1) @map("registry_version")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+
+  messages    StandardMessage[]
+  occurrences SystemEventOccurrence[]
+
+  @@map("system_event_definitions")
+}
+
+model StandardMessage {
+  id        String          @id @default(uuid()) @db.Uuid
+  eventKey  String          @map("event_key")
+  name      String
+  audience  MessageAudience
+  protected Boolean         @default(false)
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  event    SystemEventDefinition    @relation(fields: [eventKey], references: [key], onDelete: Restrict)
+  variants StandardMessageVariant[]
+
+  @@unique([eventKey, name])
+  @@index([eventKey, audience])
+  @@map("standard_messages")
+}
+
+model StandardMessageVariant {
+  id                String              @id @default(uuid()) @db.Uuid
+  standardMessageId String              @map("standard_message_id") @db.Uuid
+  channel           NotificationChannel
+  locale            String
+  curriculumStage   CurriculumStage?    @map("curriculum_stage")
+  slot              String?
+  requiresStudentName Boolean           @default(false) @map("requires_student_name")
+  priority          Int                 @default(0)
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  standardMessage StandardMessage          @relation(fields: [standardMessageId], references: [id], onDelete: Cascade)
+  versions        StandardMessageVersion[]
+  providerBinding ProviderTemplateBinding?
+
+  @@unique([standardMessageId, channel, locale, curriculumStage, slot, requiresStudentName, priority])
+  @@index([channel, locale, curriculumStage, slot])
+  @@map("standard_message_variants")
+}
+
+model StandardMessageVersion {
+  id               String                       @id @default(uuid()) @db.Uuid
+  variantId        String                       @map("variant_id") @db.Uuid
+  version          Int
+  content          String
+  placeholders     Json
+  status           StandardMessageVersionStatus @default(DRAFT)
+  expertApproved   Boolean                      @default(false) @map("expert_approved")
+  effectiveAt      DateTime?                    @map("effective_at")
+  publishedAt      DateTime?                    @map("published_at")
+  archivedAt       DateTime?                    @map("archived_at")
+  createdByAdminId String?                      @map("created_by_admin_id") @db.Uuid
+  createdAt        DateTime                     @default(now()) @map("created_at")
+
+  variant StandardMessageVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, version])
+  @@index([variantId, status, effectiveAt])
+  @@map("standard_message_versions")
+}
+
+model ProviderTemplateBinding {
+  id              String                 @id @default(uuid()) @db.Uuid
+  variantId       String                 @unique @map("variant_id") @db.Uuid
+  templateName    String                 @map("template_name")
+  providerLocale  String                 @map("provider_locale")
+  category        String
+  status          ProviderTemplateStatus
+  providerVersion String?                @map("provider_version")
+  lastSyncedAt    DateTime?              @map("last_synced_at")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  variant StandardMessageVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@map("provider_template_bindings")
+}
+
+model SystemEventOccurrence {
+  id               String   @id @default(uuid()) @db.Uuid
+  eventKey         String   @map("event_key")
+  studentId        String?  @map("student_id") @db.Uuid
+  inboundMessageId String?  @unique @map("inbound_message_id") @db.Uuid
+  idempotencyKey   String   @unique @map("idempotency_key")
+  variables        Json
+  occurredAt       DateTime @map("occurred_at")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  event SystemEventDefinition @relation(fields: [eventKey], references: [key], onDelete: Restrict)
+
+  @@index([eventKey, occurredAt])
+  @@index([studentId, occurredAt])
+  @@map("system_event_occurrences")
+}
+
+model InboundResponseOwnership {
+  id               String        @id @default(uuid()) @db.Uuid
+  inboundMessageId String        @unique @map("inbound_message_id") @db.Uuid
+  owner            ResponseOwner
+  referenceId      String?       @map("reference_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at")
+
+  @@map("inbound_response_ownership")
 }
 
 model InboxEvent {

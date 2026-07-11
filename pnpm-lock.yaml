@@ -185,6 +185,10 @@ importers:
   packages/design-tokens: {}
 
   packages/testing:
+    dependencies:
+      '@meditation/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@types/node':
         specifier: ^22.15.3
@@ -192,6 +196,9 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.1)(jiti@2.7.0)(tsx@4.23.0)
 
   packages/ui:
     dependencies:

@@ -4,10 +4,17 @@ import { AuthModule } from './auth/auth.module.js';
 import { ApplicationConfigModule } from './config/application-config.module.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health.controller.js';
+import { MessageCatalogModule } from './message-catalog/message-catalog.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 
 @Module({
-  imports: [ApplicationConfigModule, DatabaseModule, AuthModule, NotificationsModule],
+  imports: [
+    ApplicationConfigModule,
+    DatabaseModule,
+    AuthModule,
+    NotificationsModule,
+    MessageCatalogModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

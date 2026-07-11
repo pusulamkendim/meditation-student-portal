@@ -10,6 +10,7 @@ import {
 import { AdminAuthController } from './admin-auth.controller.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminDashboardController } from './admin-dashboard.controller.js';
+import { AdminCsrfGuard } from './admin-csrf.guard.js';
 import { AdminSessionGuard } from './admin-session.guard.js';
 import { FIELD_ENCRYPTION, SESSION_HMAC } from './auth.constants.js';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
@@ -25,6 +26,7 @@ function parseEncryptionKeys(serialized: string | undefined): Map<string, Buffer
   providers: [
     AdminAuthService,
     AdminSessionGuard,
+    AdminCsrfGuard,
     { provide: CLOCK_TOKEN, useClass: SystemClock },
     {
       provide: FIELD_ENCRYPTION,
@@ -48,6 +50,6 @@ function parseEncryptionKeys(serialized: string | undefined): Map<string, Buffer
       inject: [APPLICATION_CONFIG],
     },
   ],
-  exports: [AdminAuthService, AdminSessionGuard],
+  exports: [AdminAuthService, AdminSessionGuard, AdminCsrfGuard],
 })
 export class AuthModule {}
