@@ -1677,6 +1677,12 @@ bir LLM cevabı oluşmaz.
 
 ### M3 - Kanallar ve Konuşmalar
 
+**Durum:** Tamamlandı - 11 Temmuz 2026. WhatsApp/Telegram webhook güvenliği,
+kalıcı dedupe, kanal link/default akışı, monotonic delivery, merkezi send-policy,
+öğrenci advisory lock, outbox relay/provider adapterları ve admin konuşma yüzeyi
+uygulandı; unit, PostgreSQL entegrasyon ve üç uygulamanın production build
+kontrolleri geçti.
+
 - Raw-body webhook signature, message/delivery dedupe ve monotonic reconciliation
 - Telegram secret webhook, update dedupe, private-chat filtresi ve send adapter
 - Kanal kimliği, tek kullanımlı link ve default-channel resolution
@@ -1690,6 +1696,11 @@ admin/sistem mesajında zorunlu template uygulanır. Bir inbound en fazla bir
 response owner ve tek kullanıcı cevabı üretir.
 
 ### M4 - Kayıt, Rıza, Ödeme ve Paket
+
+**Durum:** Tamamlandı - 11 Temmuz 2026. Deterministik kayıt ve rıza ledger'ı,
+şifreli ad, IBAN/referans, dekont retention, ödeme review/onay, atomik bir aylık
+paket+dört credit, ileri tarih aktivasyonu, yenileme ve bitiş worker'ı uygulandı;
+unit, PostgreSQL entegrasyon ve production build kontrolleri geçti.
 
 - Deterministic kayıt state machine
 - Aydınlatma ve kapsam bazlı rızalar

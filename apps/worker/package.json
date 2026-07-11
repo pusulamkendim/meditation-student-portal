@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@meditation/core": "workspace:*",
+    "@meditation/database": "workspace:*",
     "pg-boss": "^12.25.1",
     "pino": "^9.9.5"
   },

@@ -31,7 +31,7 @@ export interface SystemMessageCommand {
 @Injectable()
 export class SystemMessageOrchestrator {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CLOCK_TOKEN) private readonly clock: Clock,
   ) {}
 

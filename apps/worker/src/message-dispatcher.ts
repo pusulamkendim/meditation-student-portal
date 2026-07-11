@@ -1,0 +1,136 @@
+import {
+  FieldEncryption,
+  TelegramBotAdapter,
+  WhatsAppCloudAdapter,
+  evaluateSendPolicy,
+  type ApplicationConfig,
+  type ChannelAdapter,
+  type Clock,
+} from '@meditation/core';
+import {
+  ChannelType,
+  MessageIntentStatus,
+  PrismaClient,
+  StudentStatus,
+} from '@meditation/database';
+
+export class MessageDispatcher {
+  private readonly encryption: FieldEncryption;
+  constructor(
+    private readonly prisma: PrismaClient,
+    private readonly clock: Clock,
+    private readonly config: ApplicationConfig,
+    private readonly adapters: Partial<Record<ChannelType, ChannelAdapter>>,
+  ) {
+    if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID) {
+      throw new Error('Worker encryption keys are required.');
+    }
+    const keys = JSON.parse(config.DATA_ENCRYPTION_KEYS_JSON) as Record<string, string>;
+    this.encryption = new FieldEncryption(
+      new Map(Object.entries(keys).map(([id, key]) => [id, Buffer.from(key, 'base64')])),
+      config.ACTIVE_DATA_KEY_ID,
+    );
+  }
+
+  async dispatch(intentId: string): Promise<void> {
+    const claimed = await this.prisma.$transaction(async (tx) => {
+      const intent = await tx.messageIntent.findUnique({
+        where: { id: intentId },
+        include: {
+          student: { include: { messagingPreference: true } },
+          channelIdentity: { include: { channelAccount: true } },
+        },
+      });
+      if (!intent || intent.status !== MessageIntentStatus.PENDING) return null;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${intent.studentId}))`;
+      const payload = intent.payload as Record<string, unknown>;
+      const decision = evaluateSendPolicy(
+        {
+          dueAt: intent.dueAt,
+          expiresAt: intent.expiresAt,
+          studentActive: intent.student.status === StudentStatus.ACTIVE,
+          messagingEnabled:
+            intent.student.messagingPreference?.proactiveEnabled !== false &&
+            !intent.student.messagingPreference?.pausedAt,
+          identityActive: intent.channelIdentity.status === 'ACTIVE',
+          channel: intent.channelIdentity.channelAccount.type,
+          lastInboundAt: intent.channelIdentity.lastInboundAt ?? undefined,
+          approvedTemplate: typeof payload.providerTemplateName === 'string',
+          aggregateVersionMatches: intent.aggregateVersion === intent.student.version,
+        },
+        this.clock,
+      );
+      if (!decision.allowed) {
+        await tx.messageIntent.update({
+          where: { id: intent.id },
+          data: { status: MessageIntentStatus.SUPPRESSED, suppressionReason: decision.reason },
+        });
+        return null;
+      }
+      const changed = await tx.messageIntent.updateMany({
+        where: { id: intent.id, status: MessageIntentStatus.PENDING },
+        data: { status: MessageIntentStatus.CLAIMED },
+      });
+      return changed.count === 1 ? intent : null;
+    });
+    if (!claimed) return;
+
+    const payload = claimed.payload as Record<string, unknown>;
+    const recipient = this.encryption.decrypt(
+      {
+        ciphertext: Buffer.from(claimed.channelIdentity.externalUserEncrypted),
+        keyId: claimed.channelIdentity.externalUserKeyId,
+      },
+      `channel:${claimed.channelIdentity.channelAccountId}`,
+    );
+    const content =
+      typeof payload.rendered === 'string'
+        ? payload.rendered
+        : this.encryption.decrypt(
+            {
+              ciphertext: Buffer.from(String(payload.contentEncrypted), 'base64'),
+              keyId: String(payload.contentKeyId),
+            },
+            `admin-reply:${claimed.studentId}`,
+          );
+    const adapter = this.adapters[claimed.channelIdentity.channelAccount.type];
+    if (!adapter) throw new Error('Channel adapter is unavailable.');
+    try {
+      const result = await adapter.send({
+        intentId: claimed.id,
+        recipient,
+        content,
+        locale: claimed.student.preferredLocale,
+        idempotencyKey: claimed.idempotencyKey,
+      });
+      await this.prisma.messageIntent.update({
+        where: { id: claimed.id },
+        data: { status: MessageIntentStatus.SENT, providerMessageId: result.providerMessageId },
+      });
+    } catch (error) {
+      await this.prisma.messageIntent.update({
+        where: { id: claimed.id },
+        data: {
+          status:
+            error instanceof TypeError
+              ? MessageIntentStatus.DELIVERY_UNKNOWN
+              : MessageIntentStatus.FAILED,
+        },
+      });
+      throw error;
+    }
+  }
+}
+
+export function createChannelAdapters(config: ApplicationConfig) {
+  const adapters: Partial<Record<ChannelType, ChannelAdapter>> = {};
+  if (config.WHATSAPP_ACCESS_TOKEN && config.WHATSAPP_PHONE_NUMBER_ID) {
+    adapters.WHATSAPP = new WhatsAppCloudAdapter(
+      config.WHATSAPP_ACCESS_TOKEN,
+      config.WHATSAPP_PHONE_NUMBER_ID,
+    );
+  }
+  if (config.TELEGRAM_BOT_TOKEN)
+    adapters.TELEGRAM = new TelegramBotAdapter(config.TELEGRAM_BOT_TOKEN);
+  return adapters;
+}

@@ -42,7 +42,7 @@ const stepUpSchema = z.object({ totpCode: z.string().regex(/^\d{6}$/) });
 @Controller('v1/admin/auth')
 export class AdminAuthController {
   constructor(
-    private readonly auth: AdminAuthService,
+    @Inject(AdminAuthService) private readonly auth: AdminAuthService,
     @Inject(APPLICATION_CONFIG) private readonly config: ApplicationConfig,
   ) {}
 

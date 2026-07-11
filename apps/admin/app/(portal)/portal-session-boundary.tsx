@@ -6,9 +6,14 @@ const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 export function PortalSessionBoundary({ children }: Readonly<{ children: ReactNode }>) {
   const [authenticated, setAuthenticated] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
+    const timeout = window.setTimeout(() => {
+      setTimedOut(true);
+      controller.abort();
+    }, 8000);
     void fetch(`${apiUrl}/v1/admin/auth/me`, {
       credentials: 'include',
       cache: 'no-store',
@@ -23,9 +28,21 @@ export function PortalSessionBoundary({ children }: Readonly<{ children: ReactNo
           window.location.replace('/login');
         }
       });
-    return () => controller.abort();
+    return () => {
+      window.clearTimeout(timeout);
+      controller.abort();
+    };
   }, []);
 
-  if (!authenticated) return <main className="session-loading">Oturum doğrulanıyor...</main>;
+  if (!authenticated)
+    return (
+      <main className="session-loading">
+        {timedOut ? (
+          <a href="/login">Oturum açılamadı. Giriş sayfasına dön.</a>
+        ) : (
+          'Oturum doğrulanıyor...'
+        )}
+      </main>
+    );
   return children;
 }

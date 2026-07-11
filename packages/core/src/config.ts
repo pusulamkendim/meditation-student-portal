@@ -18,6 +18,30 @@ const optionalConfigValue = z.preprocess(
   (value) => (value === '' ? undefined : value),
   z.string().min(1).optional(),
 );
+const encryptionKeysConfig = z.preprocess(
+  (value) => {
+    if (value === '' || value === undefined) return undefined;
+    if (typeof value !== 'string') return value;
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
+      for (const entry of Object.values(parsed)) {
+        if (typeof entry !== 'string' || Buffer.from(entry, 'base64').length !== 32)
+          throw new Error();
+      }
+      return value;
+    } catch {
+      return '__INVALID_ENCRYPTION_KEYS_JSON__';
+    }
+  },
+  z
+    .string()
+    .refine(
+      (value) => value !== '__INVALID_ENCRYPTION_KEYS_JSON__',
+      'Must be a JSON object of base64-encoded 32-byte keys.',
+    )
+    .optional(),
+);
 
 export const applicationConfigSchema = z
   .object({
@@ -30,13 +54,24 @@ export const applicationConfigSchema = z
     ALLOWED_RECIPIENTS: z.string().default(''),
     ENABLE_EXPERIMENTAL_FEATURES: booleanFromEnvironment,
     QUEUE_SMOKE_JOB: booleanFromEnvironment,
-    DATA_ENCRYPTION_KEYS_JSON: optionalSecret,
+    DATA_ENCRYPTION_KEYS_JSON: encryptionKeysConfig,
     ACTIVE_DATA_KEY_ID: optionalConfigValue,
     LOOKUP_HMAC_KEY: optionalSecret,
     ADMIN_SESSION_HMAC_KEY: optionalSecret,
     AWS_SES_REGION: z.string().default('eu-central-1'),
     ADMIN_EMAIL_FROM: z.string().email().optional(),
     ADMIN_ALERT_EMAIL: z.string().email().optional(),
+    WHATSAPP_VERIFY_TOKEN: optionalConfigValue,
+    WHATSAPP_APP_SECRET: optionalSecret,
+    WHATSAPP_ACCESS_TOKEN: optionalConfigValue,
+    WHATSAPP_PHONE_NUMBER_ID: optionalConfigValue,
+    TELEGRAM_BOT_TOKEN: optionalConfigValue,
+    TELEGRAM_WEBHOOK_SECRET: optionalSecret,
+    TELEGRAM_ACCOUNT_ID: z.string().default('default'),
+    WEBHOOK_BODY_LIMIT_BYTES: z.coerce.number().int().positive().max(1048576).default(262144),
+    PAYMENT_IBAN: optionalConfigValue,
+    PAYMENT_ACCOUNT_HOLDER: optionalConfigValue,
+    INTERNAL_COMMAND_SECRET: optionalSecret,
   })
   .superRefine((config, context) => {
     if (config.NODE_ENV !== 'staging' && config.NODE_ENV !== 'production') return;
@@ -49,6 +84,15 @@ export const applicationConfigSchema = z
       'ADMIN_ORIGIN',
       'ADMIN_EMAIL_FROM',
       'ADMIN_ALERT_EMAIL',
+      'WHATSAPP_VERIFY_TOKEN',
+      'WHATSAPP_APP_SECRET',
+      'WHATSAPP_ACCESS_TOKEN',
+      'WHATSAPP_PHONE_NUMBER_ID',
+      'TELEGRAM_BOT_TOKEN',
+      'TELEGRAM_WEBHOOK_SECRET',
+      'PAYMENT_IBAN',
+      'PAYMENT_ACCOUNT_HOLDER',
+      'INTERNAL_COMMAND_SECRET',
     ] as const) {
       if (!config[key]) {
         context.addIssue({

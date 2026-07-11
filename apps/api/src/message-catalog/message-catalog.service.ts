@@ -27,7 +27,7 @@ import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 @Injectable()
 export class MessageCatalogService implements OnModuleInit {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(APPLICATION_CONFIG) private readonly config: ApplicationConfig,
     @Inject(CLOCK_TOKEN) private readonly clock: Clock,
   ) {}

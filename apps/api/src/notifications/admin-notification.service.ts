@@ -12,7 +12,7 @@ import {
 @Injectable()
 export class AdminNotificationService {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ADMIN_EMAIL_ADAPTER) private readonly email: AdminEmailAdapter,
     @Inject(CLOCK_TOKEN) private readonly clock: Clock,
   ) {}

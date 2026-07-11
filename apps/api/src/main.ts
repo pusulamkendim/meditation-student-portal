@@ -10,8 +10,8 @@ async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: false }),
-    { bufferLogs: true },
+    new FastifyAdapter({ logger: false, bodyLimit: config.WEBHOOK_BODY_LIMIT_BYTES }),
+    { bufferLogs: true, rawBody: true },
   );
   await app.register(cookie);
   app.enableCors({

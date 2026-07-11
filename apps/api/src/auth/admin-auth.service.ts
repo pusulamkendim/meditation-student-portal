@@ -47,7 +47,7 @@ export interface BootstrapResult {
 @Injectable()
 export class AdminAuthService {
   constructor(
-    private readonly prisma: PrismaService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CLOCK_TOKEN) private readonly clock: Clock,
     @Inject(FIELD_ENCRYPTION) private readonly encryption: FieldEncryption,
     @Inject(SESSION_HMAC) private readonly sessionHmac: LookupHmac,

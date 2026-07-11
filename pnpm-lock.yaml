@@ -127,6 +127,9 @@ importers:
       '@meditation/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@meditation/database':
+        specifier: workspace:*
+        version: link:../../packages/database
       pg-boss:
         specifier: ^12.25.1
         version: 12.25.1

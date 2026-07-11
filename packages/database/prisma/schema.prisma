@@ -17,6 +17,17 @@ enum StudentStatus {
   DELETED
 }
 
+enum RegistrationStep {
+  STARTED
+  PRIVACY_NOTICE
+  CHANNEL_OPT_IN
+  AI_PREFERENCE
+  NAME
+  PAYMENT_INSTRUCTIONS
+  PAYMENT_REVIEW
+  COMPLETE
+}
+
 enum CurriculumStage {
   WEEK_1
   WEEK_2
@@ -183,6 +194,7 @@ model SystemSetting {
 model Student {
   id                       String          @id @default(uuid()) @db.Uuid
   status                   StudentStatus   @default(LEAD)
+  registrationStep         RegistrationStep @default(STARTED) @map("registration_step")
   fullNameEncrypted        Bytes?          @map("full_name_encrypted")
   fullNameKeyId            String?         @map("full_name_key_id")
   phoneEncrypted           Bytes?          @map("phone_encrypted")
@@ -211,6 +223,7 @@ model Student {
   messages               Message[]
   messageIntents         MessageIntent[]
   inboxEvents            InboxEvent[]
+  channelLinkTokens      ChannelLinkToken[]
 
   @@index([status])
   @@map("students")
@@ -301,6 +314,7 @@ model StudentChannelIdentity {
   externalUserHmac      String                @map("external_user_hmac")
   status                ChannelIdentityStatus @default(PENDING)
   verifiedAt            DateTime?             @map("verified_at")
+  lastInboundAt         DateTime?             @map("last_inbound_at")
   createdAt             DateTime              @default(now()) @map("created_at")
   updatedAt             DateTime              @updatedAt @map("updated_at")
 
@@ -315,6 +329,34 @@ model StudentChannelIdentity {
   @@map("student_channel_identities")
 }
 
+model ChannelLinkToken {
+  id          String      @id @default(uuid()) @db.Uuid
+  studentId   String      @map("student_id") @db.Uuid
+  channel     ChannelType
+  tokenHash   String      @unique @map("token_hash")
+  expiresAt   DateTime    @map("expires_at")
+  usedAt      DateTime?   @map("used_at")
+  revokedAt   DateTime?   @map("revoked_at")
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  @@index([studentId, expiresAt])
+  @@map("channel_link_tokens")
+}
+
+model MessageDeliveryEvent {
+  id                String        @id @default(uuid()) @db.Uuid
+  channel           ChannelType
+  externalMessageId String        @map("external_message_id")
+  status            MessageStatus
+  providerTimestamp DateTime      @map("provider_timestamp")
+  payloadHash       String        @map("payload_hash")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  @@unique([channel, externalMessageId, status, providerTimestamp, payloadHash])
+  @@index([externalMessageId, providerTimestamp])
+  @@map("message_delivery_events")
+}
+
 model Payment {
   id                    String        @id @default(uuid()) @db.Uuid
   studentId             String        @map("student_id") @db.Uuid
@@ -324,6 +366,7 @@ model Payment {
   referenceCode         String        @unique @map("reference_code")
   proofStorageKey       String?       @map("proof_storage_key")
   proofDeleteAfter      DateTime?     @map("proof_delete_after")
+  reviewNote            String?       @map("review_note")
   reportedAt            DateTime      @map("reported_at")
   approvedAt            DateTime?     @map("approved_at")
   approvedByAdminUserId String?       @map("approved_by_admin_user_id") @db.Uuid
@@ -658,6 +701,22 @@ model InboxEvent {
 
   @@index([studentId, createdAt])
   @@map("inbox_events")
+}
+
+model WebhookEvent {
+  id                String      @id @default(uuid()) @db.Uuid
+  channel           ChannelType
+  accountExternalId String      @map("account_external_id")
+  dedupeKey         String      @unique @map("dedupe_key")
+  eventType         String      @map("event_type")
+  externalMessageId String?     @map("external_message_id")
+  payloadHash       String      @map("payload_hash")
+  result            String
+  occurredAt        DateTime?   @map("occurred_at")
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  @@index([channel, accountExternalId, createdAt])
+  @@map("webhook_events")
 }
 
 model OutboxEvent {
