@@ -16,7 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "pretypecheck": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && pnpm --filter @meditation/testing build",
+    "pretypecheck": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && pnpm --filter @meditation/testing build && pnpm --filter @meditation/ui build",
     "typecheck": "pnpm --recursive --if-present run typecheck",
     "test": "pnpm --recursive --if-present run test",
     "test:db": "DATABASE_URL=postgresql://meditation:meditation@localhost:5433/meditation?schema=public RUN_DATABASE_TESTS=true pnpm --filter @meditation/database test",

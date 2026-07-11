@@ -11,11 +11,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { Inject } from '@nestjs/common';
+import type { ApplicationConfig } from '@meditation/core';
 import { z } from 'zod';
 
 import { ADMIN_CSRF_HEADER, ADMIN_SESSION_COOKIE } from './auth.constants.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminSessionGuard } from './admin-session.guard.js';
+import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 
 const loginSchema = z
   .object({
@@ -38,7 +41,10 @@ const stepUpSchema = z.object({ totpCode: z.string().regex(/^\d{6}$/) });
 
 @Controller('v1/admin/auth')
 export class AdminAuthController {
-  constructor(private readonly auth: AdminAuthService) {}
+  constructor(
+    private readonly auth: AdminAuthService,
+    @Inject(APPLICATION_CONFIG) private readonly config: ApplicationConfig,
+  ) {}
 
   @Post('login')
   @HttpCode(200)
@@ -61,7 +67,7 @@ export class AdminAuthController {
     });
     reply.setCookie(ADMIN_SESSION_COOKIE, result.sessionToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test',
+      secure: this.config.NODE_ENV === 'staging' || this.config.NODE_ENV === 'production',
       sameSite: 'strict',
       path: '/v1/admin',
       expires: result.expiresAt,

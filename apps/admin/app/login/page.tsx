@@ -1,6 +1,8 @@
 'use client';
 
 import { type FormEvent, useState } from 'react';
+import { Alert, Button, SegmentedControl, TextField } from '@meditation/ui';
+import { Sprout } from 'lucide-react';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -41,74 +43,70 @@ export default function LoginPage() {
 
   return (
     <main className="login-page">
-      <form className="login-form" onSubmit={submit}>
-        <div>
-          <h1>Yönetim girişi</h1>
-          <p>Devam etmek için yönetici hesabınızla doğrulama yapın.</p>
+      <section className="login-panel">
+        <div className="brand login-brand">
+          <span className="brand-mark">
+            <Sprout aria-hidden="true" />
+          </span>
+          <span className="brand-text">
+            Meditasyon<small>Öğrenci yönetimi</small>
+          </span>
         </div>
-        <label>
-          E-posta
-          <input name="email" type="email" autoComplete="username" required />
-        </label>
-        <label>
-          Parola
-          <input
+        <form className="login-form" onSubmit={submit}>
+          <div>
+            <h1>Yönetim girişi</h1>
+            <p>Hesabınız ve ikinci doğrulama adımıyla devam edin.</p>
+          </div>
+          <TextField name="email" label="E-posta" type="email" autoComplete="username" required />
+          <TextField
             name="password"
+            label="Parola"
             type="password"
             autoComplete="current-password"
             minLength={12}
             required
           />
-        </label>
-        <div className="second-factor-tabs" role="group" aria-label="İkinci doğrulama yöntemi">
-          <button
-            type="button"
-            aria-pressed={secondFactor === 'totp'}
-            onClick={() => setSecondFactor('totp')}
-          >
-            TOTP
-          </button>
-          <button
-            type="button"
-            aria-pressed={secondFactor === 'recovery'}
-            onClick={() => setSecondFactor('recovery')}
-          >
-            Kurtarma kodu
-          </button>
-        </div>
-        {secondFactor === 'totp' ? (
-          <label>
-            Doğrulama kodu
-            <input
+          <SegmentedControl
+            label="İkinci doğrulama yöntemi"
+            value={secondFactor}
+            options={[
+              { value: 'totp', label: 'Authenticator' },
+              { value: 'recovery', label: 'Kurtarma kodu' },
+            ]}
+            onChange={setSecondFactor}
+          />
+          {secondFactor === 'totp' ? (
+            <TextField
               name="totp"
+              label="Doğrulama kodu"
               inputMode="numeric"
               autoComplete="one-time-code"
               pattern="[0-9]{6}"
               maxLength={6}
               required
             />
-          </label>
-        ) : (
-          <label>
-            Kurtarma kodu
-            <input
+          ) : (
+            <TextField
               name="recovery"
+              label="Kurtarma kodu"
               autoComplete="one-time-code"
               minLength={16}
               maxLength={19}
               required
             />
-          </label>
-        )}
-        {error ? (
-          <p className="form-error" role="alert">
-            {error}
-          </p>
-        ) : null}
-        <button className="login-submit" type="submit" disabled={submitting}>
-          {submitting ? 'Doğrulanıyor...' : 'Giriş yap'}
-        </button>
-      </form>
+          )}
+          {error ? <Alert tone="danger">{error}</Alert> : null}
+          <Button type="submit" loading={submitting}>
+            Giriş yap
+          </Button>
+        </form>
+      </section>
+      <aside className="login-visual" aria-label="Meditasyon yaklaşımı">
+        <blockquote>
+          Düzenli pratik, küçük adımları anlamlı bir değişime dönüştürür.
+          <cite>Öğrenci gelişimini tek yerden takip edin.</cite>
+        </blockquote>
+      </aside>
     </main>
   );
 }

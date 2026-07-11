@@ -1,0 +1,54 @@
+:root {
+  color-scheme: light;
+  --font-sans: Inter, 'SF Pro Text', 'Segoe UI', sans-serif;
+  --color-canvas: #f4f6f5;
+  --color-surface: #ffffff;
+  --color-surface-subtle: #eef2f0;
+  --color-ink: #1c2421;
+  --color-ink-muted: #62706a;
+  --color-border: #d9dfdc;
+  --color-border-strong: #b9c4bf;
+  --color-brand: #276454;
+  --color-brand-hover: #1f5144;
+  --color-brand-soft: #e4efeb;
+  --color-accent: #c56d4d;
+  --color-info: #35718d;
+  --color-info-soft: #e6f0f4;
+  --color-success: #32805f;
+  --color-success-soft: #e3f1eb;
+  --color-warning: #9a6b1e;
+  --color-warning-soft: #f8eed9;
+  --color-danger: #b54b47;
+  --color-danger-soft: #f8e9e8;
+  --focus-ring: 0 0 0 3px rgb(39 100 84 / 22%);
+  --shadow-sm: 0 1px 2px rgb(28 36 33 / 8%);
+  --shadow-md: 0 8px 24px rgb(28 36 33 / 10%);
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --control-height: 40px;
+  --sidebar-width: 248px;
+  --content-max-width: 1440px;
+  --transition-fast: 140ms ease;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+  --color-canvas: #151a18;
+  --color-surface: #1d2421;
+  --color-surface-subtle: #252e2a;
+  --color-ink: #f1f5f3;
+  --color-ink-muted: #aab7b1;
+  --color-border: #34413b;
+  --color-border-strong: #53635c;
+  --color-brand: #69ad98;
+  --color-brand-hover: #82beac;
+  --color-brand-soft: #253f37;
+}

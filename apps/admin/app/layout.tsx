@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
+import '@meditation/design-tokens/tokens.css';
+import '@meditation/ui/styles.css';
 import './global.css';
 
 export const metadata: Metadata = {

@@ -1,12 +1,15 @@
 import { randomUUID } from 'node:crypto';
 
 import { PrismaClient, StudentStatus, SubscriptionStatus } from '@prisma/client';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const runDatabaseTests = process.env.RUN_DATABASE_TESTS === 'true';
-const prisma = new PrismaClient();
+let prisma: PrismaClient;
 
 describe.runIf(runDatabaseTests)('PostgreSQL data invariants', () => {
+  beforeAll(() => {
+    prisma = new PrismaClient();
+  });
   afterAll(async () => prisma.$disconnect());
 
   it('rejects overlapping active subscription periods', async () => {

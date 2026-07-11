@@ -606,6 +606,7 @@ model AuditLog {
 
 model NotificationDelivery {
   id                String              @id @default(uuid()) @db.Uuid
+  deliveryKey       String?             @unique @map("delivery_key")
   channel           NotificationChannel
   eventType         String              @map("event_type")
   recipientHmac     String              @map("recipient_hmac")

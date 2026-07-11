@@ -1,38 +1,30 @@
+import { Activity, CircleDollarSign, LifeBuoy, Users } from 'lucide-react';
+import { Badge, EmptyState, Metric, PageHeader } from '@meditation/ui';
+
 export default function HomePage() {
   return (
     <main className="content">
-      <div className="page-heading">
-        <div>
-          <h1>Genel Bakış</h1>
-          <p>Öğrenci ve operasyon durumlarının güncel özeti</p>
-        </div>
-      </div>
+      <PageHeader
+        title="Genel Bakış"
+        description="Öğrenci ve operasyon durumlarının güncel özeti"
+      />
 
       <section className="metrics" aria-label="Temel metrikler">
-        <article>
-          <span>Aktif öğrenci</span>
-          <strong>0</strong>
-        </article>
-        <article>
-          <span>Ödeme incelemesi</span>
-          <strong>0</strong>
-        </article>
-        <article>
-          <span>Bugünkü pratik</span>
-          <strong>0</strong>
-        </article>
-        <article>
-          <span>Açık destek</span>
-          <strong>0</strong>
-        </article>
+        <Metric label="Aktif öğrenci" value={0} icon={Users} detail="Bu ay" />
+        <Metric label="Ödeme incelemesi" value={0} icon={CircleDollarSign} detail="Bekleyen" />
+        <Metric label="Bugünkü pratik" value={0} icon={Activity} detail="Planlanan" />
+        <Metric label="Açık destek" value={0} icon={LifeBuoy} detail="Yanıt bekleyen" />
       </section>
 
-      <section className="operation-panel">
-        <div className="panel-heading">
+      <section className="section">
+        <div className="section-heading">
           <h2>Operasyon kuyruğu</h2>
-          <span>Bekleyen işlem yok</span>
+          <Badge tone="success">Bekleyen işlem yok</Badge>
         </div>
-        <div className="empty-state">Yeni ödeme, destek veya güvenlik bildirimi bulunmuyor.</div>
+        <EmptyState
+          title="Kuyruk temiz"
+          description="Yeni ödeme, destek veya güvenlik bildirimi bulunmuyor."
+        />
       </section>
     </main>
   );
