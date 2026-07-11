@@ -3,7 +3,7 @@
 | Alan | Değer |
 | --- | --- |
 | Belge durumu | Taslak |
-| Sürüm | 0.9 |
+| Sürüm | 0.10 |
 | Oluşturulma tarihi | 10 Temmuz 2026 |
 | Son güncelleme | 10 Temmuz 2026 |
 | Hedef | MVP backend, worker ve admin portalı |
@@ -1630,6 +1630,8 @@ olarak metric/admin panelinde gösterilir.
 
 ### M0 - Repository ve Yerel Altyapı
 
+**Durum:** Tamamlandı - 10 Temmuz 2026
+
 - pnpm monorepo
 - API/worker/admin iskeleti
 - Prisma/PostgreSQL/pgvector/pg-boss yerel ortamı ve fake provider adapter'ları
@@ -1641,6 +1643,9 @@ olarak metric/admin panelinde gösterilir.
 testi geçer.
 
 ### M1 - Güvenlik ve Veri Çekirdeği
+
+**Durum:** Tamamlandı - 11 Temmuz 2026. PostgreSQL migration, paket çakışması ve
+transactional outbox rollback testleri yerel ortamda doğrulandı; PR CI'da da zorunlu çalışır.
 
 - Admin login, TOTP, session, bootstrap ve recovery
 - Öğrenci, kanal kimliği, rıza, paket, ödeme, pratik, görüşme ve mesaj şemaları

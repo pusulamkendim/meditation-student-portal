@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 
+import './global.css';
+
 export const metadata: Metadata = {
   title: 'Meditasyon Öğrenci Portalı',
   description: 'Yönetim portalı',

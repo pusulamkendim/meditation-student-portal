@@ -7,17 +7,38 @@ kişiselleştirilmiş meditasyon programına alındığı ve pratiklerinin takip
 
 ```bash
 pnpm install
-cp .env.example .env
+pnpm setup:local
 docker compose up -d postgres
 pnpm db:migrate
+pnpm test:db
 pnpm dev:api
 ```
+
+`pnpm setup:local`, `.env` yoksa örnek dosyadan oluşturur ve yerel şifreleme/HMAC
+anahtarlarını otomatik üretir. Var olan `.env` dosyasının üzerine yazmaz.
+`pnpm secrets:generate` yalnızca yeni anahtarları stdout'a almak gerektiğinde
+kullanılır. İlk admin migration sonrasında tek kullanımlık komutla oluşturulur:
+
+```bash
+ADMIN_BOOTSTRAP_ENABLED=true \
+ADMIN_BOOTSTRAP_EMAIL=admin@example.com \
+ADMIN_BOOTSTRAP_PASSWORD='replace-with-a-strong-password' \
+pnpm --filter @meditation/api bootstrap-admin
+```
+
+Komut TOTP secret ve tek kullanımlık recovery code'ları yalnızca bir kez stdout'a
+yazar; ikinci admin bootstrap denemesi veritabanı tarafından reddedilir.
 
 API sağlık uçları `http://localhost:3000/health/live` ve
 `http://localhost:3000/health/ready` adreslerinde çalışır.
 
 M0; monorepo iskeletini, API/worker/admin uygulamalarını, PostgreSQL + pgvector
 yerel ortamını, fake clock/test altyapısını ve fake kanal adapter'larını kapsar.
+
+M1; admin parola/TOTP/session/recovery akışını, alan şifreleme ve HMAC
+primitive'lerini, audit + transactional outbox çekirdeğini, temel öğrenci/ödeme/
+paket/pratik/görüşme/mesaj şemasını, pg-boss worker'ını, SES admin bildirim
+adapter'ını ve admin portal shell'ini içerir.
 
 ## Coolify Deploy Secret Sözleşmesi
 

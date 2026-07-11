@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: meditation
       POSTGRES_PASSWORD: meditation
     ports:
-      - '5432:5432'
+      - '5433:5432'
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U meditation -d meditation']
       interval: 5s

@@ -16,14 +16,18 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint .",
-    "pretypecheck": "pnpm --filter @meditation/core build && pnpm --filter @meditation/testing build",
+    "pretypecheck": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && pnpm --filter @meditation/testing build",
     "typecheck": "pnpm --recursive --if-present run typecheck",
     "test": "pnpm --recursive --if-present run test",
+    "test:db": "DATABASE_URL=postgresql://meditation:meditation@localhost:5433/meditation?schema=public RUN_DATABASE_TESTS=true pnpm --filter @meditation/database test",
     "db:generate": "pnpm --filter @meditation/database prisma:generate",
-    "db:migrate": "pnpm --filter @meditation/database prisma:migrate"
+    "db:migrate": "pnpm --filter @meditation/database prisma:migrate",
+    "secrets:generate": "node scripts/generate-dev-secrets.mjs",
+    "setup:local": "node scripts/setup-local-env.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@next/eslint-plugin-next": "^15.5.20",
     "@types/node": "^22.15.3",
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^10.1.8",

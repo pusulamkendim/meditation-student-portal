@@ -28,6 +28,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://meditation:meditation@localhost:5432/meditation?schema=public
       NODE_ENV: test
+      RUN_DATABASE_TESTS: 'true'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: pnpm/action-setup@v4
@@ -39,5 +40,5 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm db:generate
-      - run: pnpm check
       - run: pnpm --filter @meditation/database exec prisma migrate deploy
+      - run: pnpm check

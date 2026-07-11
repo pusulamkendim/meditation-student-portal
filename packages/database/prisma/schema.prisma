@@ -7,6 +7,143 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum StudentStatus {
+  LEAD
+  PAYMENT_PENDING
+  ACTIVE
+  INACTIVE
+  PAUSED
+  DELETION_PENDING
+  DELETED
+}
+
+enum CurriculumStage {
+  WEEK_1
+  WEEK_2
+  WEEK_3
+  WEEK_4
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum StageSource {
+  AUTO
+  ADMIN
+}
+
+enum ChannelType {
+  WHATSAPP
+  TELEGRAM
+}
+
+enum ChannelIdentityStatus {
+  PENDING
+  VERIFIED
+  ACTIVE
+  BLOCKED
+  REVOKED
+}
+
+enum ConsentScope {
+  MESSAGING
+  AGENT_REPLY_AI
+  REFLECTION_AI
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+}
+
+enum PaymentStatus {
+  REPORTED
+  UNDER_REVIEW
+  ACTION_REQUIRED
+  APPROVED
+  REJECTED
+  REFUNDED
+}
+
+enum SubscriptionStatus {
+  SCHEDULED
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum PracticePlanStatus {
+  DRAFT
+  ACTIVE
+  SUPERSEDED
+  PAUSED
+}
+
+enum PracticeSessionStatus {
+  SCHEDULED
+  COMPLETED
+  SKIPPED
+  MISSED
+  CANCELLED
+  SUPPRESSED
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  NO_SHOW
+  CANCELLED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  RECEIVED
+  ACCEPTED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+enum MessageIntentStatus {
+  PENDING
+  CLAIMED
+  SENT
+  DELIVERY_UNKNOWN
+  DELIVERED
+  READ
+  FAILED
+  SUPPRESSED
+}
+
+enum AdminRole {
+  ADMIN
+  ASSISTANT
+  FINANCE
+}
+
+enum AuditActorType {
+  ADMIN
+  STUDENT
+  SYSTEM
+}
+
+enum OutboxStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+enum NotificationChannel {
+  EMAIL
+  WHATSAPP
+  ADMIN_PANEL
+}
+
 model SystemSetting {
   key       String   @id
   value     Json
@@ -14,4 +151,497 @@ model SystemSetting {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_settings")
+}
+
+model Student {
+  id                       String          @id @default(uuid()) @db.Uuid
+  status                   StudentStatus   @default(LEAD)
+  fullNameEncrypted        Bytes?          @map("full_name_encrypted")
+  fullNameKeyId            String?         @map("full_name_key_id")
+  phoneEncrypted           Bytes?          @map("phone_encrypted")
+  phoneKeyId               String?         @map("phone_key_id")
+  phoneHmac                String?         @unique @map("phone_hmac")
+  timezone                 String          @default("Europe/Istanbul")
+  preferredLocale          String          @default("tr-TR") @map("preferred_locale")
+  curriculumStage          CurriculumStage @default(WEEK_1) @map("curriculum_stage")
+  curriculumStageSource    StageSource     @default(AUTO) @map("curriculum_stage_source")
+  defaultChannelIdentityId String?         @unique @map("default_channel_identity_id") @db.Uuid
+  version                  Int             @default(1)
+  createdAt                DateTime        @default(now()) @map("created_at")
+  updatedAt                DateTime        @updatedAt @map("updated_at")
+
+  defaultChannelIdentity StudentChannelIdentity?  @relation("DefaultChannel", fields: [defaultChannelIdentityId], references: [id], onDelete: SetNull)
+  channelIdentities      StudentChannelIdentity[] @relation("StudentIdentities")
+  statusHistory          StudentStatusHistory[]
+  privacyReceipts        PrivacyNoticeReceipt[]
+  consents               Consent[]
+  messagingPreference    MessagingPreference?
+  payments               Payment[]
+  subscriptions          SubscriptionPeriod[]
+  practicePlans          PracticePlan[]
+  practiceSessions       PracticeSession[]
+  meetingSeries          MeetingSeries[]
+  messages               Message[]
+  messageIntents         MessageIntent[]
+  inboxEvents            InboxEvent[]
+
+  @@index([status])
+  @@map("students")
+}
+
+model StudentStatusHistory {
+  id        String         @id @default(uuid()) @db.Uuid
+  studentId String         @map("student_id") @db.Uuid
+  from      StudentStatus?
+  to        StudentStatus
+  reason    String
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@map("student_status_history")
+}
+
+model PrivacyNoticeReceipt {
+  id                String      @id @default(uuid()) @db.Uuid
+  studentId         String      @map("student_id") @db.Uuid
+  noticeVersion     String      @map("notice_version")
+  channel           ChannelType
+  deliveredAt       DateTime    @map("delivered_at")
+  externalMessageId String?     @map("external_message_id")
+  createdAt         DateTime    @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, noticeVersion, channel])
+  @@map("privacy_notice_receipts")
+}
+
+model Consent {
+  id                String        @id @default(uuid()) @db.Uuid
+  studentId         String        @map("student_id") @db.Uuid
+  scope             ConsentScope
+  status            ConsentStatus
+  textVersion       String        @map("text_version")
+  channel           ChannelType
+  externalMessageId String?       @map("external_message_id")
+  occurredAt        DateTime      @map("occurred_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, scope, occurredAt])
+  @@map("consents")
+}
+
+model MessagingPreference {
+  id               String    @id @default(uuid()) @db.Uuid
+  studentId        String    @unique @map("student_id") @db.Uuid
+  proactiveEnabled Boolean   @default(true) @map("proactive_enabled")
+  pausedAt         DateTime? @map("paused_at")
+  pauseReason      String?   @map("pause_reason")
+  version          Int       @default(1)
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("messaging_preferences")
+}
+
+model ChannelAccount {
+  id          String      @id @default(uuid()) @db.Uuid
+  type        ChannelType
+  externalId  String      @map("external_id")
+  displayName String      @map("display_name")
+  active      Boolean     @default(true)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+
+  identities StudentChannelIdentity[]
+
+  @@unique([type, externalId])
+  @@map("channel_accounts")
+}
+
+model StudentChannelIdentity {
+  id                    String                @id @default(uuid()) @db.Uuid
+  studentId             String                @map("student_id") @db.Uuid
+  channelAccountId      String                @map("channel_account_id") @db.Uuid
+  externalUserEncrypted Bytes                 @map("external_user_encrypted")
+  externalUserKeyId     String                @map("external_user_key_id")
+  externalUserHmac      String                @map("external_user_hmac")
+  status                ChannelIdentityStatus @default(PENDING)
+  verifiedAt            DateTime?             @map("verified_at")
+  createdAt             DateTime              @default(now()) @map("created_at")
+  updatedAt             DateTime              @updatedAt @map("updated_at")
+
+  student           Student         @relation("StudentIdentities", fields: [studentId], references: [id], onDelete: Cascade)
+  channelAccount    ChannelAccount  @relation(fields: [channelAccountId], references: [id], onDelete: Restrict)
+  defaultForStudent Student?        @relation("DefaultChannel")
+  messages          Message[]
+  messageIntents    MessageIntent[]
+
+  @@unique([channelAccountId, externalUserHmac])
+  @@index([studentId, status])
+  @@map("student_channel_identities")
+}
+
+model Payment {
+  id                    String        @id @default(uuid()) @db.Uuid
+  studentId             String        @map("student_id") @db.Uuid
+  status                PaymentStatus @default(REPORTED)
+  amountMinor           BigInt        @map("amount_minor")
+  currency              String        @default("TRY")
+  referenceCode         String        @unique @map("reference_code")
+  proofStorageKey       String?       @map("proof_storage_key")
+  proofDeleteAfter      DateTime?     @map("proof_delete_after")
+  reportedAt            DateTime      @map("reported_at")
+  approvedAt            DateTime?     @map("approved_at")
+  approvedByAdminUserId String?       @map("approved_by_admin_user_id") @db.Uuid
+  version               Int           @default(1)
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  student      Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  subscription SubscriptionPeriod?
+  approvedBy   AdminUser?          @relation(fields: [approvedByAdminUserId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, status])
+  @@map("payments")
+}
+
+model SubscriptionPeriod {
+  id           String             @id @default(uuid()) @db.Uuid
+  studentId    String             @map("student_id") @db.Uuid
+  paymentId    String?            @unique @map("payment_id") @db.Uuid
+  status       SubscriptionStatus @default(SCHEDULED)
+  startDate    DateTime           @map("start_date") @db.Date
+  endExclusive DateTime           @map("end_exclusive") @db.Date
+  priceMinor   BigInt             @default(400000) @map("price_minor")
+  currency     String             @default("TRY")
+  version      Int                @default(1)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  student       Student              @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  payment       Payment?             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  creditEvents  MeetingCreditEvent[]
+  practicePlans PracticePlan[]
+  meetingSeries MeetingSeries[]
+
+  @@index([studentId, status])
+  @@map("subscription_periods")
+}
+
+model MeetingCreditEvent {
+  id                   String   @id @default(uuid()) @db.Uuid
+  subscriptionPeriodId String   @map("subscription_period_id") @db.Uuid
+  delta                Int
+  reason               String
+  meetingId            String?  @map("meeting_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  subscriptionPeriod SubscriptionPeriod @relation(fields: [subscriptionPeriodId], references: [id], onDelete: Restrict)
+
+  @@index([subscriptionPeriodId, createdAt])
+  @@map("meeting_credit_events")
+}
+
+model PracticePlan {
+  id                   String             @id @default(uuid()) @db.Uuid
+  studentId            String             @map("student_id") @db.Uuid
+  subscriptionPeriodId String             @map("subscription_period_id") @db.Uuid
+  status               PracticePlanStatus @default(DRAFT)
+  revision             Int
+  effectiveFrom        DateTime           @map("effective_from")
+  effectiveUntil       DateTime?          @map("effective_until")
+  version              Int                @default(1)
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  student            Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  subscriptionPeriod SubscriptionPeriod @relation(fields: [subscriptionPeriodId], references: [id], onDelete: Restrict)
+  slots              PracticeSlot[]
+  sessions           PracticeSession[]
+
+  @@unique([studentId, revision])
+  @@index([studentId, status])
+  @@map("practice_plans")
+}
+
+model PracticeSlot {
+  id              String   @id @default(uuid()) @db.Uuid
+  practicePlanId  String   @map("practice_plan_id") @db.Uuid
+  slotKey         String   @map("slot_key")
+  localTime       String   @map("local_time")
+  durationMinutes Int      @map("duration_minutes")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  practicePlan PracticePlan      @relation(fields: [practicePlanId], references: [id], onDelete: Cascade)
+  sessions     PracticeSession[]
+
+  @@unique([practicePlanId, slotKey])
+  @@map("practice_slots")
+}
+
+model PracticeSession {
+  id              String                @id @default(uuid()) @db.Uuid
+  studentId       String                @map("student_id") @db.Uuid
+  practicePlanId  String                @map("practice_plan_id") @db.Uuid
+  practiceSlotId  String?               @map("practice_slot_id") @db.Uuid
+  serviceDate     DateTime              @map("service_date") @db.Date
+  startAt         DateTime              @map("start_at")
+  durationMinutes Int                   @map("duration_minutes")
+  status          PracticeSessionStatus @default(SCHEDULED)
+  replyNonceHmac  String?               @map("reply_nonce_hmac")
+  version         Int                   @default(1)
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  student      Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  practicePlan PracticePlan  @relation(fields: [practicePlanId], references: [id], onDelete: Restrict)
+  practiceSlot PracticeSlot? @relation(fields: [practiceSlotId], references: [id], onDelete: SetNull)
+
+  @@unique([practicePlanId, serviceDate, practiceSlotId])
+  @@index([studentId, startAt])
+  @@map("practice_sessions")
+}
+
+model MeetingSeries {
+  id                   String   @id @default(uuid()) @db.Uuid
+  studentId            String   @map("student_id") @db.Uuid
+  subscriptionPeriodId String   @map("subscription_period_id") @db.Uuid
+  timezone             String
+  recurrenceRule       String   @map("recurrence_rule")
+  googleSeriesId       String?  @map("google_series_id")
+  version              Int      @default(1)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  student            Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  subscriptionPeriod SubscriptionPeriod @relation(fields: [subscriptionPeriodId], references: [id], onDelete: Restrict)
+  meetings           WeeklyMeeting[]
+
+  @@unique([subscriptionPeriodId])
+  @@map("meeting_series")
+}
+
+model WeeklyMeeting {
+  id               String        @id @default(uuid()) @db.Uuid
+  meetingSeriesId  String        @map("meeting_series_id") @db.Uuid
+  occurrenceNumber Int           @map("occurrence_number")
+  startsAt         DateTime      @map("starts_at")
+  endsAt           DateTime      @map("ends_at")
+  status           MeetingStatus @default(SCHEDULED)
+  googleInstanceId String?       @map("google_instance_id")
+  meetUrlEncrypted Bytes?        @map("meet_url_encrypted")
+  meetUrlKeyId     String?       @map("meet_url_key_id")
+  version          Int           @default(1)
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  meetingSeries MeetingSeries @relation(fields: [meetingSeriesId], references: [id], onDelete: Restrict)
+
+  @@unique([meetingSeriesId, occurrenceNumber])
+  @@index([startsAt, status])
+  @@map("weekly_meetings")
+}
+
+model Message {
+  id                String           @id @default(uuid()) @db.Uuid
+  studentId         String           @map("student_id") @db.Uuid
+  channelIdentityId String           @map("channel_identity_id") @db.Uuid
+  direction         MessageDirection
+  status            MessageStatus
+  externalMessageId String?          @map("external_message_id")
+  contentEncrypted  Bytes?           @map("content_encrypted")
+  contentKeyId      String?          @map("content_key_id")
+  contentHmac       String?          @map("content_hmac")
+  occurredAt        DateTime         @map("occurred_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  student         Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  channelIdentity StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
+
+  @@unique([channelIdentityId, externalMessageId])
+  @@index([studentId, occurredAt])
+  @@map("messages")
+}
+
+model MessageIntent {
+  id                String              @id @default(uuid()) @db.Uuid
+  studentId         String              @map("student_id") @db.Uuid
+  channelIdentityId String              @map("channel_identity_id") @db.Uuid
+  category          String
+  status            MessageIntentStatus @default(PENDING)
+  idempotencyKey    String              @unique @map("idempotency_key")
+  dueAt             DateTime            @map("due_at")
+  expiresAt         DateTime            @map("expires_at")
+  aggregateVersion  Int                 @map("aggregate_version")
+  payload           Json
+  suppressionReason String?             @map("suppression_reason")
+  providerRequestId String?             @map("provider_request_id")
+  providerMessageId String?             @map("provider_message_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  student         Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  channelIdentity StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
+
+  @@index([status, dueAt])
+  @@map("message_intents")
+}
+
+model InboxEvent {
+  id             String      @id @default(uuid()) @db.Uuid
+  studentId      String?     @map("student_id") @db.Uuid
+  channel        ChannelType
+  dedupeKey      String      @unique @map("dedupe_key")
+  eventType      String      @map("event_type")
+  payloadHash    String      @map("payload_hash")
+  normalizedData Json        @map("normalized_data")
+  processedAt    DateTime?   @map("processed_at")
+  createdAt      DateTime    @default(now()) @map("created_at")
+
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, createdAt])
+  @@map("inbox_events")
+}
+
+model OutboxEvent {
+  id            String       @id @default(uuid()) @db.Uuid
+  topic         String
+  aggregateType String       @map("aggregate_type")
+  aggregateId   String       @map("aggregate_id") @db.Uuid
+  eventType     String       @map("event_type")
+  payload       Json
+  status        OutboxStatus @default(PENDING)
+  attempts      Int          @default(0)
+  availableAt   DateTime     @default(now()) @map("available_at")
+  publishedAt   DateTime?    @map("published_at")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  @@index([status, availableAt])
+  @@map("outbox_events")
+}
+
+model AdminUser {
+  id                  String    @id @default(uuid()) @db.Uuid
+  email               String    @unique
+  passwordHash        String    @map("password_hash")
+  role                AdminRole @default(ADMIN)
+  totpSecretEncrypted Bytes?    @map("totp_secret_encrypted")
+  totpSecretKeyId     String?   @map("totp_secret_key_id")
+  totpEnabledAt       DateTime? @map("totp_enabled_at")
+  failedLoginCount    Int       @default(0) @map("failed_login_count")
+  lockedUntil         DateTime? @map("locked_until")
+  lastLoginAt         DateTime? @map("last_login_at")
+  active              Boolean   @default(true)
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  sessions         AdminSession[]
+  recoveryCodes    TotpRecoveryCode[]
+  approvedPayments Payment[]
+
+  @@map("admin_users")
+}
+
+model AdminSession {
+  id                String    @id @default(uuid()) @db.Uuid
+  adminUserId       String    @map("admin_user_id") @db.Uuid
+  tokenHash         String    @unique @map("token_hash")
+  csrfTokenHash     String    @map("csrf_token_hash")
+  lastSeenAt        DateTime  @map("last_seen_at")
+  expiresAt         DateTime  @map("expires_at")
+  absoluteExpiresAt DateTime  @map("absolute_expires_at")
+  stepUpVerifiedAt  DateTime? @map("step_up_verified_at")
+  revokedAt         DateTime? @map("revoked_at")
+  ipHmac            String?   @map("ip_hmac")
+  userAgentHash     String?   @map("user_agent_hash")
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId, expiresAt])
+  @@map("admin_sessions")
+}
+
+model TotpRecoveryCode {
+  id          String    @id @default(uuid()) @db.Uuid
+  adminUserId String    @map("admin_user_id") @db.Uuid
+  codeHash    String    @unique @map("code_hash")
+  usedAt      DateTime? @map("used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@map("totp_recovery_codes")
+}
+
+model AuditLog {
+  id            String         @id @default(uuid()) @db.Uuid
+  actorType     AuditActorType @map("actor_type")
+  actorId       String?        @map("actor_id") @db.Uuid
+  action        String
+  entityType    String         @map("entity_type")
+  entityId      String         @map("entity_id") @db.Uuid
+  safeDiff      Json?          @map("safe_diff")
+  reason        String?
+  requestId     String         @map("request_id")
+  correlationId String         @map("correlation_id")
+  ipHmac        String?        @map("ip_hmac")
+  userAgentHash String?        @map("user_agent_hash")
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  @@index([entityType, entityId, createdAt])
+  @@index([actorType, actorId, createdAt])
+  @@map("audit_logs")
+}
+
+model NotificationDelivery {
+  id                String              @id @default(uuid()) @db.Uuid
+  channel           NotificationChannel
+  eventType         String              @map("event_type")
+  recipientHmac     String              @map("recipient_hmac")
+  providerMessageId String?             @map("provider_message_id")
+  status            String
+  attempts          Int                 @default(0)
+  errorCode         String?             @map("error_code")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("notification_deliveries")
+}
+
+model FeatureFlagConfig {
+  key               String    @id
+  enabled           Boolean   @default(false)
+  rolloutPercentage Int       @default(0) @map("rollout_percentage")
+  scope             String    @default("GLOBAL")
+  subjectIds        Json?     @map("subject_ids")
+  version           Int       @default(1)
+  expiresAt         DateTime? @map("expires_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("feature_flag_configs")
+}
+
+model FeatureFlagEvaluation {
+  id            String   @id @default(uuid()) @db.Uuid
+  key           String
+  subjectHmac   String   @map("subject_hmac")
+  enabled       Boolean
+  configVersion Int      @map("config_version")
+  evaluatedAt   DateTime @default(now()) @map("evaluated_at")
+
+  @@index([key, evaluatedAt])
+  @@map("feature_flag_evaluations")
 }

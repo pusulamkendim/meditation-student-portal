@@ -5,16 +5,21 @@
   "type": "module",
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "dev": "pnpm --filter @meditation/core build && tsx watch src/main.ts",
+    "bootstrap-admin": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && tsc -p tsconfig.build.json && node dist/commands/bootstrap-admin.js",
+    "dev": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && tsx watch src/main.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config ../../vitest.config.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-sesv2": "^3.1084.0",
+    "@fastify/cookie": "^11.1.1",
     "@meditation/core": "workspace:*",
+    "@meditation/database": "workspace:*",
     "@nestjs/common": "^11.1.11",
     "@nestjs/core": "^11.1.11",
     "@nestjs/platform-fastify": "^11.1.11",
+    "@node-rs/argon2": "^2.0.2",
     "fastify": "^5.6.2",
     "pino": "^9.9.5",
     "zod": "^3.24.2"

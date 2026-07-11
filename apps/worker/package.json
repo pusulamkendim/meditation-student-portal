@@ -7,10 +7,12 @@
     "build": "tsc -p tsconfig.json",
     "dev": "pnpm --filter @meditation/core build && tsx watch src/main.ts",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config ../../vitest.config.ts"
   },
   "dependencies": {
     "@meditation/core": "workspace:*",
+    "pg-boss": "^12.25.1",
     "pino": "^9.9.5"
   },
   "devDependencies": {

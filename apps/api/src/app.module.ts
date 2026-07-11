@@ -1,11 +1,12 @@
 import { Module } from '@nestjs/common';
-import { CLOCK_TOKEN, SystemClock } from '@meditation/core';
 
+import { AuthModule } from './auth/auth.module.js';
+import { DatabaseModule } from './database/database.module.js';
 import { HealthController } from './health.controller.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 
 @Module({
+  imports: [DatabaseModule, AuthModule, NotificationsModule],
   controllers: [HealthController],
-  providers: [{ provide: CLOCK_TOKEN, useClass: SystemClock }],
-  exports: [CLOCK_TOKEN],
 })
 export class AppModule {}
