@@ -1,8 +1,6 @@
 FROM node:22.12.0-bookworm-slim AS build
 
-ENV PNPM_HOME=/pnpm
-ENV PATH=$PNPM_HOME:$PATH
-RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
+RUN npm install --global pnpm@10.30.3
 
 WORKDIR /app
 COPY . .
