@@ -1,5 +1,8 @@
 FROM node:22.12.0-bookworm-slim AS build
 
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends openssl \
+  && rm -rf /var/lib/apt/lists/*
 RUN npm install --global pnpm@10.30.3
 
 WORKDIR /app
@@ -10,6 +13,7 @@ RUN pnpm db:generate
 ARG NEXT_PUBLIC_API_URL=https://meditation-api.pusulamkendim.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 RUN pnpm build
+RUN pnpm install --prod --offline --frozen-lockfile
 
 FROM build AS api
 ENV NODE_ENV=production
