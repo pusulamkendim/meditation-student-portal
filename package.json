@@ -23,7 +23,8 @@
     "db:generate": "pnpm --filter @meditation/database prisma:generate",
     "db:migrate": "pnpm --filter @meditation/database prisma:migrate",
     "secrets:generate": "node scripts/generate-dev-secrets.mjs",
-    "setup:local": "node scripts/setup-local-env.mjs"
+    "setup:local": "node scripts/setup-local-env.mjs",
+    "seed:demo": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && tsx scripts/seed-demo-data.mts"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

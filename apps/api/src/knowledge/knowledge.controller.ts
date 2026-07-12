@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   Post,
   Query,
@@ -34,7 +35,7 @@ const retrievalSchema = z.object({
 @Controller('v1/admin/knowledge')
 @UseGuards(AdminSessionGuard)
 export class KnowledgeController {
-  constructor(private readonly service: KnowledgeService) {}
+  constructor(@Inject(KnowledgeService) private readonly service: KnowledgeService) {}
 
   @Get('bases') listBases() {
     return this.service.listBases();
