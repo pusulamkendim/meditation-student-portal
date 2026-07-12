@@ -1,0 +1,115 @@
+import { createHash } from 'node:crypto';
+import { z } from 'zod';
+
+export const llmTaskSchema = z.enum([
+  'AGENT_REPLY',
+  'REFLECTION_TAGGING',
+  'WEEKLY_SUMMARY',
+  'KNOWLEDGE_EMBEDDING',
+  'RAG_QUERY_REWRITE',
+  'RAG_RERANK',
+]);
+export type LlmTask = z.infer<typeof llmTaskSchema>;
+
+export const studentContextSectionSchema = z.enum([
+  'PRACTICE',
+  'MEETINGS',
+  'MEMBERSHIP',
+  'PAYMENT',
+  'ACCOUNT',
+]);
+export type StudentContextSection = z.infer<typeof studentContextSectionSchema>;
+
+export const studentContextRangeSchema = z.enum(['CURRENT_PACKAGE', 'LAST_30_DAYS', 'ALL_PAGED']);
+export type StudentContextRange = z.infer<typeof studentContextRangeSchema>;
+
+export const getStudentContextInputSchema = z.object({
+  sections: z.array(studentContextSectionSchema).min(1).max(5),
+  range: studentContextRangeSchema.default('CURRENT_PACKAGE'),
+  cursor: z.string().max(512).optional(),
+  pageSize: z.number().int().min(1).max(100).default(50),
+});
+export type GetStudentContextInput = z.infer<typeof getStudentContextInputSchema>;
+
+export const agentReplyOutputSchema = z.object({
+  answer: z.string().min(1).max(2000),
+  usedSections: z.array(studentContextSectionSchema),
+  asOf: z.string().datetime(),
+  evidenceRecordHashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)),
+  handoffRequired: z.boolean(),
+  reasonCode: z.string().max(120).optional(),
+});
+export type AgentReplyOutput = z.infer<typeof agentReplyOutputSchema>;
+
+export interface LlmModelCandidate {
+  id: string;
+  providerId: string;
+  providerModelId: string;
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
+export interface LlmTaskResolution {
+  task: LlmTask;
+  requested: LlmModelCandidate;
+  fallback?: LlmModelCandidate;
+}
+
+export function resolveLlmModels(input: {
+  task: LlmTask;
+  taskPrimary?: LlmModelCandidate;
+  globalDefault?: LlmModelCandidate;
+  taskFallback?: LlmModelCandidate;
+}): LlmTaskResolution | null {
+  const requested = input.taskPrimary ?? input.globalDefault;
+  if (!requested || requested.status !== 'ACTIVE') return null;
+  const fallback =
+    input.taskFallback?.status === 'ACTIVE' && input.taskFallback.id !== requested.id
+      ? input.taskFallback
+      : undefined;
+  return { task: input.task, requested, fallback };
+}
+
+export interface PseudonymizedText {
+  value: string;
+  version: string;
+  maskedCategories: string[];
+}
+
+export function pseudonymizeForLlm(
+  text: string,
+  replacements: Array<{ value: string; category: string }>,
+  version = 'pii-v1',
+): PseudonymizedText {
+  let value = text;
+  const maskedCategories = new Set<string>();
+  for (const replacement of replacements) {
+    if (!replacement.value) continue;
+    const escaped = replacement.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(escaped, 'gi');
+    if (pattern.test(value)) {
+      value = value.replace(pattern, `[${replacement.category}]`);
+      maskedCategories.add(replacement.category);
+    }
+  }
+  value = value
+    .replace(/\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b/g, '[EMAIL]')
+    .replace(/\b(?:\+?\d[\d ()-]{8,}\d)\b/g, '[PHONE]');
+  if (value.includes('[EMAIL]')) maskedCategories.add('EMAIL');
+  if (value.includes('[PHONE]')) maskedCategories.add('PHONE');
+  return { value, version, maskedCategories: [...maskedCategories].sort() };
+}
+
+export function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+export function validateEvidence(
+  output: AgentReplyOutput,
+  availableRecordHashes: readonly string[],
+): AgentReplyOutput {
+  const available = new Set(availableRecordHashes);
+  if (output.evidenceRecordHashes.some((hash) => !available.has(hash))) {
+    throw new Error('LLM evidence validation failed.');
+  }
+  return output;
+}

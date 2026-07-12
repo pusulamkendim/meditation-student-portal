@@ -54,7 +54,14 @@ export class PaymentService {
           endExclusive: end,
           priceMinor: payment.amountMinor,
           currency: payment.currency,
-          creditEvents: { create: { delta: 4, reason: 'PACKAGE_GRANT' } },
+        },
+      });
+      await tx.meetingCreditEvent.create({
+        data: {
+          subscriptionPeriodId: subscription.id,
+          delta: 4,
+          reason: 'PACKAGE_GRANT',
+          idempotencyKey: `subscription:${subscription.id}:meeting-credit:grant`,
         },
       });
       await tx.payment.updateMany({

@@ -69,6 +69,16 @@ export class TelegramWebhookService {
             normalizedData: normalized as Prisma.InputJsonValue,
           },
         });
+        await transaction.studentChannelIdentity.updateMany({
+          where: {
+            externalUserHmac: this.lookup.digest(event.sender),
+            channelAccount: {
+              type: ChannelType.TELEGRAM,
+              externalId: this.config.TELEGRAM_ACCOUNT_ID,
+            },
+          },
+          data: { lastInboundAt: event.occurredAt },
+        });
         await transaction.outboxEvent.create({
           data: {
             topic: event.text?.startsWith('practice:') ? 'practice.inbound' : 'channel.inbound',

@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "bootstrap-admin": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && tsc -p tsconfig.build.json && node dist/commands/bootstrap-admin.js",
+    "sync-prompts": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && tsx src/commands/sync-prompts.ts",
     "dev": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && tsx watch src/main.ts",
     "start": "node dist/main.js",
     "typecheck": "tsc --noEmit",

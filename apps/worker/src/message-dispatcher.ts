@@ -51,6 +51,13 @@ export class MessageDispatcher {
               include: { practicePlan: { include: { subscriptionPeriod: true } } },
             })
           : undefined;
+      const meeting =
+        typeof payload.meetingId === 'string'
+          ? await tx.weeklyMeeting.findUnique({
+              where: { id: payload.meetingId },
+              include: { meetingSeries: { include: { subscriptionPeriod: true } } },
+            })
+          : undefined;
       const practiceStateValid = practiceSession
         ? practiceSession.practicePlan.status === 'ACTIVE' &&
           practiceSession.practicePlan.subscriptionPeriod.status === 'ACTIVE' &&
@@ -58,6 +65,11 @@ export class MessageDispatcher {
           ((intent.category === 'PRACTICE_REMINDER' && practiceSession.status === 'REMINDED') ||
             (intent.category === 'PRACTICE_CHECKIN' &&
               practiceSession.status === 'AWAITING_RESPONSE'))
+        : true;
+      const meetingStateValid = meeting
+        ? meeting.status === 'SCHEDULED' &&
+          meeting.version === intent.aggregateVersion &&
+          meeting.meetingSeries.subscriptionPeriod.status === 'ACTIVE'
         : true;
       const decision = evaluateSendPolicy(
         {
@@ -73,7 +85,9 @@ export class MessageDispatcher {
           approvedTemplate: typeof payload.providerTemplateName === 'string',
           aggregateVersionMatches: practiceSession
             ? practiceStateValid
-            : intent.aggregateVersion === intent.student.version,
+            : meeting
+              ? meetingStateValid
+              : intent.aggregateVersion === intent.student.version,
         },
         this.clock,
       );

@@ -49,6 +49,7 @@ export const applicationConfigSchema = z
     API_PORT: z.coerce.number().int().positive().default(3000),
     ADMIN_ORIGIN: z.string().url().optional(),
     DATABASE_URL: z.string().url(),
+    REDIS_URL: z.string().url().optional(),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
     DEFAULT_LOCALE: z.string().default('tr-TR'),
     ALLOWED_RECIPIENTS: z.string().default(''),
@@ -72,6 +73,12 @@ export const applicationConfigSchema = z
     PAYMENT_IBAN: optionalConfigValue,
     PAYMENT_ACCOUNT_HOLDER: optionalConfigValue,
     INTERNAL_COMMAND_SECRET: optionalSecret,
+    GOOGLE_OAUTH_CLIENT_ID: optionalConfigValue,
+    GOOGLE_OAUTH_CLIENT_SECRET: optionalConfigValue,
+    GOOGLE_OAUTH_REDIRECT_URI: z.string().url().optional(),
+    GOOGLE_CALENDAR_SCOPES: z.string().default('https://www.googleapis.com/auth/calendar'),
+    GOOGLE_OAUTH_STATE_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
+    GEMINI_API_KEY: optionalConfigValue,
   })
   .superRefine((config, context) => {
     if (config.NODE_ENV !== 'staging' && config.NODE_ENV !== 'production') return;
@@ -93,6 +100,9 @@ export const applicationConfigSchema = z
       'PAYMENT_IBAN',
       'PAYMENT_ACCOUNT_HOLDER',
       'INTERNAL_COMMAND_SECRET',
+      'GOOGLE_OAUTH_CLIENT_ID',
+      'GOOGLE_OAUTH_CLIENT_SECRET',
+      'GOOGLE_OAUTH_REDIRECT_URI',
     ] as const) {
       if (!config[key]) {
         context.addIssue({

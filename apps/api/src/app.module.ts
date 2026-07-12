@@ -9,6 +9,8 @@ import { MessageCatalogModule } from './message-catalog/message-catalog.module.j
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { RegistrationModule } from './registration/registration.module.js';
 import { PracticeModule } from './practice/practice.module.js';
+import { MeetingsModule } from './meetings/meetings.module.js';
+import { LlmModule } from './llm/llm.module.js';
 
 @Module({
   imports: [
@@ -20,6 +22,8 @@ import { PracticeModule } from './practice/practice.module.js';
     ChannelsModule,
     RegistrationModule,
     PracticeModule,
+    MeetingsModule,
+    LlmModule,
   ],
   controllers: [HealthController],
 })

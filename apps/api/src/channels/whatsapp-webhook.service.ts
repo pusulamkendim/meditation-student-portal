@@ -114,6 +114,15 @@ export class WhatsAppWebhookService {
               normalizedData: protectedData as Prisma.InputJsonValue,
             },
           });
+          if (event.sender) {
+            await transaction.studentChannelIdentity.updateMany({
+              where: {
+                externalUserHmac: this.lookup.digest(event.sender),
+                channelAccount: { type: ChannelType.WHATSAPP, externalId: event.accountExternalId },
+              },
+              data: { lastInboundAt: event.occurredAt },
+            });
+          }
           await transaction.outboxEvent.create({
             data: {
               topic: event.text?.startsWith('practice:') ? 'practice.inbound' : 'channel.inbound',

@@ -108,6 +108,43 @@ enum MeetingStatus {
   CANCELLED
 }
 
+enum CalendarSyncStatus {
+  PENDING
+  SYNCED
+  DISCREPANCY
+  RECONNECT_REQUIRED
+  FAILED
+}
+
+enum ConferenceStatus {
+  PENDING
+  READY
+  FAILED
+  MANUAL_OVERRIDE
+}
+
+enum MeetingScheduleAction {
+  CREATED
+  RESCHEDULED
+  STATUS_CHANGED
+}
+
+enum SummarySource {
+  DETERMINISTIC
+  AI_DRAFT
+}
+
+enum GoogleCalendarConnectionStatus {
+  DISCONNECTED
+  CONNECTED
+  RECONNECT_REQUIRED
+}
+
+enum CalendarDiscrepancyStatus {
+  OPEN
+  RESOLVED
+}
+
 enum MessageDirection {
   INBOUND
   OUTBOUND
@@ -185,6 +222,32 @@ enum ResponseOwner {
   NO_REPLY
 }
 
+enum LlmProviderStatus {
+  ENABLED
+  DISABLED
+}
+
+enum LlmModelStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum LlmTask {
+  AGENT_REPLY
+  REFLECTION_TAGGING
+  WEEKLY_SUMMARY
+  KNOWLEDGE_EMBEDDING
+  RAG_QUERY_REWRITE
+  RAG_RERANK
+}
+
+enum LlmBudgetReservationStatus {
+  RESERVED
+  SETTLED
+  RELEASED
+  EXPIRED
+}
+
 model SystemSetting {
   key       String   @id
   value     Json
@@ -227,6 +290,8 @@ model Student {
   messageIntents         MessageIntent[]
   inboxEvents            InboxEvent[]
   channelLinkTokens      ChannelLinkToken[]
+  llmUsageLogs           LlmUsageLog[]
+  agentContextReads      AgentContextRead[]
 
   @@index([status])
   @@map("students")
@@ -414,11 +479,14 @@ model MeetingCreditEvent {
   delta                Int
   reason               String
   meetingId            String?  @map("meeting_id") @db.Uuid
+  idempotencyKey       String   @unique @map("idempotency_key")
   createdAt            DateTime @default(now()) @map("created_at")
 
   subscriptionPeriod SubscriptionPeriod @relation(fields: [subscriptionPeriodId], references: [id], onDelete: Restrict)
+  meeting            WeeklyMeeting?     @relation(fields: [meetingId], references: [id], onDelete: Restrict)
 
   @@index([subscriptionPeriodId, createdAt])
+  @@index([meetingId, createdAt])
   @@map("meeting_credit_events")
 }
 
@@ -500,43 +568,186 @@ model PracticeReflection {
 }
 
 model MeetingSeries {
-  id                   String   @id @default(uuid()) @db.Uuid
-  studentId            String   @map("student_id") @db.Uuid
-  subscriptionPeriodId String   @map("subscription_period_id") @db.Uuid
+  id                   String             @id @default(uuid()) @db.Uuid
+  studentId            String             @map("student_id") @db.Uuid
+  subscriptionPeriodId String             @map("subscription_period_id") @db.Uuid
   timezone             String
-  recurrenceRule       String   @map("recurrence_rule")
-  googleSeriesId       String?  @map("google_series_id")
-  version              Int      @default(1)
-  createdAt            DateTime @default(now()) @map("created_at")
-  updatedAt            DateTime @updatedAt @map("updated_at")
+  recurrenceRule       String             @map("recurrence_rule")
+  googleSeriesId       String?            @map("google_series_id")
+  googleCalendarId     String?            @map("google_calendar_id")
+  googleEtag           String?            @map("google_etag")
+  calendarSyncStatus   CalendarSyncStatus @default(PENDING) @map("calendar_sync_status")
+  conferenceStatus     ConferenceStatus   @default(PENDING) @map("conference_status")
+  meetUrlEncrypted     Bytes?             @map("meet_url_encrypted")
+  meetUrlKeyId         String?            @map("meet_url_key_id")
+  lastCalendarSyncAt   DateTime?          @map("last_calendar_sync_at")
+  version              Int                @default(1)
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
 
   student            Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
   subscriptionPeriod SubscriptionPeriod @relation(fields: [subscriptionPeriodId], references: [id], onDelete: Restrict)
   meetings           WeeklyMeeting[]
+  scheduleEvents     MeetingScheduleEvent[]
+  discrepancies      CalendarDiscrepancy[]
 
   @@unique([subscriptionPeriodId])
   @@map("meeting_series")
 }
 
 model WeeklyMeeting {
-  id               String        @id @default(uuid()) @db.Uuid
-  meetingSeriesId  String        @map("meeting_series_id") @db.Uuid
-  occurrenceNumber Int           @map("occurrence_number")
-  startsAt         DateTime      @map("starts_at")
-  endsAt           DateTime      @map("ends_at")
-  status           MeetingStatus @default(SCHEDULED)
-  googleInstanceId String?       @map("google_instance_id")
-  meetUrlEncrypted Bytes?        @map("meet_url_encrypted")
-  meetUrlKeyId     String?       @map("meet_url_key_id")
-  version          Int           @default(1)
-  createdAt        DateTime      @default(now()) @map("created_at")
-  updatedAt        DateTime      @updatedAt @map("updated_at")
+  id                 String             @id @default(uuid()) @db.Uuid
+  meetingSeriesId    String             @map("meeting_series_id") @db.Uuid
+  occurrenceNumber   Int                @map("occurrence_number")
+  startsAt           DateTime           @map("starts_at")
+  endsAt             DateTime           @map("ends_at")
+  originalStartsAt   DateTime?          @map("original_starts_at")
+  status             MeetingStatus      @default(SCHEDULED)
+  googleInstanceId   String?            @map("google_instance_id")
+  googleEtag         String?            @map("google_etag")
+  calendarSyncStatus CalendarSyncStatus @default(PENDING) @map("calendar_sync_status")
+  lastCalendarSyncAt DateTime?          @map("last_calendar_sync_at")
+  meetUrlEncrypted   Bytes?             @map("meet_url_encrypted")
+  meetUrlKeyId       String?            @map("meet_url_key_id")
+  version            Int                @default(1)
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
 
-  meetingSeries MeetingSeries @relation(fields: [meetingSeriesId], references: [id], onDelete: Restrict)
+  meetingSeries MeetingSeries          @relation(fields: [meetingSeriesId], references: [id], onDelete: Restrict)
+  creditEvents  MeetingCreditEvent[]
+  scheduleEvents MeetingScheduleEvent[]
+  summary       WeeklySummary?
+  coachNotes    CoachNoteVersion[]
+  discrepancies CalendarDiscrepancy[]
 
   @@unique([meetingSeriesId, occurrenceNumber])
   @@index([startsAt, status])
   @@map("weekly_meetings")
+}
+
+model MeetingScheduleEvent {
+  id               String               @id @default(uuid()) @db.Uuid
+  meetingSeriesId  String               @map("meeting_series_id") @db.Uuid
+  meetingId        String?              @map("meeting_id") @db.Uuid
+  action           MeetingScheduleAction
+  previousStartsAt DateTime?            @map("previous_starts_at")
+  newStartsAt      DateTime?            @map("new_starts_at")
+  previousStatus   MeetingStatus?       @map("previous_status")
+  newStatus        MeetingStatus?       @map("new_status")
+  reason           String?
+  adminUserId      String               @map("admin_user_id") @db.Uuid
+  idempotencyKey   String               @unique @map("idempotency_key")
+  createdAt        DateTime             @default(now()) @map("created_at")
+
+  meetingSeries MeetingSeries  @relation(fields: [meetingSeriesId], references: [id], onDelete: Restrict)
+  meeting       WeeklyMeeting? @relation(fields: [meetingId], references: [id], onDelete: Restrict)
+  adminUser     AdminUser      @relation(fields: [adminUserId], references: [id], onDelete: Restrict)
+
+  @@index([meetingSeriesId, createdAt])
+  @@index([meetingId, createdAt])
+  @@map("meeting_schedule_events")
+}
+
+model WeeklySummary {
+  id                     String        @id @default(uuid()) @db.Uuid
+  meetingId              String        @unique @map("meeting_id") @db.Uuid
+  plannedPracticeCount   Int           @default(0) @map("planned_practice_count")
+  completedPracticeCount Int           @default(0) @map("completed_practice_count")
+  skippedPracticeCount   Int           @default(0) @map("skipped_practice_count")
+  missedPracticeCount    Int           @default(0) @map("missed_practice_count")
+  completionRate         Float         @default(0) @map("completion_rate")
+  highlights             Json
+  source                 SummarySource @default(DETERMINISTIC)
+  generatedAt            DateTime      @map("generated_at")
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
+
+  meeting WeeklyMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@map("weekly_summaries")
+}
+
+model CoachNoteVersion {
+  id               String   @id @default(uuid()) @db.Uuid
+  meetingId        String   @map("meeting_id") @db.Uuid
+  version          Int
+  content          String
+  createdByAdminId String   @map("created_by_admin_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  meeting        WeeklyMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdByAdmin AdminUser     @relation(fields: [createdByAdminId], references: [id], onDelete: Restrict)
+
+  @@unique([meetingId, version])
+  @@index([meetingId, createdAt])
+  @@map("coach_note_versions")
+}
+
+model GoogleCalendarIntegration {
+  id                    String                         @id @default("default")
+  status                GoogleCalendarConnectionStatus @default(DISCONNECTED)
+  refreshTokenEncrypted Bytes?                        @map("refresh_token_encrypted")
+  refreshTokenKeyId     String?                        @map("refresh_token_key_id")
+  calendarId            String?                        @map("calendar_id")
+  calendarName          String?                        @map("calendar_name")
+  lastSuccessfulSyncAt  DateTime?                      @map("last_successful_sync_at")
+  version               Int                            @default(1)
+  createdAt             DateTime                       @default(now()) @map("created_at")
+  updatedAt             DateTime                       @updatedAt @map("updated_at")
+
+  @@map("google_calendar_integrations")
+}
+
+model GoogleOAuthState {
+  id                    String   @id @default(uuid()) @db.Uuid
+  stateHash             String   @unique @map("state_hash")
+  codeVerifierEncrypted Bytes    @map("code_verifier_encrypted")
+  codeVerifierKeyId     String   @map("code_verifier_key_id")
+  adminUserId           String   @map("admin_user_id") @db.Uuid
+  expiresAt             DateTime @map("expires_at")
+  usedAt                DateTime? @map("used_at")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt, usedAt])
+  @@map("google_oauth_states")
+}
+
+model GoogleCalendarSyncState {
+  id                    String    @id @default("default")
+  syncTokenEncrypted    Bytes?    @map("sync_token_encrypted")
+  syncTokenKeyId        String?   @map("sync_token_key_id")
+  lastIncrementalSyncAt DateTime? @map("last_incremental_sync_at")
+  lastFullSyncAt        DateTime? @map("last_full_sync_at")
+  nextFullReconcileAt   DateTime? @map("next_full_reconcile_at")
+  version               Int       @default(1)
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  @@map("google_calendar_sync_state")
+}
+
+model CalendarDiscrepancy {
+  id               String                    @id @default(uuid()) @db.Uuid
+  meetingSeriesId  String                    @map("meeting_series_id") @db.Uuid
+  meetingId        String?                   @map("meeting_id") @db.Uuid
+  type             String
+  status           CalendarDiscrepancyStatus @default(OPEN)
+  expectedStartsAt DateTime?                 @map("expected_starts_at")
+  observedStartsAt DateTime?                 @map("observed_starts_at")
+  expectedEtag     String?                   @map("expected_etag")
+  observedEtag     String?                   @map("observed_etag")
+  details          Json?
+  resolvedAt       DateTime?                 @map("resolved_at")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+
+  meetingSeries MeetingSeries  @relation(fields: [meetingSeriesId], references: [id], onDelete: Cascade)
+  meeting       WeeklyMeeting? @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+  @@index([meetingSeriesId, createdAt])
+  @@map("calendar_discrepancies")
 }
 
 model Message {
@@ -774,6 +985,9 @@ model AdminUser {
   sessions         AdminSession[]
   recoveryCodes    TotpRecoveryCode[]
   approvedPayments Payment[]
+  meetingScheduleEvents MeetingScheduleEvent[]
+  coachNoteVersions CoachNoteVersion[]
+  googleOAuthStates GoogleOAuthState[]
 
   @@map("admin_users")
 }
@@ -871,4 +1085,189 @@ model FeatureFlagEvaluation {
 
   @@index([key, evaluatedAt])
   @@map("feature_flag_evaluations")
+}
+
+model LlmProvider {
+  id          String            @id @default(uuid()) @db.Uuid
+  adapterId   String            @unique @map("adapter_id")
+  displayName String            @map("display_name")
+  status      LlmProviderStatus @default(DISABLED)
+  secretAlias String            @map("secret_alias")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  models LlmModel[]
+
+  @@map("llm_providers")
+}
+
+model LlmModel {
+  id                     String        @id @default(uuid()) @db.Uuid
+  providerId             String        @map("provider_id") @db.Uuid
+  providerModelId        String        @map("provider_model_id")
+  displayName            String        @map("display_name")
+  status                 LlmModelStatus @default(INACTIVE)
+  inputTokenLimit       Int           @map("input_token_limit")
+  outputTokenLimit      Int           @map("output_token_limit")
+  supportsTools         Boolean       @default(false) @map("supports_tools")
+  supportsStructured    Boolean       @default(true) @map("supports_structured")
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
+
+  provider       LlmProvider             @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  priceVersions  LlmModelPriceVersion[]
+  primaryTasks   LlmTaskConfig[]         @relation("PrimaryTaskModel")
+  fallbackTasks  LlmTaskConfig[]         @relation("FallbackTaskModel")
+
+  @@unique([providerId, providerModelId])
+  @@index([status])
+  @@map("llm_models")
+}
+
+model LlmModelPriceVersion {
+  id                 String   @id @default(uuid()) @db.Uuid
+  modelId            String   @map("model_id") @db.Uuid
+  version            Int
+  inputMicroUsdPerM  BigInt   @map("input_micro_usd_per_m")
+  outputMicroUsdPerM BigInt   @map("output_micro_usd_per_m")
+  effectiveAt        DateTime @map("effective_at")
+  retiredAt          DateTime? @map("retired_at")
+  sourceUrl          String?  @map("source_url")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  model LlmModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  usageLogs LlmUsageLog[]
+
+  @@unique([modelId, version])
+  @@index([modelId, effectiveAt])
+  @@map("llm_model_price_versions")
+}
+
+model LlmPromptVersion {
+  id                   String   @id @default(uuid()) @db.Uuid
+  task                 LlmTask
+  semanticVersion      String   @map("semantic_version")
+  sourcePath            String   @map("source_path")
+  sha256               String
+  content              String
+  outputSchemaVersion  String   @map("output_schema_version")
+  approvedAt           DateTime? @map("approved_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  taskConfigs LlmTaskConfig[]
+
+  @@unique([task, semanticVersion])
+  @@index([task, createdAt])
+  @@map("llm_prompt_versions")
+}
+
+model LlmTaskConfig {
+  id             String   @id @default(uuid()) @db.Uuid
+  task           LlmTask  @unique
+  primaryModelId String?  @map("primary_model_id") @db.Uuid
+  fallbackModelId String? @map("fallback_model_id") @db.Uuid
+  promptVersionId String? @map("prompt_version_id") @db.Uuid
+  enabled        Boolean  @default(false)
+  version        Int      @default(1)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  primaryModel  LlmModel?        @relation("PrimaryTaskModel", fields: [primaryModelId], references: [id], onDelete: Restrict)
+  fallbackModel LlmModel?        @relation("FallbackTaskModel", fields: [fallbackModelId], references: [id], onDelete: Restrict)
+  promptVersion LlmPromptVersion? @relation(fields: [promptVersionId], references: [id], onDelete: Restrict)
+
+  @@map("llm_task_configs")
+}
+
+model LlmUsageLog {
+  id                String   @id @default(uuid()) @db.Uuid
+  operationId       String   @map("operation_id")
+  attempt           Int
+  task              LlmTask
+  studentId         String?  @map("student_id") @db.Uuid
+  sourceMessageId   String?  @map("source_message_id") @db.Uuid
+  requestedModelId  String?  @map("requested_model_id") @db.Uuid
+  actualModelId     String?  @map("actual_model_id") @db.Uuid
+  priceVersionId    String?  @map("price_version_id") @db.Uuid
+  promptVersionId   String?  @map("prompt_version_id") @db.Uuid
+  providerRequestId String?  @map("provider_request_id")
+  inputTokens       Int      @default(0) @map("input_tokens")
+  outputTokens      Int      @default(0) @map("output_tokens")
+  totalTokens       Int      @default(0) @map("total_tokens")
+  estimatedMicroUsd BigInt   @default(0) @map("estimated_micro_usd")
+  latencyMs         Int?     @map("latency_ms")
+  status            String
+  fallbackUsed     Boolean  @default(false) @map("fallback_used")
+  errorCode        String?  @map("error_code")
+  metadata         Json?
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  priceVersion LlmModelPriceVersion? @relation(fields: [priceVersionId], references: [id], onDelete: Restrict)
+
+  @@unique([operationId, attempt])
+  @@index([createdAt, task])
+  @@index([studentId, createdAt])
+  @@map("llm_usage_logs")
+}
+
+model LlmBudget {
+  id                   String   @id @default("default")
+  timezone             String   @default("Europe/Istanbul")
+  dailyLimitMicroUsd  BigInt   @map("daily_limit_micro_usd")
+  monthlyLimitMicroUsd BigInt  @map("monthly_limit_micro_usd")
+  warningPercent       Int      @default(80) @map("warning_percent")
+  criticalPercent      Int      @default(100) @map("critical_percent")
+  hardLimitEnabled     Boolean  @default(false) @map("hard_limit_enabled")
+  version              Int      @default(1)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  reservations LlmBudgetReservation[]
+
+  @@map("llm_budgets")
+}
+
+model LlmBudgetReservation {
+  id              String                    @id @default(uuid()) @db.Uuid
+  budgetId        String                    @map("budget_id")
+  operationId     String                    @unique @map("operation_id")
+  dayBucket       String                    @map("day_bucket")
+  monthBucket     String                    @map("month_bucket")
+  estimatedMicroUsd BigInt                  @map("estimated_micro_usd")
+  actualMicroUsd  BigInt?                   @map("actual_micro_usd")
+  status          LlmBudgetReservationStatus @default(RESERVED)
+  expiresAt       DateTime                  @map("expires_at")
+  settledAt       DateTime?                 @map("settled_at")
+  createdAt       DateTime                  @default(now()) @map("created_at")
+
+  budget LlmBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+
+  @@index([status, expiresAt])
+  @@index([dayBucket, status])
+  @@index([monthBucket, status])
+  @@map("llm_budget_reservations")
+}
+
+model AgentContextRead {
+  id                    String   @id @default(uuid()) @db.Uuid
+  studentId             String   @map("student_id") @db.Uuid
+  sourceMessageId       String?  @map("source_message_id") @db.Uuid
+  answerReference       String?  @map("answer_reference")
+  sections              Json
+  range                 String
+  asOf                  DateTime @map("as_of")
+  projectionSchemaVersion String @map("projection_schema_version")
+  recordHashes          Json     @map("record_hashes")
+  rowCount              Int      @map("row_count")
+  pageCount             Int      @default(1) @map("page_count")
+  latencyMs             Int      @map("latency_ms")
+  policyResult          String   @map("policy_result")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, createdAt])
+  @@index([policyResult, createdAt])
+  @@map("agent_context_reads")
 }

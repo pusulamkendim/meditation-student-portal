@@ -3,10 +3,10 @@
 | Alan | Değer |
 | --- | --- |
 | Belge durumu | Taslak |
-| Sürüm | 0.59 |
+| Sürüm | 0.60 |
 | Oluşturulma tarihi | 10 Temmuz 2026 |
 | Son güncelleme | 10 Temmuz 2026 |
-| Ürün aşaması | Keşif ve planlama |
+| Ürün aşaması | M7 LLM platformu ve öğrenci bağlamı uygulaması |
 
 ## 1. Amaç
 
@@ -293,7 +293,7 @@ log'a yazılır.
 ## 7. Haftalık Görüşme Akışı
 
 Her aktif öğrenci için aylık pakete bağlı dört haftalık görüşmenin tarihi, saati,
-saat dilimi ve Google Meet bağlantısı tutulur. Haftalık görüşme saatini admin
+saat dilimi ve Google Meet bağlantısı tutulur. Her görüşme 60 dakikadır. Haftalık görüşme saatini admin
 panelinden eğitmen belirler. Sistem görüşmeden önce öğrencinin varsayılan kanalından
 görüşme hatırlatmasını ve Meet bağlantısını gönderir; WhatsApp kullanılıyorsa
 gerekli onaylı şablon politikası uygulanır.
@@ -327,7 +327,7 @@ takvim olayıdır; görüşme yeni zamanıyla `SCHEDULED` kalır. `COMPLETED` ve
 Durumu yalnızca admin değiştirebilir. Durum sonradan düzeltilirse hak mutable
 sayaçla ezilmez; grant/consume/reversal credit olayı eklenir ve audit log tutulur.
 
-Görüşmeden belirlenen süre önce sistem şu verileri hazırlar:
+Görüşmeden üç saat önce sistem şu deterministik verileri hazırlar:
 
 - Planlanan ve tamamlanan pratik sayısı
 - Devam oranı
@@ -336,7 +336,7 @@ Görüşmeden belirlenen süre önce sistem şu verileri hazırlar:
 - Öğrencinin paylaştığı öne çıkan duygular
 - Önceki haftaya göre ölçülebilir değişimler
 - Öğrencinin görüşmede konuşmak istediği konular
-- Yapay zeka tarafından hazırlanmış kısa taslak özet
+- M6'da yapay zeka kullanılmaz; AI taslak özet M7 kapsamındadır
 
 Özet görüşmeden 3 saat önce oluşturulur ve admin panelinde bildirim gösterilir.
 Veri aralığı önceki görüşmeden mevcut görüşmeye kadardır; paketin ilk
@@ -730,8 +730,8 @@ değişiklikleri gerekçe ve admin kimliğiyle audit edilir.
 | MeetingSeries | Paket, Google Calendar seri kimliği ve ortak Meet bağlantısı |
 | WeeklyMeeting | Logical hak slotu, tarih, Google occurrence kimliği/original start/etag, Meet bağlantısı, sync ve görüşme durumu |
 | MeetingScheduleEvent | Görüşme planlama/yeniden planlama geçmişi, eski/yeni zaman ve admin |
-| WeeklySummary | Sayısal ölçümler, değişmez AI taslağı, model/prompt sürümü ve üretim zamanı |
-| CoachNote | Haftalık özete bağlı düzenlenebilir eğitmen notu ve değişiklik geçmişi |
+| WeeklySummary | Sayısal ölçümler, deterministik kaynak ve üretim zamanı |
+| CoachNoteVersion | Haftalık görüşmeye bağlı sürümlü eğitmen notu ve değişiklik geçmişi |
 | Message | Kanal, kanal hesabı, gelen/giden içerik, harici kimlik ve teslim durumu |
 | MessageIntent | Kategori, hedef kanal kimliği, plan sürümü, due/expiry, idempotency ve politika sonucu |
 | MessageDeliveryEvent | Kanal, harici mesaj kimliği, teslim durumu, provider zamanı ve tekilleştirme anahtarı |

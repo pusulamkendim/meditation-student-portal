@@ -8,7 +8,7 @@ kişiselleştirilmiş meditasyon programına alındığı ve pratiklerinin takip
 ```bash
 pnpm install
 pnpm setup:local
-docker compose up -d postgres
+docker compose up -d postgres redis
 pnpm db:migrate
 pnpm test:db
 pnpm dev:api
@@ -31,6 +31,20 @@ yazar; ikinci admin bootstrap denemesi veritabanı tarafından reddedilir.
 
 API sağlık uçları `http://localhost:3000/health/live` ve
 `http://localhost:3000/health/ready` adreslerinde çalışır.
+
+M6 görüşme yönetimi admin portalındaki `http://localhost:3001/meetings` ekranındadır.
+Google Calendar bağlantısı kullanılacaksa `.env` içinde mevcut Google OAuth client'ı
+deployment secret olarak `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` ve
+`GOOGLE_OAUTH_REDIRECT_URI` ile tanımlayın; `CHEATSHEET.md` içindeki değerleri koda
+veya commit'e taşımayın. Redirect URI yerelde
+`http://localhost:3000/v1/admin/google-calendar/oauth/callback` olmalıdır.
+
+M7 LLM platformu için `.env` içinde Paid Services Gemini API anahtarını
+`GEMINI_API_KEY` olarak tanımlayın. Migration provider/model/fiyat snapshot ve
+varsayılan bütçeyi oluşturur. Git kaynaklı prompt sürümlerini veritabanına almak
+için migration sonrasında `pnpm --filter @meditation/api sync-prompts` çalıştırın;
+provider'ı admin portalındaki LLM Platformu ekranından bağlantı testi sonrası
+etkinleştirin. Öğrencilerde agent yanıtı için ayrıca `AGENT_REPLY_AI` rızası gerekir.
 
 M0; monorepo iskeletini, API/worker/admin uygulamalarını, PostgreSQL + pgvector
 yerel ortamını, fake clock/test altyapısını ve fake kanal adapter'larını kapsar.

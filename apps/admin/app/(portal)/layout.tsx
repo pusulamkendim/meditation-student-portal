@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   Sprout,
   Users,
+  BrainCircuit,
 } from 'lucide-react';
 
 import { PortalSessionBoundary } from './portal-session-boundary';
@@ -52,6 +53,9 @@ export default function PortalLayout({ children }: Readonly<{ children: ReactNod
             </Link>
             <Link href="/operations">
               <ShieldAlert aria-hidden="true" /> Operasyon
+            </Link>
+            <Link href="/llm">
+              <BrainCircuit aria-hidden="true" /> LLM Platformu
             </Link>
             <Link href="/ui-preview">
               <Palette aria-hidden="true" /> UI Sistemi

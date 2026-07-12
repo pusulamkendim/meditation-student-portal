@@ -1733,11 +1733,38 @@ pause/cancel/restore yarışları ve idempotent reminder/check-in/day-close test
 
 ### M6 - Görüşme ve Google
 
+**Durum:** Uygulama tamamlandı - 12 Temmuz 2026. 60 dakikalık dört occurrence serisi,
+meeting credit ledger'ı, admin yeniden planlama/durum akışı, PKCE/offline Google OAuth,
+ayrı portal Calendar, Meet durumları, discrepancy kaydı, 24h/3h/1h lifecycle işleri,
+deterministik haftalık özet ve sürümlü koç notları API/worker/admin yüzeyine bağlandı.
+Zaman pencereleri `FakeClock` ile test edilir; migration yerel PostgreSQL'de uygulandı.
+
 - Meeting credit ledger
 - Dört occurrence planı
 - Production OAuth, recurrence instance mapping, incremental sync ve Meet state
 - 24h/3h/1h işleri
 - Deterministik weekly metrics ve coach note
+
+Uygulama kararları:
+
+- Admin ilk tarihi/saatini seçer; occurrence'lar aynı yerel saatte `+7/+14/+21` gün
+  üretilir ve süre 60 dakikadır. Tek occurrence değişimi parent seriyi bozmaz.
+- Her paket için tek recurring event ve tek Meet bağlantısı kullanılır. Google event
+  başlığı öğrenci adı/telefonu içermez; yalnızca kısa portal referansıdır.
+- Portal verisi kaynak doğrudur. Google dış değişiklikleri `calendar_discrepancies`
+  kaydı ve alarm durumu üretir; otomatik olarak portala yazılmaz. 410 sync token
+  yanıtı tam reconciliation başlatır.
+- `COMPLETED`/`NO_SHOW` bir kredi tüketir; `CANCELLED` tüketmez. Düzeltmeler yeni
+  `meeting_credit_events` satırı olarak append-only tutulur.
+- Meet `PENDING/READY/FAILED/MANUAL_OVERRIDE` durumları izlenir. Link hazır değilse
+  öğrenci reminder intent'i oluşturulmaz; admin override linkiyle kontrollü açılabilir.
+- OAuth state ve PKCE verifier, refresh token ile birlikte uygulama alan şifrelemesiyle
+  saklanır. Client ID/secret yalnızca deployment env'den okunur; CHEATSHEET.md'den
+  değer kopyalanmaz.
+- Queue işleri: `meeting.calendar-create`, `meeting.calendar-update`,
+  `meeting.reminder-24h`, `meeting.summary-3h`, `meeting.reminder-1h`,
+  `calendar.incremental-sync` (5 dk) ve `calendar.reconcile` (saatlik). Standart
+  message katalogu ve outbox üzerinden gönderim yapılır.
 
 **Çıkış ölçütü:** Tek occurrence parent seriyi bozmadan güncellenir,
 dış değişiklik alert olur, Meet hazır değilken link mesajı gönderilmez ve 24h/3h/1h
