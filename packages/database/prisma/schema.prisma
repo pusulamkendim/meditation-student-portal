@@ -248,6 +248,47 @@ enum LlmBudgetReservationStatus {
   EXPIRED
 }
 
+enum KnowledgeStage {
+  GENERAL
+  WEEK_1
+  WEEK_2
+  WEEK_3
+  WEEK_4
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum KnowledgeDocumentVersionStatus {
+  UPLOADED
+  QUARANTINED
+  SCANNING
+  PARSING
+  CHUNKING
+  EMBEDDING
+  READY
+  PUBLISHED
+  ARCHIVED
+  FAILED
+}
+
+enum KnowledgeEmbeddingStatus {
+  PENDING
+  READY
+  FAILED
+}
+
+enum HandoffStatus {
+  OPEN
+  RESOLVED
+}
+
+enum WeeklySummaryDraftStatus {
+  DRAFT
+  APPROVED
+  SENT
+  REJECTED
+}
+
 model SystemSetting {
   key       String   @id
   value     Json
@@ -292,6 +333,8 @@ model Student {
   channelLinkTokens      ChannelLinkToken[]
   llmUsageLogs           LlmUsageLog[]
   agentContextReads      AgentContextRead[]
+  knowledgeQueryLogs     RagQueryLog[]
+  handoffs               Handoff[]
 
   @@index([status])
   @@map("students")
@@ -563,6 +606,7 @@ model PracticeReflection {
   createdAt         DateTime @default(now()) @map("created_at")
 
   practiceSession PracticeSession @relation(fields: [practiceSessionId], references: [id], onDelete: Cascade)
+  tags            ReflectionTag[]
 
   @@map("practice_reflections")
 }
@@ -617,6 +661,7 @@ model WeeklyMeeting {
   creditEvents  MeetingCreditEvent[]
   scheduleEvents MeetingScheduleEvent[]
   summary       WeeklySummary?
+  draftVersions WeeklySummaryDraftVersion[]
   coachNotes    CoachNoteVersion[]
   discrepancies CalendarDiscrepancy[]
 
@@ -760,11 +805,13 @@ model Message {
   contentEncrypted  Bytes?           @map("content_encrypted")
   contentKeyId      String?          @map("content_key_id")
   contentHmac       String?          @map("content_hmac")
+  inboxEventId      String?          @unique @map("inbox_event_id") @db.Uuid
   occurredAt        DateTime         @map("occurred_at")
   createdAt         DateTime         @default(now()) @map("created_at")
 
   student         Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
   channelIdentity StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
+  inboxEvent      InboxEvent?            @relation(fields: [inboxEventId], references: [id], onDelete: SetNull)
 
   @@unique([channelIdentityId, externalMessageId])
   @@index([studentId, occurredAt])
@@ -928,6 +975,7 @@ model InboxEvent {
   createdAt      DateTime    @default(now()) @map("created_at")
 
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  message Message?
 
   @@index([studentId, createdAt])
   @@map("inbox_events")
@@ -1270,4 +1318,207 @@ model AgentContextRead {
   @@index([studentId, createdAt])
   @@index([policyResult, createdAt])
   @@map("agent_context_reads")
+}
+
+model KnowledgeBase {
+  id                     String   @id @default(uuid()) @db.Uuid
+  name                   String
+  description            String?
+  active                 Boolean  @default(true)
+  retrievalConfigVersion Int      @default(1) @map("retrieval_config_version")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  documents KnowledgeDocument[]
+
+  @@unique([name])
+  @@map("knowledge_bases")
+}
+
+model KnowledgeDocument {
+  id              String   @id @default(uuid()) @db.Uuid
+  knowledgeBaseId String   @map("knowledge_base_id") @db.Uuid
+  logicalName     String   @map("logical_name")
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  knowledgeBase KnowledgeBase            @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  versions     KnowledgeDocumentVersion[]
+
+  @@unique([knowledgeBaseId, logicalName])
+  @@index([knowledgeBaseId, active])
+  @@map("knowledge_documents")
+}
+
+model KnowledgeDocumentVersion {
+  id            String                         @id @default(uuid()) @db.Uuid
+  documentId    String                         @map("document_id") @db.Uuid
+  version       Int
+  filename      String
+  contentType   String                         @map("content_type")
+  byteSize      Int                            @map("byte_size")
+  contentHash   String                         @map("content_hash")
+  quarantineKey String?                        @map("quarantine_key")
+  storageKey    String?                        @map("storage_key")
+  extractedText String?                        @map("extracted_text")
+  parserVersion String?                        @map("parser_version")
+  status        KnowledgeDocumentVersionStatus @default(UPLOADED)
+  errorCode     String?                        @map("error_code")
+  publishedAt   DateTime?                      @map("published_at")
+  archivedAt    DateTime?                      @map("archived_at")
+  createdAt     DateTime                       @default(now()) @map("created_at")
+  updatedAt     DateTime                       @updatedAt @map("updated_at")
+
+  document         KnowledgeDocument             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  stageAssignments KnowledgeDocumentStageAssignment[]
+  chunks           KnowledgeChunk[]
+
+  @@unique([documentId, version])
+  @@index([status, createdAt])
+  @@map("knowledge_document_versions")
+}
+
+model KnowledgeDocumentStageAssignment {
+  id                String         @id @default(uuid()) @db.Uuid
+  documentVersionId String         @map("document_version_id") @db.Uuid
+  stage             KnowledgeStage
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  documentVersion KnowledgeDocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+
+  @@unique([documentVersionId, stage])
+  @@index([stage, documentVersionId])
+  @@map("knowledge_document_stage_assignments")
+}
+
+model KnowledgeChunk {
+  id                String   @id @default(uuid()) @db.Uuid
+  documentVersionId String   @map("document_version_id") @db.Uuid
+  chunkIndex        Int      @map("chunk_index")
+  titlePath         String   @map("title_path")
+  content           String
+  contentHash       String   @map("content_hash")
+  tokenCount        Int      @map("token_count")
+  startChar         Int?     @map("start_char")
+  endChar           Int?     @map("end_char")
+  stageSnapshot     Json     @map("stage_snapshot")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  documentVersion KnowledgeDocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  embeddings      KnowledgeEmbedding[]
+
+  @@unique([documentVersionId, chunkIndex])
+  @@index([contentHash])
+  @@map("knowledge_chunks")
+}
+
+model KnowledgeEmbedding {
+  id              String                   @id @default(uuid()) @db.Uuid
+  chunkId         String                   @map("chunk_id") @db.Uuid
+  modelRef        String                   @map("model_ref")
+  modelVersion    String                   @map("model_version")
+  dimension       Int
+  embeddingVector Unsupported("vector(768)")? @map("embedding_vector")
+  contentHash     String                   @map("content_hash")
+  status          KnowledgeEmbeddingStatus @default(PENDING)
+  createdAt       DateTime                 @default(now()) @map("created_at")
+
+  chunk KnowledgeChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@unique([chunkId, modelRef, contentHash])
+  @@index([modelRef, status])
+  @@map("knowledge_embeddings")
+}
+
+model KnowledgeRetrievalConfig {
+  id                   String   @id @default("default")
+  topK                 Int      @default(20) @map("top_k")
+  finalChunks          Int      @default(6) @map("final_chunks")
+  minScore             Float    @default(0.55) @map("min_score")
+  maxContextChars      Int      @default(12000) @map("max_context_chars")
+  vectorWeight         Float    @default(0.78) @map("vector_weight")
+  keywordWeight        Float    @default(0.22) @map("keyword_weight")
+  maxChunksPerDocument Int      @default(3) @map("max_chunks_per_document")
+  version              Int      @default(1)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  @@map("knowledge_retrieval_configs")
+}
+
+model RagQueryLog {
+  id                     String   @id @default(uuid()) @db.Uuid
+  sourceMessageId        String?  @map("source_message_id") @db.Uuid
+  studentId              String?  @map("student_id") @db.Uuid
+  curriculumStage        String?  @map("curriculum_stage")
+  retrievalConfigVersion Int      @map("retrieval_config_version")
+  candidateChunkIds      Json     @map("candidate_chunk_ids")
+  selectedChunkIds       Json     @map("selected_chunk_ids")
+  scores                 Json
+  thresholdPassed        Boolean  @map("threshold_passed")
+  handoffReference       String?  @map("handoff_reference") @db.Uuid
+  latencyMs              Int      @map("latency_ms")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@index([studentId, createdAt])
+  @@index([thresholdPassed, createdAt])
+  @@map("rag_query_logs")
+}
+
+model Handoff {
+  id                String       @id @default(uuid()) @db.Uuid
+  studentId         String       @map("student_id") @db.Uuid
+  sourceMessageId   String?      @map("source_message_id") @db.Uuid
+  reason            String
+  status            HandoffStatus @default(OPEN)
+  responseOwnerId   String?      @map("response_owner_id") @db.Uuid
+  resolvedByAdminId String?      @map("resolved_by_admin_id") @db.Uuid
+  resolvedAt        DateTime?    @map("resolved_at")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, status, createdAt])
+  @@map("handoffs")
+}
+
+model ReflectionTag {
+  id              String   @id @default(uuid()) @db.Uuid
+  reflectionId    String   @map("reflection_id") @db.Uuid
+  tag             String
+  confidence      Float
+  taxonomyVersion String   @map("taxonomy_version")
+  operationId     String   @map("operation_id")
+  modelRef        String   @map("model_ref")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  reflection PracticeReflection @relation(fields: [reflectionId], references: [id], onDelete: Cascade)
+
+  @@unique([reflectionId, tag, operationId])
+  @@index([tag, createdAt])
+  @@map("reflection_tags")
+}
+
+model WeeklySummaryDraftVersion {
+  id               String                   @id @default(uuid()) @db.Uuid
+  meetingId        String                   @map("meeting_id") @db.Uuid
+  version          Int
+  contentEncrypted Bytes                    @map("content_encrypted")
+  contentKeyId     String                   @map("content_key_id")
+  status           WeeklySummaryDraftStatus @default(DRAFT)
+  operationId      String?                  @map("operation_id")
+  createdByAdminId String?                  @map("created_by_admin_id") @db.Uuid
+  approvedAt       DateTime?                @map("approved_at")
+  sentAt           DateTime?                @map("sent_at")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+
+  meeting WeeklyMeeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, version])
+  @@index([meetingId, status])
+  @@map("weekly_summary_draft_versions")
 }

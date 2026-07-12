@@ -11,6 +11,7 @@ import { RegistrationModule } from './registration/registration.module.js';
 import { PracticeModule } from './practice/practice.module.js';
 import { MeetingsModule } from './meetings/meetings.module.js';
 import { LlmModule } from './llm/llm.module.js';
+import { KnowledgeModule } from './knowledge/knowledge.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { LlmModule } from './llm/llm.module.js';
     PracticeModule,
     MeetingsModule,
     LlmModule,
+    KnowledgeModule,
   ],
   controllers: [HealthController],
 })

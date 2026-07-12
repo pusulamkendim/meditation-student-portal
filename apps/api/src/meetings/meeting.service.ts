@@ -183,6 +183,120 @@ export class MeetingService {
     return this.presentMeeting(meeting);
   }
 
+  async listSummaryDrafts(meetingId?: string) {
+    const drafts = await this.prisma.weeklySummaryDraftVersion.findMany({
+      where: meetingId ? { meetingId } : undefined,
+      include: { meeting: { include: { meetingSeries: { include: { student: true } } } } },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    return drafts.map((draft) => ({
+      id: draft.id,
+      meetingId: draft.meetingId,
+      version: draft.version,
+      status: draft.status,
+      createdAt: draft.createdAt,
+      approvedAt: draft.approvedAt,
+      sentAt: draft.sentAt,
+      content: this.encryption.decrypt(
+        { ciphertext: Buffer.from(draft.contentEncrypted), keyId: draft.contentKeyId },
+        `weekly-summary:${draft.meetingId}:v${draft.version}`,
+      ),
+      studentId: draft.meeting.meetingSeries.studentId,
+    }));
+  }
+
+  async editSummaryDraft(meetingId: string, content: string, adminId: string) {
+    const latest = await this.prisma.weeklySummaryDraftVersion.findFirst({
+      where: { meetingId },
+      orderBy: { version: 'desc' },
+    });
+    if (!latest) throw new NotFoundException('Summary draft not found.');
+    const version = latest.version + 1;
+    const encrypted = this.encryption.encrypt(
+      content.trim(),
+      `weekly-summary:${meetingId}:v${version}`,
+    );
+    return this.prisma.weeklySummaryDraftVersion.create({
+      data: {
+        meetingId,
+        version,
+        contentEncrypted: new Uint8Array(encrypted.ciphertext),
+        contentKeyId: encrypted.keyId,
+        status: 'DRAFT',
+        createdByAdminId: adminId,
+      },
+    });
+  }
+
+  async approveSummaryDraft(draftId: string, adminId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const draft = await tx.weeklySummaryDraftVersion.findUnique({
+        where: { id: draftId },
+        include: {
+          meeting: {
+            include: {
+              meetingSeries: {
+                include: {
+                  student: { include: { messagingPreference: true, defaultChannelIdentity: true } },
+                  subscriptionPeriod: true,
+                },
+              },
+            },
+          },
+        },
+      });
+      if (!draft) throw new NotFoundException('Summary draft not found.');
+      if (draft.status !== 'DRAFT')
+        throw new BadRequestException('Only draft summaries can be approved.');
+      const student = draft.meeting.meetingSeries.student;
+      const consent = await tx.consent.findFirst({
+        where: { studentId: student.id, scope: 'MESSAGING' },
+        orderBy: { occurredAt: 'desc' },
+      });
+      if (
+        consent?.status !== 'GRANTED' ||
+        student.status !== 'ACTIVE' ||
+        draft.meeting.meetingSeries.subscriptionPeriod.status !== 'ACTIVE' ||
+        !student.defaultChannelIdentity ||
+        student.defaultChannelIdentity.status !== 'ACTIVE' ||
+        student.messagingPreference?.proactiveEnabled === false
+      )
+        throw new BadRequestException('Summary sharing policy is not satisfied.');
+      const content = this.encryption.decrypt(
+        { ciphertext: Buffer.from(draft.contentEncrypted), keyId: draft.contentKeyId },
+        `weekly-summary:${draft.meetingId}:v${draft.version}`,
+      );
+      const intent = await tx.messageIntent.create({
+        data: {
+          studentId: student.id,
+          channelIdentityId: student.defaultChannelIdentity.id,
+          category: 'WEEKLY_SUMMARY_SHARED',
+          status: 'PENDING',
+          idempotencyKey: `weekly-summary-share:${draft.id}`,
+          dueAt: this.clock.now(),
+          expiresAt: new Date(this.clock.now().getTime() + 86_400_000),
+          aggregateVersion: student.version,
+          payload: { rendered: content, draftId: draft.id },
+        },
+      });
+      await tx.outboxEvent.create({
+        data: {
+          topic: 'message.intents',
+          aggregateType: 'MessageIntent',
+          aggregateId: intent.id,
+          eventType: 'WeeklySummaryShared',
+          payload: { intentId: intent.id },
+        },
+      });
+      await tx.weeklySummaryDraftVersion.update({
+        where: { id: draft.id },
+        data: { status: 'APPROVED', approvedAt: this.clock.now(), createdByAdminId: adminId },
+      });
+      return { draftId: draft.id, intentId: intent.id, status: 'APPROVED' };
+    });
+  }
+
   async createSeries(subscriptionId: string, firstStartsAt: Date, adminId: string) {
     const now = this.clock.now();
     if (Number.isNaN(firstStartsAt.getTime()))

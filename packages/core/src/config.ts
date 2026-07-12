@@ -79,6 +79,13 @@ export const applicationConfigSchema = z
     GOOGLE_CALENDAR_SCOPES: z.string().default('https://www.googleapis.com/auth/calendar'),
     GOOGLE_OAUTH_STATE_TTL_SECONDS: z.coerce.number().int().min(60).max(1800).default(600),
     GEMINI_API_KEY: optionalConfigValue,
+    R2_ENDPOINT: z.string().url().optional(),
+    R2_ACCESS_KEY_ID: optionalConfigValue,
+    R2_SECRET_ACCESS_KEY: optionalConfigValue,
+    R2_QUARANTINE_BUCKET: z.string().default('meditation-quarantine'),
+    R2_PRIVATE_BUCKET: z.string().default('meditation-private'),
+    CLAMAV_HOST: z.string().default('localhost'),
+    CLAMAV_PORT: z.coerce.number().int().positive().default(3310),
   })
   .superRefine((config, context) => {
     if (config.NODE_ENV !== 'staging' && config.NODE_ENV !== 'production') return;
@@ -103,6 +110,9 @@ export const applicationConfigSchema = z
       'GOOGLE_OAUTH_CLIENT_ID',
       'GOOGLE_OAUTH_CLIENT_SECRET',
       'GOOGLE_OAUTH_REDIRECT_URI',
+      'R2_ENDPOINT',
+      'R2_ACCESS_KEY_ID',
+      'R2_SECRET_ACCESS_KEY',
     ] as const) {
       if (!config[key]) {
         context.addIssue({

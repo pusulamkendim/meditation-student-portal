@@ -71,6 +71,15 @@ type Connection = {
   calendarName?: string;
   lastSuccessfulSyncAt?: string;
 };
+type SummaryDraft = {
+  id: string;
+  meetingId: string;
+  version: number;
+  status: string;
+  content: string;
+  createdAt: string;
+  studentId: string;
+};
 
 const statusTone: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
   SCHEDULED: 'info',
@@ -115,6 +124,7 @@ export default function MeetingsPage() {
   const [items, setItems] = useState<Meeting[]>();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [connection, setConnection] = useState<Connection>();
+  const [drafts, setDrafts] = useState<SummaryDraft[]>([]);
   const [selected, setSelected] = useState<Meeting>();
   const [filter, setFilter] = useState('ALL');
   const [error, setError] = useState<string>();
@@ -126,12 +136,13 @@ export default function MeetingsPage() {
   const load = useCallback(async () => {
     setError(undefined);
     try {
-      const [meetingsResponse, subscriptionsResponse] = await Promise.all([
+      const [meetingsResponse, subscriptionsResponse, draftsResponse] = await Promise.all([
         fetch(`${api}/v1/admin/meetings`, { credentials: 'include', cache: 'no-store' }),
         fetch(`${api}/v1/admin/meeting-subscriptions`, {
           credentials: 'include',
           cache: 'no-store',
         }),
+        fetch(`${api}/v1/admin/summary-drafts`, { credentials: 'include', cache: 'no-store' }),
       ]);
       if (!meetingsResponse.ok) throw new Error(`Toplantılar HTTP ${meetingsResponse.status}`);
       if (!subscriptionsResponse.ok)
@@ -141,9 +152,13 @@ export default function MeetingsPage() {
         connection: Connection;
       };
       const available = (await subscriptionsResponse.json()) as { items: Subscription[] };
+      const summaryDrafts = draftsResponse.ok
+        ? ((await draftsResponse.json()) as SummaryDraft[])
+        : [];
       setItems(meetings.items);
       setConnection(meetings.connection);
       setSubscriptions(available.items);
+      setDrafts(summaryDrafts);
       setSelected((current) =>
         current ? meetings.items.find((item) => item.id === current.id) : undefined,
       );
@@ -294,6 +309,31 @@ export default function MeetingsPage() {
     }
   }
 
+  async function approveDraft(draftId: string) {
+    try {
+      await request(`summary-drafts/${draftId}/approve`, { method: 'POST' });
+      setNotice('Haftalık özet varsayılan kanala gönderim kuyruğuna alındı.');
+      await load();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Özet gönderilemedi.');
+    }
+  }
+
+  async function editDraft(draft: SummaryDraft) {
+    const next = window.prompt('Admin düzenlemesi', draft.content);
+    if (!next?.trim()) return;
+    try {
+      await request(`meetings/${draft.meetingId}/summary-drafts`, {
+        method: 'POST',
+        body: JSON.stringify({ content: next.trim() }),
+      });
+      setNotice('Özet yeni sürüm olarak kaydedildi.');
+      await load();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Özet düzenlenemedi.');
+    }
+  }
+
   const visible = useMemo(
     () => (items ?? []).filter((item) => filter === 'ALL' || item.status === filter),
     [filter, items],
@@ -397,6 +437,49 @@ export default function MeetingsPage() {
         {subscriptions.length === 0 && items ? (
           <p className="muted">Görüşme serisi olmayan aktif veya planlı paket bulunmuyor.</p>
         ) : null}
+      </section>
+      <section className="section weekly-drafts">
+        <div className="section-heading">
+          <div>
+            <h2>AI haftalık özet taslakları</h2>
+            <p>Özetler yalnızca admin onayından sonra öğrencinin varsayılan kanalına gönderilir.</p>
+          </div>
+          <Badge tone="warning">Onay gerekli</Badge>
+        </div>
+        {drafts.length === 0 ? (
+          <p className="muted">Bekleyen AI taslağı yok.</p>
+        ) : (
+          <div className="weekly-draft-list">
+            {drafts.map((draft) => (
+              <article className="weekly-draft" key={draft.id}>
+                <div>
+                  <strong>
+                    {draft.studentId.slice(0, 8)} · v{draft.version}
+                  </strong>
+                  <span>
+                    {draft.status} · {new Date(draft.createdAt).toLocaleString('tr-TR')}
+                  </span>
+                  <p>{draft.content}</p>
+                </div>
+                <div className="row-actions">
+                  <Button
+                    variant="secondary"
+                    onClick={() => void editDraft(draft)}
+                    disabled={draft.status !== 'DRAFT'}
+                  >
+                    Düzenle
+                  </Button>
+                  <Button
+                    onClick={() => void approveDraft(draft.id)}
+                    disabled={draft.status !== 'DRAFT'}
+                  >
+                    <Check /> Onayla ve gönder
+                  </Button>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
       <section className="section">
         <div className="payment-toolbar">

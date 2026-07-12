@@ -21,6 +21,7 @@ type Session = {
   slot?: string;
   planRevision: number;
   cancellationReason?: string;
+  reflectionTags?: Array<{ tag: string; confidence: number }>;
 };
 type Plan = {
   id: string;
@@ -229,6 +230,18 @@ export default function PracticePage() {
                     <Badge tone={tones[selected.status] ?? 'neutral'}>{selected.status}</Badge>
                   </header>
                   <p>{new Date(selected.startAt).toLocaleString('tr-TR')}</p>
+                  {selected.reflectionTags?.length ? (
+                    <div className="practice-tags">
+                      <strong>AI gözlem etiketleri</strong>
+                      <div>
+                        {selected.reflectionTags.map((tag) => (
+                          <Badge key={tag.tag} tone="info">
+                            {tag.tag} · {Math.round(tag.confidence * 100)}%
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   {['SCHEDULED', 'REMINDED'].includes(selected.status) ? (
                     <Button
                       variant="danger"

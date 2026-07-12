@@ -71,7 +71,31 @@ export async function processPracticeResponse(
       data: { status: parsed.response, version: { increment: 1 } },
     });
     if (changed.count !== 1) return false;
-    await tx.inboxEvent.update({ where: { id: inbox.id }, data: { processedAt: now } });
+    const existingMessage = await tx.message.findUnique({
+      where: { inboxEventId: inbox.id },
+      select: { id: true },
+    });
+    if (!existingMessage) {
+      const messageContent = encryption.encrypt(content, `message:${inbox.id}`);
+      await tx.message.create({
+        data: {
+          studentId: identity.studentId,
+          channelIdentityId: identity.id,
+          direction: 'INBOUND',
+          status: 'RECEIVED',
+          externalMessageId:
+            typeof normalized.externalMessageId === 'string' ? normalized.externalMessageId : null,
+          contentEncrypted: new Uint8Array(messageContent.ciphertext),
+          contentKeyId: messageContent.keyId,
+          occurredAt: inbox.createdAt,
+          inboxEventId: inbox.id,
+        },
+      });
+    }
+    await tx.inboxEvent.update({
+      where: { id: inbox.id },
+      data: { processedAt: now, studentId: identity.studentId },
+    });
     return true;
   });
 }

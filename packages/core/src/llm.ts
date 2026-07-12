@@ -38,8 +38,40 @@ export const agentReplyOutputSchema = z.object({
   evidenceRecordHashes: z.array(z.string().regex(/^[a-f0-9]{64}$/)),
   handoffRequired: z.boolean(),
   reasonCode: z.string().max(120).optional(),
+  sourceChunkIds: z.array(z.string().uuid()).max(6).default([]),
+  supported: z.boolean().default(true),
 });
 export type AgentReplyOutput = z.infer<typeof agentReplyOutputSchema>;
+
+export const reflectionTagOutputSchema = z.object({
+  tags: z
+    .array(
+      z.object({
+        tag: z.enum([
+          'CALM',
+          'RESTLESSNESS',
+          'SLEEPINESS',
+          'FOCUS_DIFFICULTY',
+          'EMOTIONAL_INTENSITY',
+          'BODY_SENSATION',
+          'POSITIVE_SHIFT',
+          'PRACTICE_BARRIER',
+          'SAFETY_CONCERN',
+        ]),
+        confidence: z.number().min(0).max(1),
+      }),
+    )
+    .max(6),
+  handoffRequired: z.boolean().default(false),
+});
+export type ReflectionTagOutput = z.infer<typeof reflectionTagOutputSchema>;
+
+export const weeklySummaryOutputSchema = z.object({
+  summary: z.string().min(1).max(4000),
+  highlights: z.array(z.string().min(1).max(500)).max(8),
+  handoffRequired: z.boolean().default(false),
+});
+export type WeeklySummaryOutput = z.infer<typeof weeklySummaryOutputSchema>;
 
 export interface LlmModelCandidate {
   id: string;

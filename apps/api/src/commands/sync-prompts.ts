@@ -38,7 +38,14 @@ async function main() {
               sourcePath,
               sha256,
               content,
-              outputSchemaVersion: 'agent-reply-v1',
+              outputSchemaVersion:
+                task === LlmTask.REFLECTION_TAGGING
+                  ? 'reflection-tags-v1'
+                  : task === LlmTask.WEEKLY_SUMMARY
+                    ? 'weekly-summary-v1'
+                    : task === LlmTask.AGENT_REPLY
+                      ? 'agent-reply-v2'
+                      : 'embedding-v1',
               approvedAt: new Date(),
             },
           }));

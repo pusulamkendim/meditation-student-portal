@@ -38,6 +38,7 @@ const statusSchema = z.object({
 });
 const noteSchema = z.object({ content: z.string().min(1).max(10_000) });
 const meetOverrideSchema = z.object({ url: z.string().url().max(2000) });
+const summaryDraftSchema = z.object({ content: z.string().trim().min(1).max(20_000) });
 
 @Controller('v1/admin')
 @UseGuards(AdminSessionGuard)
@@ -120,6 +121,29 @@ export class MeetingController {
   async summary(@Param('id') meetingId: string) {
     const meeting = await this.meetings.get(meetingId);
     return { summary: meeting.summary ?? null };
+  }
+
+  @Get('summary-drafts')
+  summaryDrafts(@Query('meetingId') meetingId?: string) {
+    return this.meetings.listSummaryDrafts(meetingId);
+  }
+
+  @Post('meetings/:id/summary-drafts')
+  @UseGuards(AdminCsrfGuard)
+  editSummaryDraft(
+    @Param('id') meetingId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const parsed = summaryDraftSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Invalid summary draft payload.');
+    return this.meetings.editSummaryDraft(meetingId, parsed.data.content, request.admin!.id);
+  }
+
+  @Post('summary-drafts/:id/approve')
+  @UseGuards(AdminCsrfGuard)
+  approveSummaryDraft(@Param('id') draftId: string, @Req() request: FastifyRequest) {
+    return this.meetings.approveSummaryDraft(draftId, request.admin!.id);
   }
 
   @Put('meetings/:id/coach-note')

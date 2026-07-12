@@ -26,7 +26,7 @@ export class PracticeController {
     const items = await this.prisma.practiceSession.findMany({
       take: 200,
       orderBy: { startAt: 'desc' },
-      include: { practiceSlot: true, practicePlan: true },
+      include: { practiceSlot: true, practicePlan: true, reflection: { include: { tags: true } } },
     });
     return {
       items: items.map((item) => ({
@@ -38,6 +38,12 @@ export class PracticeController {
         slot: item.practiceSlot?.slotKey,
         planRevision: item.practicePlan.revision,
         cancellationReason: item.cancellationReason,
+        reflectionTags:
+          item.reflection?.tags.map((tag) => ({
+            tag: tag.tag,
+            confidence: tag.confidence,
+            taxonomyVersion: tag.taxonomyVersion,
+          })) ?? [],
       })),
     };
   }

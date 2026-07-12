@@ -10,7 +10,13 @@ type Data = {
     status: string;
     channel?: { type: string; status: string; lastInboundAt?: string };
   };
-  items: Array<{ id: string; direction: string; status: string; occurredAt: string }>;
+  items: Array<{
+    id: string;
+    direction: string;
+    status: string;
+    occurredAt: string;
+    content?: string;
+  }>;
   intents: Array<{
     id: string;
     category: string;
@@ -124,6 +130,7 @@ export default function ConversationDetail() {
                   <span>
                     {item.status} · {new Date(item.occurredAt).toLocaleString('tr-TR')}
                   </span>
+                  {item.content ? <p>{item.content}</p> : <small>İçerik mevcut değil</small>}
                 </article>
               ))}
               {data.intents.map((intent) => (

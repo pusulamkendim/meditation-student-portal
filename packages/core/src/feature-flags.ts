@@ -2,7 +2,10 @@ export const featureFlagKeys = [
   'channels.whatsapp.enabled',
   'channels.telegram.enabled',
   'llm.agent-reply.enabled',
+  'knowledge.ingestion.enabled',
   'knowledge.rag.enabled',
+  'llm.reflection-tagging.enabled',
+  'llm.weekly-summary.enabled',
   'messaging.proactive.enabled',
 ] as const;
 

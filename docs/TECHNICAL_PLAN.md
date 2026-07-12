@@ -2,10 +2,10 @@
 
 | Alan | Değer |
 | --- | --- |
-| Belge durumu | Taslak |
-| Sürüm | 0.10 |
+| Belge durumu | M8 uygulaması tamamlandı; M9-M10 planlandı |
+| Sürüm | 0.11 |
 | Oluşturulma tarihi | 10 Temmuz 2026 |
-| Son güncelleme | 10 Temmuz 2026 |
+| Son güncelleme | 12 Temmuz 2026 |
 | Hedef | MVP backend, worker ve admin portalı |
 | Kapasite | İlk aşamada 100 aktif öğrenci |
 
@@ -989,7 +989,7 @@ MEETING_RESCHEDULED, MEETING_CANCELLED, MEETING_COMPLETED,
 MEETING_NO_SHOW, MEET_LINK_UNAVAILABLE
 
 Knowledge/support:
-STUDENT_CONTEXT_RESPONSE, KNOWLEDGE_NOT_FOUND, HANDOFF_OPENED, HANDOFF_RESOLVED, AGENT_UNAVAILABLE,
+STUDENT_CONTEXT_RESPONSE, WEEKLY_SUMMARY_SHARED, KNOWLEDGE_NOT_FOUND, HANDOFF_OPENED, HANDOFF_RESOLVED, AGENT_UNAVAILABLE,
 UNKNOWN_MESSAGE_FALLBACK, UNSUPPORTED_MEDIA
 
 Channel:
@@ -1787,11 +1787,37 @@ deterministik sorgular çalışır.
 
 ### M8 - Bilgi Bankası, RAG ve Bağlamsal Agent
 
+**Durum:** Uygulama tamamlandı - 12 Temmuz 2026. R2 uyumlu private/quarantine
+storage (lokalde filesystem fallback), ClamAV taraması, PDF/DOCX/Markdown/TXT
+ingestion, pgvector hybrid retrieval, kalıcı handoff, mesaj kalıcılığı, reflection
+etiketleme, admin onaylı haftalık AI taslağı ve admin bilgi bankası ekranı
+uygulandı. Migration, prompt seed, tüm paket typecheck/lint, unit ve production
+build kontrolleri geçti; veritabanı entegrasyon testi yerel Postgres'te doğrulandı.
+
 - Çoklu doküman upload, parse/chunk/embed, stage assignment ve publish/archive
 - pgvector hybrid retrieval, threshold, rerank ve retrieval evaluation set'i
 - Öğrenci bağlamı + RAG birleşimi, source validation ve knowledge-miss handoff
 - Reflection tag ve AI weekly draft
 - Bilgi bankası yönetim ekranı ve cevap kalite testleri
+
+Uygulama ayrıntıları:
+
+- `knowledge.document-parse`, `llm.reflection-tagging` ve `llm.weekly-summary`
+  outbox/pg-boss iş akışları idempotent operation key kullanır. Ingestion akışı
+  `QUARANTINED -> SCANNING -> PARSING -> CHUNKING -> EMBEDDING -> READY` durumlarını
+  kullanır; yalnızca admin `PUBLISHED` yapabilir.
+- Embedding modeli `gemini-embedding-2`, 768 boyut ve 25 MiB dosya/100 MiB istek
+  sınırlarıyla seed edilir. RAG başlangıç ayarları topK=20, final=6, min-score=.55,
+  vector=.78/keyword=.22 ve doküman başına en fazla 3 chunk'tır; rewrite/rerank
+  flag'leri kapalıdır.
+- Agent cevabında seçilen chunk UUID'leri allowlist ile doğrulanır; kaynak yok,
+  çelişki veya güvenilmeyen içerik durumunda `KNOWLEDGE_NOT_FOUND` occurrence'ı ve
+  kalıcı `Handoff` oluşturulur. Öğrenciye RAG kaynak adı/chunk kimliği gösterilmez.
+- Inbound/outbound kanonik `Message` satırları şifreli içerik ve kanal kimliğiyle
+  tutulur; admin konuşma ekranı yetkili decrypt sonrası metni gösterebilir.
+- Reflection AI yalnız `REFLECTION_AI` rızasıyla non-clinical taxonomy etiketi
+  üretir. Haftalık özet taslağı admin panelinde düzenlenip yeniden sürümlenir;
+  paylaşım öncesi messaging rızası, aktif üyelik ve varsayılan kanal tekrar kontrol edilir.
 
 **Çıkış ölçütü:** Stage uyumlu yayınlanmış kaynak varsa kaynaklı tek cevap, yoksa
 handoff üretilir; birleşik kişisel/genel sorular tek response owner ile sonuçlanır ve

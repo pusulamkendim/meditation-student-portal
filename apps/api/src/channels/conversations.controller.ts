@@ -75,6 +75,10 @@ export class ConversationsController {
         status: true,
         occurredAt: true,
         channelIdentityId: true,
+        inboxEventId: true,
+        externalMessageId: true,
+        contentEncrypted: true,
+        contentKeyId: true,
       },
     });
     return {
@@ -89,7 +93,30 @@ export class ConversationsController {
             }
           : undefined,
       },
-      items: items.map((item) => ({ ...item, occurredAt: item.occurredAt.toISOString() })),
+      items: items.map((item) => {
+        let content: string | undefined;
+        if (item.contentEncrypted && item.contentKeyId) {
+          const associatedData = item.inboxEventId ?? item.externalMessageId;
+          if (associatedData) {
+            try {
+              content = this.encryption.decrypt(
+                { ciphertext: Buffer.from(item.contentEncrypted), keyId: item.contentKeyId },
+                `message:${associatedData}`,
+              );
+            } catch {
+              content = undefined;
+            }
+          }
+        }
+        return {
+          id: item.id,
+          direction: item.direction,
+          status: item.status,
+          occurredAt: item.occurredAt.toISOString(),
+          channelIdentityId: item.channelIdentityId,
+          content,
+        };
+      }),
       intents: student.messageIntents.map((intent) => ({
         id: intent.id,
         category: intent.category,

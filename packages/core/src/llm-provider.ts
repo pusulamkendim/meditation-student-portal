@@ -1,5 +1,11 @@
 import { z } from 'zod';
-import { agentReplyOutputSchema, type AgentReplyOutput, type LlmModelCandidate } from './llm.js';
+import {
+  agentReplyOutputSchema,
+  type AgentReplyOutput,
+  type LlmModelCandidate,
+  reflectionTagOutputSchema,
+  weeklySummaryOutputSchema,
+} from './llm.js';
 
 export interface LlmGenerateInput {
   model: LlmModelCandidate;
@@ -15,6 +21,24 @@ export interface LlmGenerateResult {
   inputTokens: number;
   outputTokens: number;
   totalTokens: number;
+}
+
+export interface StructuredGenerateInput extends LlmGenerateInput {
+  outputSchema?: 'agent-reply' | 'reflection-tags' | 'weekly-summary';
+}
+
+export interface StructuredGenerateResult<T> {
+  output: T;
+  providerRequestId?: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
+export interface EmbeddingResult {
+  values: number[];
+  providerRequestId?: string;
+  inputTokens: number;
 }
 
 const responseSchema = z.object({
@@ -52,6 +76,12 @@ export class GeminiPaidAdapter {
   }
 
   async generateStructured(input: LlmGenerateInput): Promise<LlmGenerateResult> {
+    return this.generateJson({ ...input, outputSchema: 'agent-reply' });
+  }
+
+  async generateJson<T = AgentReplyOutput>(
+    input: StructuredGenerateInput,
+  ): Promise<StructuredGenerateResult<T>> {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(input.model.providerModelId)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -87,18 +117,65 @@ export class GeminiPaidAdapter {
     } catch {
       throw new LlmProviderError('Gemini returned invalid JSON.', 'INVALID_OUTPUT');
     }
-    const output = agentReplyOutputSchema.safeParse(json);
+    const output =
+      input.outputSchema === 'reflection-tags'
+        ? reflectionTagOutputSchema.safeParse(json)
+        : input.outputSchema === 'weekly-summary'
+          ? weeklySummaryOutputSchema.safeParse(json)
+          : agentReplyOutputSchema.safeParse(json);
     if (!output.success)
       throw new LlmProviderError('Gemini output failed schema validation.', 'INVALID_OUTPUT');
     const usage = parsed.data.usageMetadata;
     return {
-      output: output.data,
+      output: output.data as T,
       providerRequestId: response.headers.get('x-request-id') ?? undefined,
       inputTokens: usage?.promptTokenCount ?? 0,
       outputTokens: usage?.candidatesTokenCount ?? 0,
       totalTokens:
         usage?.totalTokenCount ??
         (usage?.promptTokenCount ?? 0) + (usage?.candidatesTokenCount ?? 0),
+    };
+  }
+
+  async embedContent(input: {
+    model: LlmModelCandidate;
+    operationId: string;
+    content: string;
+    outputDimensionality?: number;
+  }): Promise<EmbeddingResult> {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(input.model.providerModelId)}:embedContent?key=${encodeURIComponent(this.apiKey)}`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-client-operation-id': input.operationId },
+      body: JSON.stringify({
+        model: `models/${input.model.providerModelId}`,
+        content: { parts: [{ text: input.content }] },
+        outputDimensionality: input.outputDimensionality ?? 768,
+      }),
+    });
+    if (!response.ok) {
+      const status = response.status;
+      throw new LlmProviderError(
+        `Gemini embedding request failed with HTTP ${status}.`,
+        status >= 500 || status === 429 ? 'TRANSIENT' : 'PERMANENT',
+      );
+    }
+    const parsed = z
+      .object({
+        embedding: z.object({ values: z.array(z.number()) }),
+        usageMetadata: z.object({ promptTokenCount: z.number().optional() }).optional(),
+      })
+      .safeParse(await response.json());
+    if (
+      !parsed.success ||
+      parsed.data.embedding.values.length !== (input.outputDimensionality ?? 768)
+    )
+      throw new LlmProviderError('Gemini embedding response shape is invalid.', 'INVALID_OUTPUT');
+    return {
+      values: parsed.data.embedding.values,
+      providerRequestId: response.headers.get('x-request-id') ?? undefined,
+      inputTokens:
+        parsed.data.usageMetadata?.promptTokenCount ?? Math.ceil(input.content.length / 4),
     };
   }
 }

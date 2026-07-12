@@ -169,6 +169,24 @@ export async function createMeetingIntent(
         },
       });
     }
+    const aiOutbox = await tx.outboxEvent.findFirst({
+      where: {
+        topic: 'llm.weekly-summary',
+        aggregateId: meetingId,
+        eventType: 'WeeklySummaryAiRequested',
+      },
+    });
+    if (!aiOutbox) {
+      await tx.outboxEvent.create({
+        data: {
+          topic: 'llm.weekly-summary',
+          aggregateType: 'WeeklyMeeting',
+          aggregateId: meetingId,
+          eventType: 'WeeklySummaryAiRequested',
+          payload: { meetingId },
+        },
+      });
+    }
     return true;
   });
 }

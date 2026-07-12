@@ -153,9 +153,29 @@ export class MessageDispatcher {
               .map((reply) => ({ id: String(reply.id), title: String(reply.title) }))
           : undefined,
       });
-      await this.prisma.messageIntent.update({
-        where: { id: claimed.id },
-        data: { status: MessageIntentStatus.SENT, providerMessageId: result.providerMessageId },
+      await this.prisma.$transaction(async (tx) => {
+        const encrypted = this.encryption.encrypt(content, `message:${result.providerMessageId}`);
+        await tx.message.create({
+          data: {
+            studentId: claimed.studentId,
+            channelIdentityId: claimed.channelIdentityId,
+            direction: 'OUTBOUND',
+            status: 'SENT',
+            externalMessageId: result.providerMessageId,
+            contentEncrypted: new Uint8Array(encrypted.ciphertext),
+            contentKeyId: encrypted.keyId,
+            occurredAt: this.clock.now(),
+          },
+        });
+        await tx.messageIntent.update({
+          where: { id: claimed.id },
+          data: { status: MessageIntentStatus.SENT, providerMessageId: result.providerMessageId },
+        });
+        if (typeof payload.draftId === 'string')
+          await tx.weeklySummaryDraftVersion.updateMany({
+            where: { id: payload.draftId, status: 'APPROVED' },
+            data: { status: 'SENT', sentAt: this.clock.now() },
+          });
       });
     } catch (error) {
       await this.prisma.messageIntent.update({

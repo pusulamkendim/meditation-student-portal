@@ -21,3 +21,4 @@ export * from './telegram-normalizer.js';
 export * from './llm.js';
 export * from './student-context.js';
 export * from './llm-provider.js';
+export * from './knowledge.js';

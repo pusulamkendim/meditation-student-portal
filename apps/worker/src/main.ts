@@ -11,6 +11,9 @@ import { processPracticeResponse } from './practice-response.js';
 import { processMeetingReminder, processMeetingSummaries } from './meeting-lifecycle.js';
 import { MeetingCalendarWorker } from './meeting-calendar.js';
 import { LlmAgentProcessor } from './llm-agent.js';
+import { KnowledgeIngestionProcessor } from './knowledge-ingestion.js';
+import { ReflectionTaggingProcessor } from './reflection-tagging.js';
+import { WeeklySummaryAiProcessor } from './weekly-summary-ai.js';
 
 async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
@@ -20,6 +23,9 @@ async function bootstrap(): Promise<void> {
   const systemClock = new SystemClock();
   const calendarWorker = new MeetingCalendarWorker(prisma, config, systemClock);
   const llmAgent = new LlmAgentProcessor(prisma, config, systemClock);
+  const knowledgeIngestion = new KnowledgeIngestionProcessor(prisma, config, systemClock);
+  const reflectionTagging = new ReflectionTaggingProcessor(prisma, config, systemClock);
+  const weeklySummaryAi = new WeeklySummaryAiProcessor(prisma, config, systemClock);
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
   await boss.start();
   await registerSmokeQueue(boss, systemClock, logger, config.QUEUE_SMOKE_JOB);
@@ -46,6 +52,9 @@ async function bootstrap(): Promise<void> {
             'meeting.calendar-create',
             'meeting.calendar-update',
             'llm.agent-reply',
+            'knowledge.document-parse',
+            'llm.reflection-tagging',
+            'llm.weekly-summary',
           ],
         },
       },
@@ -53,31 +62,61 @@ async function bootstrap(): Promise<void> {
       orderBy: { createdAt: 'asc' },
     });
     for (const event of events) {
+      const gatedFlag: Record<string, string> = {
+        'knowledge.document-parse': 'knowledge.ingestion.enabled',
+        'llm.reflection-tagging': 'llm.reflection-tagging.enabled',
+        'llm.weekly-summary': 'llm.weekly-summary.enabled',
+      };
+      const requiredFlag = gatedFlag[event.topic];
+      if (requiredFlag) {
+        const flag = await prisma.featureFlagConfig.findUnique({ where: { key: requiredFlag } });
+        if (!flag?.enabled || flag.rolloutPercentage <= 0) continue;
+      }
       const payload = event.payload as {
         intentId?: string;
         inboxEventId?: string;
         seriesId?: string;
         meetingId?: string;
         retryOperationId?: string;
+        versionId?: string;
+        reflectionId?: string;
       };
-      const queueName =
-        event.topic === 'message.intents'
-          ? 'message.send'
-          : event.topic === 'practice.inbound'
-            ? 'practice.response'
-            : event.topic === 'meeting.calendar-create'
-              ? 'meeting.calendar-create'
-              : event.topic === 'meeting.calendar-update'
-                ? 'meeting.calendar-update'
-                : 'llm.agent-reply';
-      const data =
-        event.topic === 'message.intents'
-          ? { intentId: payload.intentId }
-          : event.topic === 'practice.inbound'
-            ? { inboxEventId: payload.inboxEventId }
-            : event.topic === 'meeting.calendar-update'
-              ? { seriesId: payload.seriesId, meetingId: payload.meetingId }
-              : { inboxEventId: payload.inboxEventId, retryOperationId: payload.retryOperationId };
+      let queueName: string;
+      let data: Record<string, string | undefined>;
+      switch (event.topic) {
+        case 'message.intents':
+          queueName = 'message.send';
+          data = { intentId: payload.intentId };
+          break;
+        case 'practice.inbound':
+          queueName = 'practice.response';
+          data = { inboxEventId: payload.inboxEventId };
+          break;
+        case 'meeting.calendar-create':
+          queueName = 'meeting.calendar-create';
+          data = { seriesId: payload.seriesId };
+          break;
+        case 'meeting.calendar-update':
+          queueName = 'meeting.calendar-update';
+          data = { seriesId: payload.seriesId, meetingId: payload.meetingId };
+          break;
+        case 'knowledge.document-parse':
+          queueName = 'knowledge.document-parse';
+          data = { versionId: payload.versionId };
+          break;
+        case 'llm.reflection-tagging':
+          queueName = 'llm.reflection-tagging';
+          data = { reflectionId: payload.reflectionId };
+          break;
+        case 'llm.weekly-summary':
+          queueName = 'llm.weekly-summary';
+          data = { meetingId: payload.meetingId };
+          break;
+        default:
+          queueName = 'llm.agent-reply';
+          data = { inboxEventId: payload.inboxEventId, retryOperationId: payload.retryOperationId };
+          break;
+      }
       if (!Object.values(data)[0]) continue;
       const jobId = await boss.send(queueName, data, { id: `${event.topic}-${event.id}` });
       if (jobId)
@@ -128,6 +167,21 @@ async function bootstrap(): Promise<void> {
       }
     },
   );
+  await boss.createQueue('knowledge.document-parse');
+  await boss.work<{ versionId: string }>('knowledge.document-parse', async (jobs) => {
+    for (const job of jobs)
+      if (job.data.versionId) await knowledgeIngestion.process(job.data.versionId);
+  });
+  await boss.createQueue('llm.reflection-tagging');
+  await boss.work<{ reflectionId: string }>('llm.reflection-tagging', async (jobs) => {
+    for (const job of jobs)
+      if (job.data.reflectionId) await reflectionTagging.process(job.data.reflectionId);
+  });
+  await boss.createQueue('llm.weekly-summary');
+  await boss.work<{ meetingId: string }>('llm.weekly-summary', async (jobs) => {
+    for (const job of jobs)
+      if (job.data.meetingId) await weeklySummaryAi.process(job.data.meetingId);
+  });
   await boss.createQueue('meeting.reminder-24h');
   await boss.work('meeting.reminder-24h', async () => {
     await processMeetingReminder(

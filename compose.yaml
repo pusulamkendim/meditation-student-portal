@@ -27,6 +27,17 @@ services:
     volumes:
       - redis_data:/data
 
+  clamav:
+    image: clamav/clamav:stable
+    platform: linux/amd64
+    ports:
+      - '3310:3310'
+    healthcheck:
+      test: ['CMD-SHELL', 'clamdscan --ping 1:2 || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 volumes:
   postgres_data:
   redis_data:

@@ -12,6 +12,7 @@ import {
   Sprout,
   Users,
   BrainCircuit,
+  BookOpen,
 } from 'lucide-react';
 
 import { PortalSessionBoundary } from './portal-session-boundary';
@@ -56,6 +57,9 @@ export default function PortalLayout({ children }: Readonly<{ children: ReactNod
             </Link>
             <Link href="/llm">
               <BrainCircuit aria-hidden="true" /> LLM Platformu
+            </Link>
+            <Link href="/knowledge">
+              <BookOpen aria-hidden="true" /> Bilgi Bankası
             </Link>
             <Link href="/ui-preview">
               <Palette aria-hidden="true" /> UI Sistemi
