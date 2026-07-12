@@ -58,6 +58,7 @@ enum ChannelIdentityStatus {
 enum ConsentScope {
   MESSAGING
   AGENT_REPLY_AI
+  REFLECTION_STORAGE
   REFLECTION_AI
 }
 
@@ -91,6 +92,8 @@ enum PracticePlanStatus {
 
 enum PracticeSessionStatus {
   SCHEDULED
+  REMINDED
+  AWAITING_RESPONSE
   COMPLETED
   SKIPPED
   MISSED
@@ -467,6 +470,8 @@ model PracticeSession {
   durationMinutes Int                   @map("duration_minutes")
   status          PracticeSessionStatus @default(SCHEDULED)
   replyNonceHmac  String?               @map("reply_nonce_hmac")
+  cancelledAt     DateTime?             @map("cancelled_at")
+  cancellationReason String?            @map("cancellation_reason")
   version         Int                   @default(1)
   createdAt       DateTime              @default(now()) @map("created_at")
   updatedAt       DateTime              @updatedAt @map("updated_at")
@@ -474,10 +479,24 @@ model PracticeSession {
   student      Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
   practicePlan PracticePlan  @relation(fields: [practicePlanId], references: [id], onDelete: Restrict)
   practiceSlot PracticeSlot? @relation(fields: [practiceSlotId], references: [id], onDelete: SetNull)
+  reflection   PracticeReflection?
 
   @@unique([practicePlanId, serviceDate, practiceSlotId])
   @@index([studentId, startAt])
+  @@index([status, startAt])
   @@map("practice_sessions")
+}
+
+model PracticeReflection {
+  id                String   @id @default(uuid()) @db.Uuid
+  practiceSessionId String   @unique @map("practice_session_id") @db.Uuid
+  contentEncrypted  Bytes    @map("content_encrypted")
+  contentKeyId      String   @map("content_key_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  practiceSession PracticeSession @relation(fields: [practiceSessionId], references: [id], onDelete: Cascade)
+
+  @@map("practice_reflections")
 }
 
 model MeetingSeries {

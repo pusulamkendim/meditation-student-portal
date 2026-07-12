@@ -1715,6 +1715,11 @@ onayıyla aktive olur; AI kapalıyken de temel akış tamamlanır.
 
 ### M5 - Pratik Programı
 
+**Durum:** Tamamlandı - 11 Temmuz 2026. Sürümlü planlar, 15/20/25/30 dakika
+kuralı, tek/çift slot, admin override, paket aktivasyonunda session üretimi,
+reminder/check-in/day-close lifecycle işleri, pause/cancel/restore ve yönetim
+ekranı uygulandı. Zaman kararları core `FakeClock` testleriyle doğrulandı.
+
 - Sürümlü plan
 - 15/20/25/30 kuralları, admin özel süresi ve tek/çift günlük pratik
 - Kesin timestamp'li reminder/check-in/day-close işleri

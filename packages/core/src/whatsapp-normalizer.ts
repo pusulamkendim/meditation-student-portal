@@ -31,6 +31,16 @@ const payloadSchema = z
                           type: z.string().min(1),
                           timestamp: z.string().regex(/^\d+$/),
                           text: z.object({ body: z.string() }).optional(),
+                          button: z
+                            .object({ payload: z.string(), text: z.string().optional() })
+                            .optional(),
+                          interactive: z
+                            .object({
+                              button_reply: z
+                                .object({ id: z.string(), title: z.string().optional() })
+                                .optional(),
+                            })
+                            .optional(),
                         }),
                       )
                       .optional(),
@@ -67,7 +77,8 @@ export function normalizeWhatsAppPayload(payload: unknown): NormalizedWhatsAppEv
           externalMessageId: message.id,
           eventType: 'MESSAGE_RECEIVED',
           sender: message.from,
-          text: message.text?.body,
+          text:
+            message.text?.body ?? message.button?.payload ?? message.interactive?.button_reply?.id,
           messageType: message.type,
           occurredAt: new Date(Number(message.timestamp) * 1000),
         });

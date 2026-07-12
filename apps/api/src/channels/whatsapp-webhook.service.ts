@@ -116,7 +116,7 @@ export class WhatsAppWebhookService {
           });
           await transaction.outboxEvent.create({
             data: {
-              topic: 'channel.inbound',
+              topic: event.text?.startsWith('practice:') ? 'practice.inbound' : 'channel.inbound',
               aggregateType: 'InboxEvent',
               aggregateId: inbox.id,
               eventType: event.eventType,

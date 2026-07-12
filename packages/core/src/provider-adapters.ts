@@ -17,12 +17,56 @@ export class WhatsAppCloudAdapter implements ChannelAdapter {
       {
         method: 'POST',
         headers: { authorization: `Bearer ${this.token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: message.recipient,
-          type: 'text',
-          text: { body: message.content },
-        }),
+        body: JSON.stringify(
+          message.template
+            ? {
+                messaging_product: 'whatsapp',
+                to: message.recipient,
+                type: 'template',
+                template: {
+                  name: message.template.name,
+                  language: { code: message.template.languageCode },
+                  components: [
+                    ...(message.template.parameters.length
+                      ? [
+                          {
+                            type: 'body',
+                            parameters: message.template.parameters.map((text) => ({
+                              type: 'text',
+                              text,
+                            })),
+                          },
+                        ]
+                      : []),
+                    ...(message.quickReplies ?? []).map((reply, index) => ({
+                      type: 'button',
+                      sub_type: 'quick_reply',
+                      index: String(index),
+                      parameters: [{ type: 'payload', payload: reply.id }],
+                    })),
+                  ],
+                },
+              }
+            : {
+                messaging_product: 'whatsapp',
+                to: message.recipient,
+                ...(message.quickReplies?.length
+                  ? {
+                      type: 'interactive',
+                      interactive: {
+                        type: 'button',
+                        body: { text: message.content },
+                        action: {
+                          buttons: message.quickReplies.map((reply) => ({
+                            type: 'reply',
+                            reply: { id: reply.id, title: reply.title },
+                          })),
+                        },
+                      },
+                    }
+                  : { type: 'text', text: { body: message.content } }),
+              },
+        ),
       },
     );
     if (!response.ok) throw new Error(`WhatsApp send failed: ${response.status}`);
@@ -41,7 +85,20 @@ export class TelegramBotAdapter implements ChannelAdapter {
     const response = await this.request(`https://api.telegram.org/bot${this.token}/sendMessage`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ chat_id: message.recipient, text: message.content }),
+      body: JSON.stringify({
+        chat_id: message.recipient,
+        text: message.content,
+        reply_markup: message.quickReplies?.length
+          ? {
+              inline_keyboard: [
+                message.quickReplies.map((reply) => ({
+                  text: reply.title,
+                  callback_data: reply.id,
+                })),
+              ],
+            }
+          : undefined,
+      }),
     });
     if (!response.ok) throw new Error(`Telegram send failed: ${response.status}`);
     const value = (await response.json()) as { result?: { message_id: number } };

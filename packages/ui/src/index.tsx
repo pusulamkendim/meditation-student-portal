@@ -223,3 +223,67 @@ export function MessageBubble({
     </div>
   );
 }
+
+export function Toast({
+  tone = 'info',
+  children,
+  onDismiss,
+}: {
+  tone?: 'info' | 'success' | 'danger';
+  children: ReactNode;
+  onDismiss?: () => void;
+}) {
+  return (
+    <div className={`ui-toast ui-toast--${tone}`} role={tone === 'danger' ? 'alert' : 'status'}>
+      <span>{children}</span>
+      {onDismiss ? (
+        <button type="button" aria-label="Bildirimi kapat" onClick={onDismiss}>
+          ×
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+export function Modal({
+  title,
+  description,
+  children,
+  actions,
+  onClose,
+}: {
+  title: string;
+  description?: string;
+  children: ReactNode;
+  actions?: ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="ui-modal-backdrop"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <section
+        className="ui-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ui-modal-title"
+      >
+        <header>
+          <div>
+            <h2 id="ui-modal-title">{title}</h2>
+            {description ? <p>{description}</p> : null}
+          </div>
+          <button type="button" aria-label="Pencereyi kapat" onClick={onClose}>
+            ×
+          </button>
+        </header>
+        <div className="ui-modal__body">{children}</div>
+        {actions ? <footer>{actions}</footer> : null}
+      </section>
+    </div>
+  );
+}

@@ -7,6 +7,7 @@ export * from './localization.js';
 export * from './message-template.js';
 export * from './message-resolver.js';
 export * from './provider-adapters.js';
+export * from './practice-schedule.js';
 export * from './registration-state.js';
 export * from './security.js';
 export * from './send-policy.js';

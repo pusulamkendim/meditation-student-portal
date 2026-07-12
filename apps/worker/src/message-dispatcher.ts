@@ -44,6 +44,21 @@ export class MessageDispatcher {
       if (!intent || intent.status !== MessageIntentStatus.PENDING) return null;
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${intent.studentId}))`;
       const payload = intent.payload as Record<string, unknown>;
+      const practiceSession =
+        typeof payload.practiceSessionId === 'string'
+          ? await tx.practiceSession.findUnique({
+              where: { id: payload.practiceSessionId },
+              include: { practicePlan: { include: { subscriptionPeriod: true } } },
+            })
+          : undefined;
+      const practiceStateValid = practiceSession
+        ? practiceSession.practicePlan.status === 'ACTIVE' &&
+          practiceSession.practicePlan.subscriptionPeriod.status === 'ACTIVE' &&
+          practiceSession.version === intent.aggregateVersion &&
+          ((intent.category === 'PRACTICE_REMINDER' && practiceSession.status === 'REMINDED') ||
+            (intent.category === 'PRACTICE_CHECKIN' &&
+              practiceSession.status === 'AWAITING_RESPONSE'))
+        : true;
       const decision = evaluateSendPolicy(
         {
           dueAt: intent.dueAt,
@@ -56,7 +71,9 @@ export class MessageDispatcher {
           channel: intent.channelIdentity.channelAccount.type,
           lastInboundAt: intent.channelIdentity.lastInboundAt ?? undefined,
           approvedTemplate: typeof payload.providerTemplateName === 'string',
-          aggregateVersionMatches: intent.aggregateVersion === intent.student.version,
+          aggregateVersionMatches: practiceSession
+            ? practiceStateValid
+            : intent.aggregateVersion === intent.student.version,
         },
         this.clock,
       );
@@ -74,6 +91,9 @@ export class MessageDispatcher {
       return changed.count === 1 ? intent : null;
     });
     if (!claimed) return;
+
+    const latest = await this.prisma.messageIntent.findUnique({ where: { id: claimed.id } });
+    if (latest?.status !== MessageIntentStatus.CLAIMED) return;
 
     const payload = claimed.payload as Record<string, unknown>;
     const recipient = this.encryption.decrypt(
@@ -102,6 +122,22 @@ export class MessageDispatcher {
         content,
         locale: claimed.student.preferredLocale,
         idempotencyKey: claimed.idempotencyKey,
+        template:
+          typeof payload.providerTemplateName === 'string' &&
+          typeof payload.providerTemplateLocale === 'string'
+            ? {
+                name: payload.providerTemplateName,
+                languageCode: payload.providerTemplateLocale,
+                parameters: Array.isArray(payload.providerTemplateParameters)
+                  ? payload.providerTemplateParameters.map(String)
+                  : [],
+              }
+            : undefined,
+        quickReplies: Array.isArray(payload.quickReplies)
+          ? (payload.quickReplies as Array<Record<string, unknown>>)
+              .filter((reply) => typeof reply.id === 'string' && typeof reply.title === 'string')
+              .map((reply) => ({ id: String(reply.id), title: String(reply.title) }))
+          : undefined,
       });
       await this.prisma.messageIntent.update({
         where: { id: claimed.id },

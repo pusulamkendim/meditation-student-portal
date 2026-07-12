@@ -71,7 +71,7 @@ export class TelegramWebhookService {
         });
         await transaction.outboxEvent.create({
           data: {
-            topic: 'channel.inbound',
+            topic: event.text?.startsWith('practice:') ? 'practice.inbound' : 'channel.inbound',
             aggregateType: 'InboxEvent',
             aggregateId: inbox.id,
             eventType: 'MESSAGE_RECEIVED',

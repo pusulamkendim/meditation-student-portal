@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Inject, Param, Post, UseGuards } from '@nestjs/common';
 import { ChannelType } from '@meditation/database';
 import { z } from 'zod';
 import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
@@ -16,7 +16,7 @@ const defaultSchema = z.object({
 });
 @Controller()
 export class ChannelLinkController {
-  constructor(private readonly links: ChannelLinkService) {}
+  constructor(@Inject(ChannelLinkService) private readonly links: ChannelLinkService) {}
   @Post('v1/admin/students/:id/channel-links') @UseGuards(AdminSessionGuard, AdminCsrfGuard) create(
     @Param('id') id: string,
     @Body() body: unknown,

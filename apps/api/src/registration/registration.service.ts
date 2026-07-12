@@ -146,20 +146,36 @@ export class RegistrationService {
     channel: ChannelType,
     externalMessageId: string,
   ) {
+    return this.recordConsent(
+      studentId,
+      scope,
+      ConsentStatus.WITHDRAWN,
+      channel,
+      externalMessageId,
+    );
+  }
+
+  async recordConsent(
+    studentId: string,
+    scope: ConsentScope,
+    status: ConsentStatus,
+    channel: ChannelType,
+    externalMessageId: string,
+  ) {
     const now = this.clock.now();
     return this.prisma.$transaction(async (tx) => {
       const consent = await tx.consent.create({
         data: {
           studentId,
           scope,
-          status: ConsentStatus.WITHDRAWN,
+          status,
           textVersion: 'v1',
           channel,
           externalMessageId,
           occurredAt: now,
         },
       });
-      if (scope === ConsentScope.MESSAGING)
+      if (scope === ConsentScope.MESSAGING && status === ConsentStatus.WITHDRAWN)
         await tx.messagingPreference.upsert({
           where: { studentId },
           create: {
@@ -180,8 +196,8 @@ export class RegistrationService {
           topic: 'student.events',
           aggregateType: 'Consent',
           aggregateId: consent.id,
-          eventType: 'CONSENT_WITHDRAWN',
-          payload: { studentId, scope },
+          eventType: status === ConsentStatus.GRANTED ? 'CONSENT_GRANTED' : 'CONSENT_WITHDRAWN',
+          payload: { studentId, scope, status },
         },
       });
       return consent;

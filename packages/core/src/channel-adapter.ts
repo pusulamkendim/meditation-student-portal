@@ -4,6 +4,12 @@ export interface OutboundChannelMessage {
   content: string;
   locale: string;
   idempotencyKey: string;
+  template?: {
+    name: string;
+    languageCode: string;
+    parameters: string[];
+  };
+  quickReplies?: Array<{ id: string; title: string }>;
 }
 
 export interface ChannelSendResult {

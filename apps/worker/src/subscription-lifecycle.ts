@@ -1,5 +1,11 @@
 import type { Clock } from '@meditation/core';
-import { PrismaClient, StudentStatus, SubscriptionStatus } from '@meditation/database';
+import {
+  PracticePlanStatus,
+  PrismaClient,
+  StudentStatus,
+  SubscriptionStatus,
+} from '@meditation/database';
+
 export async function reconcileSubscriptions(prisma: PrismaClient, clock: Clock): Promise<void> {
   const now = clock.now();
   const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -12,6 +18,10 @@ export async function reconcileSubscriptions(prisma: PrismaClient, clock: Clock)
         data: { status: SubscriptionStatus.ACTIVE, version: { increment: 1 } },
       });
       if (claimed.count !== 1) continue;
+      await tx.practicePlan.updateMany({
+        where: { subscriptionPeriodId: item.id, status: PracticePlanStatus.DRAFT },
+        data: { status: PracticePlanStatus.ACTIVE, effectiveFrom: now, version: { increment: 1 } },
+      });
       await tx.student.update({
         where: { id: item.studentId },
         data: { status: StudentStatus.ACTIVE, version: { increment: 1 } },

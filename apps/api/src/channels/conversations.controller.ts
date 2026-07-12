@@ -25,33 +25,78 @@ export class ConversationsController {
   }
   @Get() async list() {
     const students = await this.prisma.student.findMany({
-      where: { messages: { some: {} } },
+      where: { OR: [{ messages: { some: {} } }, { messageIntents: { some: {} } }] },
       select: {
         id: true,
         status: true,
+        defaultChannelIdentity: {
+          select: { status: true, channelAccount: { select: { type: true } } },
+        },
         messages: {
           take: 1,
           orderBy: { occurredAt: 'desc' },
           select: { occurredAt: true, direction: true, status: true },
         },
+        messageIntents: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          select: { createdAt: true, category: true, status: true },
+        },
       },
+      orderBy: { updatedAt: 'desc' },
       take: 100,
     });
-    return { items: students };
+    return {
+      items: students.map((student) => ({
+        ...student,
+        channel: student.defaultChannelIdentity
+          ? {
+              type: student.defaultChannelIdentity.channelAccount.type,
+              status: student.defaultChannelIdentity.status,
+            }
+          : undefined,
+      })),
+    };
   }
   @Get(':studentId') async detail(@Param('studentId') studentId: string) {
+    const student = await this.prisma.student.findUniqueOrThrow({
+      where: { id: studentId },
+      include: {
+        defaultChannelIdentity: { include: { channelAccount: true } },
+        messageIntents: { take: 20, orderBy: { createdAt: 'desc' } },
+      },
+    });
+    const items = await this.prisma.message.findMany({
+      where: { studentId },
+      orderBy: { occurredAt: 'asc' },
+      select: {
+        id: true,
+        direction: true,
+        status: true,
+        occurredAt: true,
+        channelIdentityId: true,
+      },
+    });
     return {
-      items: await this.prisma.message.findMany({
-        where: { studentId },
-        orderBy: { occurredAt: 'asc' },
-        select: {
-          id: true,
-          direction: true,
-          status: true,
-          occurredAt: true,
-          channelIdentityId: true,
-        },
-      }),
+      student: {
+        id: student.id,
+        status: student.status,
+        channel: student.defaultChannelIdentity
+          ? {
+              type: student.defaultChannelIdentity.channelAccount.type,
+              status: student.defaultChannelIdentity.status,
+              lastInboundAt: student.defaultChannelIdentity.lastInboundAt?.toISOString(),
+            }
+          : undefined,
+      },
+      items: items.map((item) => ({ ...item, occurredAt: item.occurredAt.toISOString() })),
+      intents: student.messageIntents.map((intent) => ({
+        id: intent.id,
+        category: intent.category,
+        status: intent.status,
+        createdAt: intent.createdAt.toISOString(),
+        suppressionReason: intent.suppressionReason,
+      })),
     };
   }
   @Post(':studentId/reply')
@@ -89,5 +134,51 @@ export class ConversationsController {
       });
       return intent;
     });
+  }
+}
+
+@Controller('v1/admin/operations')
+@UseGuards(AdminSessionGuard)
+export class OperationsController {
+  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  @Get()
+  async overview() {
+    const [pending, failed, suppressed, recentIntents, webhooks, deliveries] = await Promise.all([
+      this.prisma.messageIntent.count({ where: { status: 'PENDING' } }),
+      this.prisma.messageIntent.count({ where: { status: 'FAILED' } }),
+      this.prisma.messageIntent.count({ where: { status: 'SUPPRESSED' } }),
+      this.prisma.messageIntent.findMany({
+        where: { status: { in: ['PENDING', 'FAILED', 'SUPPRESSED'] } },
+        take: 20,
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          category: true,
+          status: true,
+          suppressionReason: true,
+          updatedAt: true,
+        },
+      }),
+      this.prisma.webhookEvent.findMany({
+        take: 12,
+        orderBy: { createdAt: 'desc' },
+        select: { id: true, channel: true, eventType: true, result: true, createdAt: true },
+      }),
+      this.prisma.notificationDelivery.findMany({
+        take: 12,
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          channel: true,
+          eventType: true,
+          status: true,
+          attempts: true,
+          errorCode: true,
+          updatedAt: true,
+        },
+      }),
+    ]);
+    return { counts: { pending, failed, suppressed }, recentIntents, webhooks, deliveries };
   }
 }

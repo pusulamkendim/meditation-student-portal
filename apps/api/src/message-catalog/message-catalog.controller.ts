@@ -3,6 +3,7 @@ import {
   Body,
   Controller,
   Get,
+  Inject,
   Param,
   Post,
   Put,
@@ -52,7 +53,7 @@ const bindingSchema = z.object({
 @Controller('v1/admin')
 @UseGuards(AdminSessionGuard)
 export class MessageCatalogController {
-  constructor(private readonly catalog: MessageCatalogService) {}
+  constructor(@Inject(MessageCatalogService) private readonly catalog: MessageCatalogService) {}
 
   @Get('system-events')
   listEvents() {

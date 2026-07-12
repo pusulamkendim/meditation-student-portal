@@ -32,4 +32,29 @@ describe('WhatsApp normalizer', () => {
       'wa:phone-1:status:wamid.out:delivered:2',
     ]);
   });
+  it('uses quick-reply payload as the normalized message text', () => {
+    const [event] = normalizeWhatsAppPayload({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: 'phone-1' },
+                messages: [
+                  {
+                    id: 'wamid.button',
+                    from: '90500',
+                    type: 'interactive',
+                    timestamp: '1',
+                    interactive: { button_reply: { id: 'practice:session:nonce:COMPLETED' } },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(event?.text).toBe('practice:session:nonce:COMPLETED');
+  });
 });

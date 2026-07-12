@@ -8,6 +8,7 @@ import { HealthController } from './health.controller.js';
 import { MessageCatalogModule } from './message-catalog/message-catalog.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
 import { RegistrationModule } from './registration/registration.module.js';
+import { PracticeModule } from './practice/practice.module.js';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RegistrationModule } from './registration/registration.module.js';
     MessageCatalogModule,
     ChannelsModule,
     RegistrationModule,
+    PracticeModule,
   ],
   controllers: [HealthController],
 })

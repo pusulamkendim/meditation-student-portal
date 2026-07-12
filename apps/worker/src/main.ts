@@ -6,6 +6,8 @@ import pino from 'pino';
 import { registerSmokeQueue } from './queue-runtime.js';
 import { createChannelAdapters, MessageDispatcher } from './message-dispatcher.js';
 import { reconcileSubscriptions } from './subscription-lifecycle.js';
+import { processPracticeLifecycle } from './practice-lifecycle.js';
+import { processPracticeResponse } from './practice-response.js';
 
 async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
@@ -28,18 +30,19 @@ async function bootstrap(): Promise<void> {
   await boss.createQueue('outbox.relay');
   await boss.work('outbox.relay', async () => {
     const events = await prisma.outboxEvent.findMany({
-      where: { status: 'PENDING', topic: 'message.intents' },
+      where: { status: 'PENDING', topic: { in: ['message.intents', 'practice.inbound'] } },
       take: 100,
       orderBy: { createdAt: 'asc' },
     });
     for (const event of events) {
-      const payload = event.payload as { intentId?: string };
-      if (!payload.intentId) continue;
-      const jobId = await boss.send(
-        'message.send',
-        { intentId: payload.intentId },
-        { id: `intent-${payload.intentId}` },
-      );
+      const payload = event.payload as { intentId?: string; inboxEventId?: string };
+      const queueName = event.topic === 'message.intents' ? 'message.send' : 'practice.response';
+      const data =
+        event.topic === 'message.intents'
+          ? { intentId: payload.intentId }
+          : { inboxEventId: payload.inboxEventId };
+      if (!Object.values(data)[0]) continue;
+      const jobId = await boss.send(queueName, data, { id: `${event.topic}-${event.aggregateId}` });
       if (jobId)
         await prisma.outboxEvent.update({
           where: { id: event.id },
@@ -53,6 +56,16 @@ async function bootstrap(): Promise<void> {
     await reconcileSubscriptions(prisma, new SystemClock());
   });
   await boss.schedule('subscription.lifecycle', '0 * * * *', {});
+  await boss.createQueue('practice.lifecycle');
+  await boss.work('practice.lifecycle', async () => {
+    await processPracticeLifecycle(prisma, new SystemClock(), config);
+  });
+  await boss.schedule('practice.lifecycle', '* * * * *', {});
+  await boss.createQueue('practice.response');
+  await boss.work<{ inboxEventId: string }>('practice.response', async (jobs) => {
+    for (const job of jobs)
+      await processPracticeResponse(prisma, new SystemClock(), config, job.data.inboxEventId);
+  });
   logger.info({ environment: config.NODE_ENV }, 'Worker started');
 
   const shutdown = async () => {

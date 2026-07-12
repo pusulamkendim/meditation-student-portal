@@ -3,7 +3,7 @@ import { CLOCK_TOKEN, SystemClock } from '@meditation/core';
 import { AuthModule } from '../auth/auth.module.js';
 import { ChannelLinkController } from './channel-link.controller.js';
 import { ChannelLinkService } from './channel-link.service.js';
-import { ConversationsController } from './conversations.controller.js';
+import { ConversationsController, OperationsController } from './conversations.controller.js';
 
 import { WhatsAppWebhookController } from './whatsapp-webhook.controller.js';
 import { WhatsAppWebhookService } from './whatsapp-webhook.service.js';
@@ -17,6 +17,7 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
     TelegramWebhookController,
     ChannelLinkController,
     ConversationsController,
+    OperationsController,
   ],
   providers: [
     WhatsAppWebhookService,

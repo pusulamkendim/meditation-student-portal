@@ -6,6 +6,7 @@ import {
   CreditCard,
   LayoutDashboard,
   MessageSquareText,
+  FileText,
   Palette,
   ShieldAlert,
   Sprout,
@@ -45,6 +46,9 @@ export default function PortalLayout({ children }: Readonly<{ children: ReactNod
             </Link>
             <Link href="/conversations">
               <MessageSquareText aria-hidden="true" /> Konuşmalar
+            </Link>
+            <Link href="/standard-messages">
+              <FileText aria-hidden="true" /> Mesaj Şablonları
             </Link>
             <Link href="/operations">
               <ShieldAlert aria-hidden="true" /> Operasyon
