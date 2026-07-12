@@ -118,7 +118,7 @@ async function bootstrap(): Promise<void> {
           break;
       }
       if (!Object.values(data)[0]) continue;
-      const jobId = await boss.send(queueName, data, { id: `${event.topic}-${event.id}` });
+      const jobId = await boss.send(queueName, data, { id: event.id });
       if (jobId)
         await prisma.outboxEvent.update({
           where: { id: event.id },
