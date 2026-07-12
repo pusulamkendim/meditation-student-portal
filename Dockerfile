@@ -2,7 +2,7 @@ FROM node:22.12.0-bookworm-slim AS build
 
 ENV CI=true
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends openssl \
+  && apt-get install --yes --no-install-recommends curl openssl \
   && rm -rf /var/lib/apt/lists/*
 RUN npm install --global pnpm@10.30.3
 
