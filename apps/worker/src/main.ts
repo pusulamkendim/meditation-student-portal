@@ -14,6 +14,7 @@ import { LlmAgentProcessor } from './llm-agent.js';
 import { KnowledgeIngestionProcessor } from './knowledge-ingestion.js';
 import { ReflectionTaggingProcessor } from './reflection-tagging.js';
 import { WeeklySummaryAiProcessor } from './weekly-summary-ai.js';
+import { RegistrationInboundProcessor } from './registration-inbound.js';
 
 async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
@@ -26,6 +27,7 @@ async function bootstrap(): Promise<void> {
   const knowledgeIngestion = new KnowledgeIngestionProcessor(prisma, config, systemClock);
   const reflectionTagging = new ReflectionTaggingProcessor(prisma, config, systemClock);
   const weeklySummaryAi = new WeeklySummaryAiProcessor(prisma, config, systemClock);
+  const registrationInbound = new RegistrationInboundProcessor(prisma, config, systemClock);
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
   await boss.start();
   await registerSmokeQueue(boss, systemClock, logger, config.QUEUE_SMOKE_JOB);
@@ -112,6 +114,10 @@ async function bootstrap(): Promise<void> {
           queueName = 'llm.weekly-summary';
           data = { meetingId: payload.meetingId };
           break;
+        case 'channel.inbound':
+          queueName = 'channel.inbound';
+          data = { inboxEventId: payload.inboxEventId };
+          break;
         default:
           queueName = 'llm.agent-reply';
           data = { inboxEventId: payload.inboxEventId, retryOperationId: payload.retryOperationId };
@@ -158,6 +164,14 @@ async function bootstrap(): Promise<void> {
       await processPracticeResponse(prisma, systemClock, config, job.data.inboxEventId);
   });
   await boss.createQueue('llm.agent-reply');
+  await boss.createQueue('channel.inbound');
+  await boss.work<{ inboxEventId: string }>('channel.inbound', async (jobs) => {
+    for (const job of jobs) {
+      if (!job.data.inboxEventId) continue;
+      const result = await registrationInbound.process(job.data.inboxEventId);
+      if (result === 'unhandled') await llmAgent.process(job.data.inboxEventId);
+    }
+  });
   await boss.work<{ inboxEventId: string; retryOperationId?: string }>(
     'llm.agent-reply',
     async (jobs) => {

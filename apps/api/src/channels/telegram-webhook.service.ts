@@ -53,6 +53,9 @@ export class TelegramWebhookService {
           senderHmac: this.lookup.digest(event.sender),
           occurredAt: event.occurredAt.toISOString(),
         };
+        const sender = this.encryption.encrypt(event.sender, event.dedupeKey);
+        normalized.senderEncrypted = sender.ciphertext.toString('base64');
+        normalized.senderKeyId = sender.keyId;
         if (event.text !== undefined) {
           const value = this.encryption.encrypt(event.text, event.dedupeKey);
           normalized.contentEncrypted = value.ciphertext.toString('base64');

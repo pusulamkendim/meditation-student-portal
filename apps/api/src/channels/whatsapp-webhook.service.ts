@@ -97,7 +97,12 @@ export class WhatsAppWebhookService {
             status: event.status,
             occurredAt: event.occurredAt.toISOString(),
           };
-          if (event.sender) protectedData.senderHmac = this.lookup.digest(event.sender);
+          if (event.sender) {
+            protectedData.senderHmac = this.lookup.digest(event.sender);
+            const sender = this.encryption.encrypt(event.sender, event.dedupeKey);
+            protectedData.senderEncrypted = sender.ciphertext.toString('base64');
+            protectedData.senderKeyId = sender.keyId;
+          }
           if (event.text !== undefined) {
             const encrypted = this.encryption.encrypt(event.text, event.dedupeKey);
             protectedData.contentEncrypted = encrypted.ciphertext.toString('base64');
