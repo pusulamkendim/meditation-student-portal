@@ -19,6 +19,7 @@ import {
   ProviderTemplateStatus,
   StandardMessageVersionStatus,
   syncSystemEventRegistry,
+  syncDefaultRegistrationMessages,
 } from '@meditation/database';
 
 import { PrismaService } from '../database/prisma.service.js';
@@ -34,6 +35,7 @@ export class MessageCatalogService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     await syncSystemEventRegistry(this.prisma);
+    await syncDefaultRegistrationMessages(this.prisma);
   }
 
   listEvents() {

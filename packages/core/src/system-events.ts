@@ -126,7 +126,7 @@ const variableSchemas = {
   NAME_REQUEST: noVariables(),
   REGISTRATION_ALREADY_EXISTS: optionalTextVariables('studentDisplayName'),
   CONSENT_WITHDRAWN: textVariables('consentScope'),
-  PAYMENT_INSTRUCTIONS: textVariables('amountText', 'iban', 'reference'),
+  PAYMENT_INSTRUCTIONS: textVariables('amountText', 'iban', 'accountHolder', 'reference'),
   PAYMENT_REPORTED: textVariables('reference', 'reportedAtText'),
   PAYMENT_ACTION_REQUIRED: textVariables('reference', 'actionText'),
   PAYMENT_APPROVED: textVariables(

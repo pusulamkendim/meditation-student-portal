@@ -1,5 +1,9 @@
 import { loadApplicationConfig, SystemClock } from '@meditation/core';
-import { PrismaClient } from '@meditation/database';
+import {
+  PrismaClient,
+  syncDefaultRegistrationMessages,
+  syncSystemEventRegistry,
+} from '@meditation/database';
 import { PgBoss } from 'pg-boss';
 import pino from 'pino';
 
@@ -29,6 +33,8 @@ async function bootstrap(): Promise<void> {
   const weeklySummaryAi = new WeeklySummaryAiProcessor(prisma, config, systemClock);
   const registrationInbound = new RegistrationInboundProcessor(prisma, config, systemClock);
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
+  await syncSystemEventRegistry(prisma);
+  await syncDefaultRegistrationMessages(prisma);
   await boss.start();
   await registerSmokeQueue(boss, systemClock, logger, config.QUEUE_SMOKE_JOB);
   const dispatcher = new MessageDispatcher(

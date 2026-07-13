@@ -77,7 +77,8 @@ export class MessageDispatcher {
           expiresAt: intent.expiresAt,
           studentActive:
             intent.student.status === StudentStatus.ACTIVE ||
-            (intent.category === 'REGISTRATION_RESPONSE' && payload.reactive === true),
+            (intent.category === 'REGISTRATION_RESPONSE' && payload.reactive === true) ||
+            (intent.category === 'PAYMENT_APPROVED' && intent.student.status === 'INACTIVE'),
           messagingEnabled:
             intent.student.messagingPreference?.proactiveEnabled !== false &&
             !intent.student.messagingPreference?.pausedAt,

@@ -11,6 +11,7 @@ export * from './practice-schedule.js';
 export * from './meeting-schedule.js';
 export * from './google-calendar.js';
 export * from './registration-state.js';
+export * from './registration-messages.js';
 export * from './security.js';
 export * from './send-policy.js';
 export * from './system-events.js';

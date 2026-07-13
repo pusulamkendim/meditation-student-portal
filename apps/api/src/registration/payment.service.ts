@@ -1,10 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { CLOCK_TOKEN, type Clock } from '@meditation/core';
 import {
+  CLOCK_TOKEN,
+  getDefaultRegistrationMessage,
+  renderMessageTemplate,
+  resolveMessageVariant,
+  type Clock,
+} from '@meditation/core';
+import {
+  MessageIntentStatus,
   PaymentStatus,
   RegistrationStep,
   StudentStatus,
   SubscriptionStatus,
+  StandardMessageVersionStatus,
 } from '@meditation/database';
 import { PrismaService } from '../database/prisma.service.js';
 
@@ -73,7 +81,7 @@ export class PaymentService {
           version: { increment: 1 },
         },
       });
-      await tx.student.update({
+      const activatedStudent = await tx.student.update({
         where: { id: payment.studentId },
         data: {
           status: start > today ? StudentStatus.INACTIVE : StudentStatus.ACTIVE,
@@ -81,6 +89,77 @@ export class PaymentService {
           version: { increment: 1 },
         },
       });
+      const identity = await tx.studentChannelIdentity.findFirst({
+        where: { studentId: payment.studentId, status: 'ACTIVE' },
+        include: { channelAccount: true },
+        orderBy: [{ id: 'asc' }],
+      });
+      if (identity) {
+        const variables = {
+          amountText: '4.000 TL',
+          subscriptionStartsAtText: this.formatDate(start),
+          subscriptionEndsAtText: this.formatDate(end),
+        };
+        const versions = await tx.standardMessageVersion.findMany({
+          where: {
+            status: StandardMessageVersionStatus.PUBLISHED,
+            effectiveAt: { lte: now },
+            variant: {
+              channel: identity.channelAccount.type,
+              standardMessage: { eventKey: 'PAYMENT_APPROVED', audience: 'STUDENT' },
+            },
+          },
+          include: { variant: true },
+        });
+        const selected = resolveMessageVariant(
+          versions.map((version) => ({
+            ...version,
+            locale: version.variant.locale,
+            stage: version.variant.curriculumStage,
+            slot: version.variant.slot,
+            priority: version.variant.priority,
+            requiresStudentName: version.variant.requiresStudentName,
+            effectiveAt: version.effectiveAt!,
+          })),
+          { locale: activatedStudent.preferredLocale, hasStudentName: false },
+        );
+        const template = selected?.content ?? getDefaultRegistrationMessage('PAYMENT_APPROVED');
+        if (!template) throw new Error('Default payment approval message is unavailable.');
+        const intent = await tx.messageIntent.create({
+          data: {
+            studentId: payment.studentId,
+            channelIdentityId: identity.id,
+            category: 'PAYMENT_APPROVED',
+            status: MessageIntentStatus.PENDING,
+            idempotencyKey: `payment-approved:${payment.id}`,
+            dueAt: now,
+            expiresAt: new Date(now.getTime() + 86400000),
+            aggregateVersion: activatedStudent.version,
+            payload: {
+              rendered: renderMessageTemplate('PAYMENT_APPROVED', template, variables),
+              eventKey: 'PAYMENT_APPROVED',
+            },
+          },
+        });
+        await tx.systemEventOccurrence.create({
+          data: {
+            eventKey: 'PAYMENT_APPROVED',
+            studentId: payment.studentId,
+            idempotencyKey: `payment-approved:${payment.id}:event`,
+            variables,
+            occurredAt: now,
+          },
+        });
+        await tx.outboxEvent.create({
+          data: {
+            topic: 'message.intents',
+            aggregateType: 'MessageIntent',
+            aggregateId: intent.id,
+            eventType: 'MessageIntentCreated',
+            payload: { intentId: intent.id },
+          },
+        });
+      }
       await tx.outboxEvent.create({
         data: {
           topic: 'student.events',
@@ -92,5 +171,12 @@ export class PaymentService {
       });
       return subscription;
     });
+  }
+
+  private formatDate(value: Date): string {
+    return new Intl.DateTimeFormat('tr-TR', {
+      dateStyle: 'medium',
+      timeZone: 'Europe/Istanbul',
+    }).format(value);
   }
 }
