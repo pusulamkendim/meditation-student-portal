@@ -82,9 +82,38 @@ export class TelegramWebhookService {
           },
           data: { lastInboundAt: event.occurredAt },
         });
+        const awaitingPractice = event.text
+          ? await transaction.practiceSession.findFirst({
+              where: {
+                OR: [
+                  { status: 'AWAITING_RESPONSE' },
+                  {
+                    status: 'COMPLETED',
+                    updatedAt: { gte: new Date(event.occurredAt.getTime() - 60 * 60_000) },
+                    reflection: { is: null },
+                  },
+                ],
+                student: {
+                  channelIdentities: {
+                    some: {
+                      externalUserHmac: this.lookup.digest(event.sender),
+                      channelAccount: {
+                        type: ChannelType.TELEGRAM,
+                        externalId: this.config.TELEGRAM_ACCOUNT_ID,
+                      },
+                    },
+                  },
+                },
+              },
+              select: { id: true },
+            })
+          : null;
         await transaction.outboxEvent.create({
           data: {
-            topic: event.text?.startsWith('practice:') ? 'practice.inbound' : 'channel.inbound',
+            topic:
+              event.text?.startsWith('practice:') || awaitingPractice
+                ? 'practice.inbound'
+                : 'channel.inbound',
             aggregateType: 'InboxEvent',
             aggregateId: inbox.id,
             eventType: 'MESSAGE_RECEIVED',

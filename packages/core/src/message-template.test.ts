@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { localeFallbackChain } from './localization.js';
+import { defaultRegistrationMessages } from './registration-messages.js';
 import { renderMessageTemplate, validateMessageTemplate } from './message-template.js';
 import { assertNoPublishedVariantConflict, resolveMessageVariant } from './message-resolver.js';
 import { getSystemEvent, systemEventKeys } from './system-events.js';
@@ -38,6 +39,12 @@ describe('M2 message catalog domain', () => {
       const schema = getSystemEvent(key).variableSchema;
       expect(schema.additionalProperties).toBe(false);
       expect(schema.required.every((name) => schema.properties[name])).toBe(true);
+    }
+  });
+
+  it('keeps every published system default compatible with its event schema', () => {
+    for (const message of defaultRegistrationMessages) {
+      expect(() => validateMessageTemplate(message.eventKey, message.content)).not.toThrow();
     }
   });
 

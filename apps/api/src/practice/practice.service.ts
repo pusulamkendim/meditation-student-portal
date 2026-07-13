@@ -53,7 +53,7 @@ export class PracticeService {
     durationOverride?: number,
     adminId?: string,
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    const plan = await this.prisma.$transaction(async (tx) => {
       const subscription = await tx.subscriptionPeriod.findUniqueOrThrow({
         where: { id: subscriptionId },
         include: { student: { include: { subscriptions: true } } },
@@ -82,6 +82,8 @@ export class PracticeService {
         adminId,
       );
     });
+    await this.notifyPlanChange(plan, plan.revision === 1 ? 'PRACTICE_PLAN_CONFIRMED' : 'PRACTICE_PLAN_UPDATED');
+    return plan;
   }
 
   private async createPlanInTransaction(
@@ -217,7 +219,7 @@ export class PracticeService {
 
   async pause(studentId: string, paused: boolean, reason: string, adminId: string) {
     const now = this.clock.now();
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const plan = await tx.practicePlan.findFirstOrThrow({
         where: {
           studentId,
@@ -297,6 +299,74 @@ export class PracticeService {
       });
       return { planId: plan.id, status: paused ? 'PAUSED' : 'ACTIVE' };
     });
+    await this.notifyPlanStatus(studentId, result.planId, paused);
+    return result;
+  }
+
+  private async notifyPlanChange(
+    plan: { id: string; studentId: string; revision: number; slots: Array<{ slotKey: string; localTime: string; active: boolean; durationMinutes: number }> },
+    eventKey: 'PRACTICE_PLAN_CONFIRMED' | 'PRACTICE_PLAN_UPDATED',
+  ) {
+    const student = await this.prisma.student.findUnique({
+      where: { id: plan.studentId },
+      include: { defaultChannelIdentity: true },
+    });
+    if (!student?.defaultChannelIdentityId) return;
+    const active = plan.slots.filter((slot) => slot.active);
+    const scheduleSummary = active
+      .map((slot) => `${slot.slotKey === 'MORNING' ? 'Sabah' : 'Akşam'} ${slot.localTime} (${slot.durationMinutes} dakika)`)
+      .join(', ');
+    const variables =
+      eventKey === 'PRACTICE_PLAN_CONFIRMED'
+        ? {
+            morningTimeText: active.find((slot) => slot.slotKey === 'MORNING')?.localTime ?? 'kapalı',
+            eveningTimeText: active.find((slot) => slot.slotKey === 'EVENING')?.localTime ?? 'kapalı',
+            durationText: `${active[0]?.durationMinutes ?? 0} dakika`,
+            studentDisplayName: '',
+          }
+        : { scheduleSummary };
+    try {
+      await this.messages.createIntent({
+        eventKey,
+        studentId: student.id,
+        channelIdentityId: student.defaultChannelIdentityId,
+        idempotencyKey: `practice-plan:${plan.id}:${eventKey.toLowerCase()}:v${plan.revision}`,
+        locale: student.preferredLocale,
+        stage: student.curriculumStage,
+        variables,
+      });
+    } catch {
+      // A missing template must not roll back an admin plan change.
+    }
+  }
+
+  private async notifyPlanStatus(studentId: string, planId: string, paused: boolean) {
+    const student = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      include: {
+        defaultChannelIdentity: true,
+        practicePlans: { where: { id: planId }, include: { slots: true }, take: 1 },
+      },
+    });
+    if (!student?.defaultChannelIdentityId) return;
+    const scheduleSummary = (student.practicePlans[0]?.slots ?? [])
+      .filter((slot) => slot.active)
+      .map((slot) => `${slot.slotKey === 'MORNING' ? 'Sabah' : 'Akşam'} ${slot.localTime}`)
+      .join(', ');
+    const eventKey = paused ? 'PRACTICE_PAUSED' : 'PRACTICE_RESUMED';
+    try {
+      await this.messages.createIntent({
+        eventKey,
+        studentId,
+        channelIdentityId: student.defaultChannelIdentityId,
+        idempotencyKey: `practice-plan:${planId}:${eventKey.toLowerCase()}`,
+        locale: student.preferredLocale,
+        stage: student.curriculumStage,
+        variables: paused ? { resumeAtText: '' } : { scheduleSummary },
+      });
+    } catch {
+      // A missing template must not roll back an admin plan state change.
+    }
   }
 
   async cancel(sessionId: string, reason: string, adminId: string) {

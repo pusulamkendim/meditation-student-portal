@@ -70,6 +70,61 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
     content:
       'Pratik saatini güncelledim. Eski saat {{previousStartsAtText}}, yeni saat {{startsAtText}}. Süremiz {{durationText}}.',
   },
+  {
+    eventKey: 'PRACTICE_PLAN_CONFIRMATION_REQUEST',
+    content:
+      'Sana uygun pratik planını hazırladım. Sabah {{morningTimeText}}, akşam {{eveningTimeText}} ve her pratik {{durationText}}. Bu saatler uygunsa ONAYLIYORUM yazabilirsin; değiştirmek istediğin bir saat varsa bana yazman yeterli.',
+  },
+  {
+    eventKey: 'PRACTICE_PLAN_CONFIRMED',
+    content:
+      'Harika{{studentDisplayName}}, pratik programın hazır. Sabah {{morningTimeText}}, akşam {{eveningTimeText}} ve her pratik {{durationText}}. Pratiklerinden 10 dakika önce sana hatırlatma göndereceğim.',
+  },
+  {
+    eventKey: 'PRACTICE_PLAN_UPDATED',
+    content:
+      'Pratik programını güncelledim: {{scheduleSummary}}. Bundan sonraki hatırlatmalarını yeni programa göre göndereceğim.',
+  },
+  {
+    eventKey: 'PRACTICE_REMINDER',
+    content:
+      'Merhaba{{studentDisplayName}}, {{startsAtText}} saatindeki {{durationText}} pratiğine 10 dakika kaldı. Hazır olduğunda kendine sakin bir alan açabilirsin.',
+  },
+  {
+    eventKey: 'PRACTICE_CHECKIN',
+    content:
+      '{{durationText}} pratiğin nasıl geçti? Tamamladıysan YAPTIM, bugün yapamadıysan YAPAMADIM seçeneğini kullanabilirsin.',
+  },
+  {
+    eventKey: 'PRACTICE_REFLECTION_REQUEST',
+    content:
+      'Pratik sırasında ve sonrasında neler fark ettin? Yaşadığın zorlukları, bedenindeki hisleri veya duygularını birkaç cümleyle paylaşabilirsin.',
+  },
+  {
+    eventKey: 'PRACTICE_COMPLETED_ACK',
+    content:
+      'Eline sağlık, bugünkü pratiğini tamamladın. Kendine ayırdığın bu zamanı önemsiyorum. {{nextPracticeAtText}}',
+  },
+  {
+    eventKey: 'PRACTICE_SKIPPED_ACK',
+    content:
+      'Bugün pratiğini yapamamış olman sorun değil. Kendine yüklenmeden bir sonraki pratikte devam edebilirsin. {{nextPracticeAtText}}',
+  },
+  {
+    eventKey: 'PRACTICE_RESPONSE_AMBIGUOUS',
+    content:
+      'Yanıtını doğru kaydettiğimden emin olmak istiyorum. Pratiği tamamladıysan YAPTIM, yapamadıysan YAPAMADIM yazabilir misin?',
+  },
+  {
+    eventKey: 'PRACTICE_PAUSED',
+    content:
+      'Pratik programını şimdilik duraklattım. Bu süre boyunca hatırlatma mesajı göndermeyeceğim. {{resumeAtText}}',
+  },
+  {
+    eventKey: 'PRACTICE_RESUMED',
+    content:
+      'Pratik programını yeniden başlattım. Güncel programın: {{scheduleSummary}}. Bundan sonraki pratiklerinde hatırlatmaların tekrar gönderilecek.',
+  },
 ] as const;
 
 export function getDefaultRegistrationMessage(eventKey: SystemEventKey): string | undefined {
