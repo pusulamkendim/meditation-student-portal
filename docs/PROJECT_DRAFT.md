@@ -1070,7 +1070,65 @@ günlük yedek yaşam döngüsü sonunda ortadan kalkar. Yedekten geri dönüş 
 tamamlanmış silme kayıtları yeniden uygulanarak silinen içeriğin geri gelmesi
 engellenir.
 
-## 15. Teslim Aşamaları
+## 15. E2E Ürün Kabul Planı
+
+E2E testleri yalnız ekranların açılmasını değil, öğrencinin kanala mesaj
+göndermesinden provider teslimat kaydı oluşmasına kadar bütün iş sonucunu doğrular.
+Test ortamında gerçek öğrenci verisi kullanılmaz; her senaryo kendine ait öğrenci,
+kanal kimliği, paket ve zaman çizelgesi oluşturur.
+
+### Kritik Öğrenci Yolculukları
+
+| Kimlik | Yolculuk | Beklenen ürün sonucu |
+|---|---|---|
+| `E2E-REG-01` | Telegram `KAYIT` -> KVKK -> kanal izni -> AI tercihi -> ad-soyad | Şifreli öğrenci kaydı, izin ledger'ı, tek varsayılan kanal ve her inbound için tek cevap |
+| `E2E-REG-02` | AI iznine `HAYIR` denilen kayıt | Kayıt ve ödeme devam eder; kişisel AI işleri oluşmaz |
+| `E2E-REG-03` | Duplicate webhook ve tekrar `KAYIT` | İkinci öğrenci, izin veya mesaj intent'i oluşmaz |
+| `E2E-ROUTE-01` | Kaydı tamamlanmış öğrenci "İlk görüşmem ne zaman?" sorar | Kayıt mesajı değil, öğrenciye bağlı görüşme cevabı veya veri-yok cevabı gönderilir |
+| `E2E-PAY-01` | `ÖDEME YAPTIM` -> admin onayı | 4.000 TL ödeme onaylanır, bir aylık aktif paket ve dört görüşme kredisi atomik oluşur |
+| `E2E-PRAC-01` | Admin sabah/akşam planı tanımlar | Seanslar oluşur ve öğrenci program saatleri/süreleriyle bilgilendirilir |
+| `E2E-PRAC-02` | Reminder -> check-in -> geri bildirim | Tek reminder/check-in gönderilir, cevap reflection olarak saklanır |
+| `E2E-PRAC-03` | Cevapsız pratik ve yerel gün sonu | Pratik `MISSED` olur; gecikmiş veya çift mesaj oluşmaz |
+| `E2E-MEET-01` | Admin ilk görüşmeyi planlar | Dört görüşme, Meet durumu ve 24 saat/1 saat mesajları doğru kanalda oluşur |
+| `E2E-AGENT-01` | Kişisel program sorusu | Yalnız soruyu soran öğrencinin DB bağlamı kullanılır ve kayıt router'ına düşmez |
+| `E2E-RAG-01` | Bilgi bankasında bulunan/bulunmayan iki soru | Kaynaklı tek cevap veya `KNOWLEDGE_NOT_FOUND` handoff oluşur |
+| `E2E-HANDOFF-01` | Admin konuşmayı devralır ve yanıtlar | Agent cevabı bastırılır, admin yanıtı default kanaldan tek kez gider |
+| `E2E-CONSENT-01` | `RIZA İPTAL` | Bekleyen kişisel AI işleri bastırılır; deterministik hesap/program sorguları çalışır |
+| `E2E-DELETE-01` | Silme talebi -> admin onayı | Aktif veri silinir, deletion journal yazılır ve öğrenci sonucu alır |
+
+### Admin Portal Kabul Akışları
+
+- Login, TOTP/step-up, session expiry ve yeniden giriş
+- Öğrenci, ödeme, pratik, görüşme ve konuşma detayına doğrudan geçiş
+- Ödeme onayında çift tıklama/eşzamanlı istek altında tek paket oluşturma
+- Pratik planı oluşturma, tek seansa düşürme, özel süre, pause/resume ve yeni revizyon
+- Görüşme planlama/değiştirme ve Meet linki hazır değilken güvenli hata durumu
+- Standart mesaj preview/publish/rollback ve protected mesaj step-up kontrolü
+- Bilgi bankası upload/index/test/publish ve başarısız dosyada anlaşılır hata durumu
+- Desktop ve mobile görünümde loading, empty, error, toast ve modal davranışları
+
+### Kabul Eşikleri
+
+- Bir inbound mesaj en fazla bir response owner ve bir öğrenci cevabı üretir.
+- Kayıt ve ödeme happy-path testlerinin tamamı release-blocking'dir.
+- Test provider ile kayıt adımı yanıtı 15 saniye içinde `SENT` olmalıdır; staging
+  canary'de provider gecikmesi ayrıca raporlanır.
+- Reminder/check-in/görüşme testleri gerçek süre beklemez; paylaşılan fake clock ile
+  ilerletilir.
+- Retry, duplicate ve worker restart sonrasında öğrenciye çift mesaj gönderilmez.
+- Başka öğrenciye ait veri hiçbir agent cevabında veya admin yetkisiz rolünde görünmez.
+- Kritik Playwright testleri Chromium desktop ve mobile viewport'ta geçmeden pilot
+  release açılamaz.
+
+### Uygulama Sırası
+
+1. **P0 smoke:** `REG-01/02/03`, `ROUTE-01`, `PAY-01`, `PRAC-01` ve admin login.
+2. **P1 lifecycle:** pratik time-travel, görüşme, üyelik yenileme ve kanal değiştirme.
+3. **P1 agent:** kişisel context, RAG, handoff, AI rıza ve budget fallback.
+4. **P2 resilience:** provider timeout, duplicate storm, rolling worker ve restore replay.
+5. **Pilot canary:** allowlist'li gerçek Telegram/WhatsApp, Google ve Gemini sözleşmeleri.
+
+## 16. Teslim Aşamaları
 
 ### Aşama 1 - Temel Backend
 
@@ -1107,10 +1165,12 @@ engellenir.
 - KVKK ve güvenlik kontrolü
 - Şablon mesaj onayları
 - İzleme, alarmlar ve yedekleme
+- Playwright/channel-driver E2E harness ve P0 smoke paketi
+- Lifecycle/agent/resilience E2E paketleri ve staging provider canary
 - Yük ve hata senaryosu testleri
 - Pilot öğrenci grubu
 
-## 16. Başarı Ölçütleri
+## 17. Başarı Ölçütleri
 
 - Kayıt akışını tamamlayan öğrenci oranı
 - Ödeme bildiriminin admin tarafından sonuçlandırılma süresi
@@ -1121,7 +1181,7 @@ engellenir.
 - Adminin görüşme hazırlığı için harcadığı süre
 - Öğrencilerin otomatik mesajları durdurma oranı
 
-## 17. Dış Kaynaklar
+## 18. Dış Kaynaklar
 
 - [Meta WhatsApp Business Platform](https://www.postman.com/meta/whatsapp-business-platform/overview)
 - [WhatsApp Business Messaging Policy](https://whatsappbusiness.com/policy/)
@@ -1129,7 +1189,7 @@ engellenir.
 - [KVKK sıkça sorulan sorular](https://www.kvkk.gov.tr/Icerik/4196/Kisisel-Verilerin-Korunmasi-Kanunu-Hakkinda-Sikca-Sorulan-Sorular)
 - [Özel Nitelikli Kişisel Verilerin İşlenmesine İlişkin Rehber](https://www.kvkk.gov.tr/Icerik/8183/Ozel-Nitelikli-Kisisel-Verilerin-Islenmesine-Iliskin-Rehber)
 
-## 18. Açık Konular
+## 19. Açık Konular
 
 Henüz kararlaştırılmamış ürün ve teknik konular
 [Açık kararlar](OPEN_DECISIONS.md) belgesinde tutulur. Alınan her karar tarih,

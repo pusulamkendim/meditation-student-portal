@@ -1479,6 +1479,90 @@ output/usage metadata sözleşmelerini release öncesi doğrular.
 24. Kişisel plan + genel "neden" sorusu -> context + RAG -> tek contextual cevap
 25. AI izni yok -> `PROGRAMIM` -> deterministic read-model -> standart context cevabı
 
+#### 19.4.1 E2E Harness ve Sınırlar
+
+E2E harness dört parçadan oluşur:
+
+1. **Playwright:** Admin portalını gerçek browser/cookie/CSRF akışıyla kullanır.
+2. **Channel driver:** Meta ve Telegram webhook fixture'larını imzalı HTTP isteği olarak
+   API'ye gönderir; doğrudan service metodu çağırmaz.
+3. **Worker driver:** Testte API ve worker aynı PostgreSQL üzerinde çalışır. Paylaşılan
+   `FakeClock` ilerletildikten sonra ilgili lifecycle handler ve outbox drain işlemi
+   deterministik olarak çağrılır; wall-clock sleep kullanılmaz.
+4. **Fake provider collector:** WhatsApp, Telegram, Google, Gemini, SES ve object storage
+   adapter çağrılarını idempotency key ile kaydeder; testler yalnız DB durumunu değil
+   provider'a giden son payload ve çağrı sayısını da doğrular.
+
+PR E2E ortamı gerçek Meta/Telegram/Google/Gemini kimlik bilgisi içermez. Gerçek provider
+testleri ayrı staging canary job'unda allowlist'li alıcılarla çalışır. Production DB veya
+production webhook endpoint'i otomatik E2E hedefi olamaz.
+
+Her test worker'ı benzersiz PostgreSQL schema/database, kanal account external ID,
+öğrenci HMAC'i ve object-storage prefix'i kullanır. Test verisi suite sonunda silinir;
+başarısız testte inceleme için artifact süresi boyunca korunabilir. Encryption/HMAC
+anahtarları test-run bazında üretilir ve CI loglarına yazılmaz.
+
+#### 19.4.2 Release-Blocking Senaryo Matrisi
+
+| Kimlik | Katman | Ana doğrulamalar |
+|---|---|---|
+| `E2E-REG-01` | API + worker + fake Telegram | KVKK receipt, messaging/AI consent, şifreli ad, default identity, tek response owner |
+| `E2E-REG-02` | API + worker | AI decline sonrası kayıt/ödeme devamı ve sıfır kişisel AI job'u |
+| `E2E-REG-03` | Webhook/outbox | Duplicate `update_id`/`wamid`, tekrar `KAYIT`, retry sonrası tek aggregate |
+| `E2E-ROUTE-01` | Router + agent | `COMPLETE` öğrenci sorusunun registration processor tarafından sahiplenilmemesi |
+| `E2E-PAY-01` | API + DB + worker | Optimistic approve, tek subscription, dört credit, approval intent ve delivery |
+| `E2E-PRAC-01` | Admin UI + worker | Plan revizyonu, session üretimi, `PRACTICE_PLAN_CONFIRMED/UPDATED` öğrenci mesajı |
+| `E2E-PRAC-02` | Fake clock + worker | Reminder/check-in/completed ve her eşikte tek provider çağrısı |
+| `E2E-PRAC-03` | Fake clock + worker | Day-close `MISSED`, pause/cancel/restore ve stale intent suppression |
+| `E2E-MEET-01` | Admin UI + fake Google | Dört occurrence, credit, Meet readiness, 24h/3h/1h işleri |
+| `E2E-AGENT-01` | Agent + DB | Student-bound query, evidence, cross-student reddi ve görüşme-verisi-yok cevabı |
+| `E2E-RAG-01` | Ingestion + agent | Stage filtresi, kaynak allowlist'i, tek cevap veya kalıcı handoff |
+| `E2E-MSG-01` | Catalog + dispatcher | Variant resolution, protected publish, send-time policy ve tek teslimat |
+| `E2E-OUTBOX-01` | API + worker restart | Crash/retry/duplicate altında tek etki; test provider'da <=15 saniye kayıt yanıtı |
+| `E2E-PRIV-01` | API + worker | Rıza iptali, queued AI suppression ve deterministic query'nin devamı |
+| `E2E-DELETE-01` | Admin UI + storage | DB/R2/index temizliği, deletion journal ve restore replay |
+
+`E2E-PRAC-01` özellikle `student.events -> standard message -> message.intent ->
+message.send` zincirini doğrular. Event yalnız outbox'ta kalırsa test başarısızdır.
+`E2E-ROUTE-01`, aktif öğrencinin genel sorusuna `REGISTRATION_ALREADY_EXISTS`
+dönülmesini regresyon olarak kabul eder.
+
+#### 19.4.3 Test Paketleri ve CI Kapıları
+
+- `e2e:smoke` (her PR): admin login, `REG-01/02/03`, `ROUTE-01`, `PAY-01`,
+  `PRAC-01`; hedef süre 10 dakika.
+- `e2e:lifecycle` (main/nightly): fake-clock pratik, görüşme, paket, pause/cancel/restore
+  ve timezone matrisi; hedef süre 20 dakika.
+- `e2e:agent` (main/nightly): fake Gemini ile context/RAG/handoff/budget/rıza;
+  sabit fixture ve snapshot yerine schema + evidence assertion kullanır.
+- `e2e:resilience` (nightly/release): process kill, outbox replay, duplicate storm,
+  provider timeout ve 100 öğrenci reminder burst.
+- `e2e:staging-canary` (manuel release gate): allowlist'li Telegram/WhatsApp gönderimi,
+  Google OAuth/Meet, Gemini usage ve SES teslimatı. Canary test verisi açık `E2E-`
+  prefix'i ve retention etiketi taşır.
+
+PR merge için `e2e:smoke`, migration, unit/integration ve production build zorunludur.
+Release için bunlara ek olarak son 24 saatte başarılı lifecycle/agent, son release
+candidate üzerinde resilience ve manuel onaylı staging canary gerekir. Flaky test
+otomatik retry ile yeşil sayılamaz; ilk hata artifact'i korunur ve test quarantine
+edilirse ilgili özellik release flag'i kapalı kalır.
+
+#### 19.4.4 Gözlemlenebilirlik ve Test Kanıtı
+
+Her E2E test correlation ID üretir ve inbox, response owner, system event occurrence,
+message intent, outbox, provider delivery ve audit log kayıtlarında aynı ID'nin izi
+aranır. CI artifact'leri şunları içerir:
+
+- Playwright trace, screenshot ve video (yalnız hata durumunda)
+- Sanitized API/worker JSON logları
+- İlgili aggregate'lerin PII içermeyen state timeline'ı
+- Fake provider çağrı listesi, idempotency key ve latency histogramı
+- Fake clock başlangıç/bitiş zamanı ve çalıştırılan handler listesi
+
+Artifact sanitization testi telefon, ad, mesaj içeriği, token, encryption key ve signed
+URL sızıntısını reddeder. Staging canary raporu provider message ID'lerini sınırlı
+erişimli artifact'te tutar; genel CI çıktısında maskeler.
+
 100 öğrencinin aynı dakikadaki reminder burst'ü, duplicate webhook storm,
 Meta/Google timeout ve worker rolling-deploy testleri pilot kapasite testine dahildir.
 
@@ -1836,6 +1920,8 @@ prompt injection/source fabrication testleri geçer.
 ### M10 - Üretim Hazırlığı ve Pilot
 
 - Coolify production/staging
+- Playwright + channel/worker driver + fake provider collector E2E harness
+- `e2e:smoke`, `e2e:lifecycle`, `e2e:agent`, `e2e:resilience` CI job'ları
 - Meta template onayları ve webhook cutover
 - Tüm built-in event'ler için yayınlanmış kanal fallback mesajları ve provider binding kontrolü
 - Telegram bot/webhook kurulumu, secret doğrulaması ve production canary
@@ -1847,8 +1933,10 @@ prompt injection/source fabrication testleri geçer.
 - KVKK/AI/safety uzman kontrolleri
 - İzin listesindeki pilot öğrenciler
 
-**Çıkış ölçütü:** Go-live checklist, restore/cutover/rollback provası ve kapasite
-testleri tamamlanır; kontrollü pilot açılır.
+**Çıkış ölçütü:** Release-blocking E2E matrisi, go-live checklist,
+restore/cutover/rollback provası, kapasite testleri ve staging provider canary
+tamamlanır; kontrollü pilot açılır. `E2E-REG-01/02/03`, `E2E-ROUTE-01`,
+`E2E-PAY-01` veya `E2E-PRAC-01` başarısızken pilot açılamaz.
 
 ## 23. Canlıya Geçiş Kontrolü
 
