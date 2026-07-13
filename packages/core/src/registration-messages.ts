@@ -125,6 +125,41 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
     content:
       'Pratik programını yeniden başlattım. Güncel programın: {{scheduleSummary}}. Bundan sonraki pratiklerinde hatırlatmaların tekrar gönderilecek.',
   },
+  {
+    eventKey: 'MEETING_SERIES_SCHEDULED',
+    content:
+      'Görüşme programını oluşturdum. Bu paket kapsamında dört online görüşmemiz olacak:\n\n{{meetingScheduleSummary}}\n\nGörüşmelerimizi Google Meet üzerinden yapacağız. Katılım bağlantın: {{meetUrl}}\nHer görüşmeden önce bağlantıyı tekrar hatırlatacağım.',
+  },
+  {
+    eventKey: 'MEETING_REMINDER_24H',
+    content:
+      'Yarın {{startsAtText}} tarihinde online görüşmemiz var. Görüşmeye şu bağlantıdan katılabilirsin:\n\n{{meetUrl}}\n\nÖzellikle konuşmak istediğin bir konu varsa önceden bana yazabilirsin.',
+  },
+  {
+    eventKey: 'MEETING_REMINDER_1H',
+    content:
+      'Görüşmemize 1 saat kaldı. Görüşme saati: {{startsAtText}}\n\nHazır olduğunda şu Google Meet bağlantısından katılabilirsin:\n{{meetUrl}}',
+  },
+  {
+    eventKey: 'MEETING_RESCHEDULED',
+    content:
+      'Görüşme saatini güncelledim. Önceki saat {{previousStartsAtText}}, yeni saat {{startsAtText}}.\n\nGoogle Meet bağlantın:\n{{meetUrl}}',
+  },
+  {
+    eventKey: 'MEETING_CANCELLED',
+    content:
+      '{{startsAtText}} için planlanan görüşmemizi iptal ettim. Yeni bir görüşme zamanı belirlediğimizde sana tekrar bilgi vereceğim.',
+  },
+  {
+    eventKey: 'MEETING_COMPLETED',
+    content:
+      'Bugünkü görüşmemiz için teşekkür ederim. Konuştuğumuz noktaları önümüzdeki pratiklerinde birlikte takip edeceğiz. {{nextMeetingAtText}}',
+  },
+  {
+    eventKey: 'MEETING_NO_SHOW',
+    content:
+      '{{startsAtText}} tarihindeki görüşmemizde buluşamadık. Her şey yolundaysa bana kısaca haber verebilirsin. Uygun olduğunda yeni görüşme zamanını birlikte belirleyebiliriz.',
+  },
 ] as const;
 
 export function getDefaultRegistrationMessage(eventKey: SystemEventKey): string | undefined {

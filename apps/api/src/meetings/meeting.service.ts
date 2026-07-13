@@ -25,6 +25,7 @@ import { randomUUID } from 'node:crypto';
 
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { SystemMessageOrchestrator } from '../message-catalog/system-message-orchestrator.js';
 
 type Transaction = Prisma.TransactionClient;
 type MeetingStatusValue = keyof typeof MeetingStatus;
@@ -101,6 +102,7 @@ export class MeetingService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CLOCK_TOKEN) private readonly clock: Clock,
     @Inject(APPLICATION_CONFIG) config: ApplicationConfig,
+    @Inject(SystemMessageOrchestrator) private readonly messages: SystemMessageOrchestrator,
   ) {
     this.environment = config.NODE_ENV;
     if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID) {
@@ -419,7 +421,7 @@ export class MeetingService {
     adminId: string,
   ) {
     if (Number.isNaN(startsAt.getTime())) throw new BadRequestException('Invalid meeting time.');
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const meeting = await tx.weeklyMeeting.findUnique({
         where: { id: meetingId },
         include: { meetingSeries: { include: { subscriptionPeriod: true } } },
@@ -481,8 +483,13 @@ export class MeetingService {
         startsAt: startsAt.toISOString(),
         endsAt: endsAt.toISOString(),
         version: expectedVersion + 1,
+        previousStartsAt: meeting.startsAt.toISOString(),
       };
     });
+    await this.notifyMeetingChange(meetingId, 'MEETING_RESCHEDULED', {
+      previousStartsAt: result.previousStartsAt,
+    });
+    return result;
   }
 
   async rescheduleSeries(
@@ -586,7 +593,7 @@ export class MeetingService {
     reason: string,
     adminId: string,
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const meeting = await tx.weeklyMeeting.findUnique({
         where: { id: meetingId },
         include: { meetingSeries: true },
@@ -645,6 +652,90 @@ export class MeetingService {
       });
       return { id: meetingId, status, version: expectedVersion + 1, creditDelta: delta };
     });
+    const eventKey =
+      status === MeetingStatus.CANCELLED
+        ? 'MEETING_CANCELLED'
+        : status === MeetingStatus.COMPLETED
+          ? 'MEETING_COMPLETED'
+          : status === MeetingStatus.NO_SHOW
+            ? 'MEETING_NO_SHOW'
+            : undefined;
+    if (eventKey) await this.notifyMeetingChange(meetingId, eventKey);
+    return result;
+  }
+
+  private async notifyMeetingChange(
+    meetingId: string,
+    eventKey:
+      | 'MEETING_RESCHEDULED'
+      | 'MEETING_CANCELLED'
+      | 'MEETING_COMPLETED'
+      | 'MEETING_NO_SHOW',
+    context: { previousStartsAt?: string } = {},
+  ) {
+    const meeting = await this.prisma.weeklyMeeting.findUnique({
+      where: { id: meetingId },
+      include: {
+        meetingSeries: {
+          include: {
+            student: { include: { defaultChannelIdentity: true } },
+            meetings: {
+              where: { status: MeetingStatus.SCHEDULED },
+              orderBy: { startsAt: 'asc' },
+            },
+          },
+        },
+      },
+    });
+    const identity = meeting?.meetingSeries.student.defaultChannelIdentity;
+    if (!meeting || !identity || identity.status !== 'ACTIVE') return;
+    const formatter = new Intl.DateTimeFormat('tr-TR', {
+      timeZone: meeting.meetingSeries.timezone,
+      dateStyle: 'full',
+      timeStyle: 'short',
+    });
+    const startsAtText = formatter.format(meeting.startsAt);
+    let variables: Record<string, string>;
+    if (eventKey === 'MEETING_RESCHEDULED') {
+      if (
+        !context.previousStartsAt ||
+        !meeting.meetingSeries.meetUrlEncrypted ||
+        !meeting.meetingSeries.meetUrlKeyId
+      )
+        return;
+      const meetUrl = this.encryption.decrypt(
+        {
+          ciphertext: Buffer.from(meeting.meetingSeries.meetUrlEncrypted),
+          keyId: meeting.meetingSeries.meetUrlKeyId,
+        },
+        `meeting-series:${meeting.meetingSeries.id}:meet-url`,
+      );
+      variables = {
+        previousStartsAtText: formatter.format(new Date(context.previousStartsAt)),
+        startsAtText,
+        meetUrl,
+      };
+    } else if (eventKey === 'MEETING_COMPLETED') {
+      const next = meeting.meetingSeries.meetings.find((item) => item.startsAt > this.clock.now());
+      variables = {
+        nextMeetingAtText: next ? `Bir sonraki görüşmemiz ${formatter.format(next.startsAt)}.` : '',
+      };
+    } else {
+      variables = { startsAtText };
+    }
+    try {
+      await this.messages.createIntent({
+        eventKey,
+        studentId: meeting.meetingSeries.studentId,
+        channelIdentityId: identity.id,
+        idempotencyKey: `meeting:${meeting.id}:${eventKey.toLowerCase()}:v${meeting.version}`,
+        locale: meeting.meetingSeries.student.preferredLocale,
+        stage: meeting.meetingSeries.student.curriculumStage,
+        variables,
+      });
+    } catch {
+      // Missing templates must not roll back an admin meeting change.
+    }
   }
 
   async saveCoachNote(meetingId: string, content: string, adminId: string) {

@@ -13,7 +13,7 @@ import {
   GoogleCalendarConnectionStatus,
   PrismaClient,
 } from '@meditation/database';
-import { createMeetingIntent } from './meeting-lifecycle.js';
+import { createMeetingSeriesIntent } from './meeting-lifecycle.js';
 
 type CalendarConfig = Pick<
   ApplicationConfig,
@@ -93,15 +93,7 @@ export class MeetingCalendarWorker {
         access.accessToken,
         series.googleCalendarId ?? access.calendarId,
       );
-      for (const meeting of series.meetings)
-        await createMeetingIntent(
-          this.prisma,
-          this.clock,
-          this.config,
-          meeting.id,
-          'MEETING_SCHEDULED',
-          `meeting:${meeting.id}:scheduled:v${meeting.version}`,
-        );
+      await createMeetingSeriesIntent(this.prisma, this.clock, this.config, series.id);
       return;
     }
     try {
@@ -138,18 +130,8 @@ export class MeetingCalendarWorker {
         },
       });
       await this.mapInstances(series.id, event.id, access.accessToken, access.calendarId);
-      if (meetUrl) {
-        for (const meeting of series.meetings) {
-          await createMeetingIntent(
-            this.prisma,
-            this.clock,
-            this.config,
-            meeting.id,
-            'MEETING_SCHEDULED',
-            `meeting:${meeting.id}:scheduled:v${meeting.version}`,
-          );
-        }
-      }
+      if (meetUrl)
+        await createMeetingSeriesIntent(this.prisma, this.clock, this.config, series.id);
     } catch (error) {
       await this.prisma.meetingSeries.update({
         where: { id: series.id },
@@ -219,6 +201,7 @@ export class MeetingCalendarWorker {
     for (const meeting of series.meetings.filter((item) => item.status === 'SCHEDULED')) {
       await this.updateMeeting(meeting.id);
     }
+    await createMeetingSeriesIntent(this.prisma, this.clock, this.config, series.id);
   }
 
   async incrementalSync(full = false): Promise<void> {

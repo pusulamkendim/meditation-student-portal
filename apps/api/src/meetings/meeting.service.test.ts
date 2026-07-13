@@ -59,7 +59,12 @@ function createMeetingService(meetingSeries: Array<{ id: string }> = []) {
     ACTIVE_DATA_KEY_ID: 'primary',
   };
   return {
-    service: new MeetingService(prisma as never, { now: () => now } as never, config as never),
+    service: new MeetingService(
+      prisma as never,
+      { now: () => now } as never,
+      config as never,
+      { createIntent: vi.fn() } as never,
+    ),
     tx,
   };
 }

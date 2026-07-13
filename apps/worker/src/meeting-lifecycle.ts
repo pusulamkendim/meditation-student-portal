@@ -191,6 +191,133 @@ export async function createMeetingIntent(
   });
 }
 
+export async function createMeetingSeriesIntent(
+  prisma: PrismaClient,
+  clock: Clock,
+  config: MeetingLifecycleConfig,
+  seriesId: string,
+): Promise<boolean> {
+  const encryption = createEncryption(config);
+  const now = clock.now();
+  return prisma.$transaction(async (tx) => {
+    const series = await tx.meetingSeries.findUnique({
+      where: { id: seriesId },
+      include: {
+        meetings: { where: { status: 'SCHEDULED' }, orderBy: { occurrenceNumber: 'asc' } },
+        student: { include: { defaultChannelIdentity: { include: { channelAccount: true } } } },
+        subscriptionPeriod: true,
+      },
+    });
+    if (
+      !series ||
+      (series.subscriptionPeriod.status !== SubscriptionStatus.ACTIVE &&
+        series.subscriptionPeriod.status !== SubscriptionStatus.SCHEDULED)
+    )
+      return false;
+    const identity = series.student.defaultChannelIdentity;
+    if (!identity || identity.status !== 'ACTIVE' || !series.meetings.length) return false;
+    if (!series.meetUrlEncrypted || !series.meetUrlKeyId) return false;
+    const meetUrl = encryption.decrypt(
+      { ciphertext: Buffer.from(series.meetUrlEncrypted), keyId: series.meetUrlKeyId },
+      `meeting-series:${series.id}:meet-url`,
+    );
+    const versions = await tx.standardMessageVersion.findMany({
+      where: {
+        status: StandardMessageVersionStatus.PUBLISHED,
+        effectiveAt: { lte: now },
+        variant: {
+          channel: identity.channelAccount.type,
+          standardMessage: { eventKey: 'MEETING_SERIES_SCHEDULED', audience: 'STUDENT' },
+        },
+      },
+      include: { variant: { include: { providerBinding: true } } },
+    });
+    const variant = resolveMessageVariant(
+      versions.map((version) => ({
+        ...version,
+        locale: version.variant.locale,
+        stage: version.variant.curriculumStage,
+        slot: version.variant.slot,
+        priority: version.variant.priority,
+        requiresStudentName: version.variant.requiresStudentName,
+        effectiveAt: version.effectiveAt!,
+      })),
+      {
+        locale: series.student.preferredLocale,
+        stage: series.student.curriculumStage,
+        hasStudentName: false,
+      },
+    );
+    if (!variant) return false;
+    const formatter = new Intl.DateTimeFormat('tr-TR', {
+      timeZone: series.timezone,
+      dateStyle: 'full',
+      timeStyle: 'short',
+    });
+    const variables = {
+      meetingScheduleSummary: series.meetings
+        .map((meeting) => `${meeting.occurrenceNumber}. görüşme: ${formatter.format(meeting.startsAt)}`)
+        .join('\n'),
+      meetUrl,
+    };
+    const idempotencyKey = `meeting-series:${series.id}:scheduled:v${series.version}`;
+    const occurrence = await tx.systemEventOccurrence.upsert({
+      where: { idempotencyKey },
+      create: {
+        eventKey: 'MEETING_SERIES_SCHEDULED',
+        studentId: series.studentId,
+        idempotencyKey,
+        variables,
+        occurredAt: now,
+      },
+      update: {},
+    });
+    const intent = await tx.messageIntent.upsert({
+      where: { idempotencyKey: `system-event:${occurrence.id}` },
+      create: {
+        studentId: series.studentId,
+        channelIdentityId: identity.id,
+        category: 'SYSTEM_STANDARD_MESSAGE',
+        status: MessageIntentStatus.PENDING,
+        idempotencyKey: `system-event:${occurrence.id}`,
+        dueAt: now,
+        expiresAt: new Date(now.getTime() + 86_400_000),
+        aggregateVersion: series.version,
+        payload: {
+          eventKey: 'MEETING_SERIES_SCHEDULED',
+          meetingSeriesId: series.id,
+          standardMessageVersionId: variant.id,
+          rendered: renderMessageTemplate(
+            'MEETING_SERIES_SCHEDULED',
+            variant.content,
+            variables,
+          ),
+          locale: variant.variant.locale,
+        },
+      },
+      update: {},
+    });
+    const existingOutbox = await tx.outboxEvent.findFirst({
+      where: {
+        topic: 'message.intents',
+        aggregateId: intent.id,
+        eventType: 'MessageIntentCreated',
+      },
+    });
+    if (!existingOutbox)
+      await tx.outboxEvent.create({
+        data: {
+          topic: 'message.intents',
+          aggregateType: 'MessageIntent',
+          aggregateId: intent.id,
+          eventType: 'MessageIntentCreated',
+          payload: { intentId: intent.id },
+        },
+      });
+    return true;
+  });
+}
+
 export async function createMeetingSummary(
   prisma: PrismaClient,
   clock: Clock,
