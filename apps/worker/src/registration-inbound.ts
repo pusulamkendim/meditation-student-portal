@@ -184,6 +184,37 @@ export class RegistrationInboundProcessor {
         ));
       }
 
+      const existingInbound = await tx.message.findUnique({
+        where: { inboxEventId: inbox.id },
+        select: { id: true },
+      });
+      if (!existingInbound) {
+        const protectedContent = text
+          ? this.encryption.encrypt(text, `message:${inbox.id}`)
+          : undefined;
+        const occurredAt =
+          typeof normalized.occurredAt === 'string' &&
+          !Number.isNaN(new Date(normalized.occurredAt).getTime())
+            ? new Date(normalized.occurredAt)
+            : inbox.createdAt;
+        await tx.message.create({
+          data: {
+            studentId: identity.studentId,
+            channelIdentityId: identity.id,
+            direction: 'INBOUND',
+            status: 'RECEIVED',
+            externalMessageId:
+              typeof normalized.externalMessageId === 'string'
+                ? normalized.externalMessageId
+                : null,
+            contentEncrypted: protectedContent ? new Uint8Array(protectedContent.ciphertext) : null,
+            contentKeyId: protectedContent?.keyId,
+            inboxEventId: inbox.id,
+            occurredAt,
+          },
+        });
+      }
+
       const student = await tx.student.findUniqueOrThrow({ where: { id: identity.studentId } });
       const rendered = await this.render(tx, eventKey, inbox.channel, variables);
       const now = this.clock.now();

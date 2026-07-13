@@ -105,6 +105,16 @@ export class ConversationsController {
         contentKeyId: true,
       },
     });
+    const inboxItems = await this.prisma.inboxEvent.findMany({
+      where: { studentId },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        dedupeKey: true,
+        normalizedData: true,
+        createdAt: true,
+      },
+    });
     try {
       await this.prisma.auditLog.create({
         data: {
@@ -122,19 +132,11 @@ export class ConversationsController {
     } catch {
       // Audit failure should not hide an otherwise authorized conversation view.
     }
-    return {
-      student: {
-        id: student.id,
-        status: student.status,
-        channel: student.defaultChannelIdentity
-          ? {
-              type: student.defaultChannelIdentity.channelAccount.type,
-              status: student.defaultChannelIdentity.status,
-              lastInboundAt: student.defaultChannelIdentity.lastInboundAt?.toISOString(),
-            }
-          : undefined,
-      },
-      items: items.map((item) => {
+    const representedInboxIds = new Set(
+      items.flatMap((item) => (item.inboxEventId ? [item.inboxEventId] : [])),
+    );
+    const timeline = [
+      ...items.map((item) => {
         let content: string | undefined;
         if (item.contentEncrypted && item.contentKeyId) {
           const associatedData = item.inboxEventId ?? item.externalMessageId;
@@ -158,6 +160,56 @@ export class ConversationsController {
           content,
         };
       }),
+      ...inboxItems
+        .filter((item) => !representedInboxIds.has(item.id))
+        .map((item) => {
+          const normalized = item.normalizedData as Record<string, unknown>;
+          let content: string | undefined;
+          if (
+            typeof normalized.contentEncrypted === 'string' &&
+            typeof normalized.contentKeyId === 'string'
+          ) {
+            try {
+              content = this.encryption.decrypt(
+                {
+                  ciphertext: Buffer.from(normalized.contentEncrypted, 'base64'),
+                  keyId: normalized.contentKeyId,
+                },
+                item.dedupeKey,
+              );
+            } catch {
+              content = undefined;
+            }
+          }
+          const normalizedOccurredAt =
+            typeof normalized.occurredAt === 'string' ? new Date(normalized.occurredAt) : undefined;
+          return {
+            id: `inbox-${item.id}`,
+            direction: 'INBOUND',
+            status: 'RECEIVED',
+            occurredAt:
+              normalizedOccurredAt && !Number.isNaN(normalizedOccurredAt.getTime())
+                ? normalizedOccurredAt.toISOString()
+                : item.createdAt.toISOString(),
+            channelIdentityId: student.defaultChannelIdentityId,
+            content,
+          };
+        }),
+    ].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));
+
+    return {
+      student: {
+        id: student.id,
+        status: student.status,
+        channel: student.defaultChannelIdentity
+          ? {
+              type: student.defaultChannelIdentity.channelAccount.type,
+              status: student.defaultChannelIdentity.status,
+              lastInboundAt: student.defaultChannelIdentity.lastInboundAt?.toISOString(),
+            }
+          : undefined,
+      },
+      items: timeline,
       intents: student.messageIntents.map((intent) => ({
         id: intent.id,
         category: intent.category,

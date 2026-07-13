@@ -77,6 +77,7 @@ describe.runIf(runDatabaseTests)('registration inbound flow', () => {
       await prisma.systemEventOccurrence.deleteMany({
         where: { inboundMessageId: { in: inboxIds } },
       });
+      await prisma.message.deleteMany({ where: { inboxEventId: { in: inboxIds } } });
       await prisma.inboxEvent.deleteMany({ where: { id: { in: inboxIds } } });
     }
     if (studentId) {
@@ -168,5 +169,8 @@ describe.runIf(runDatabaseTests)('registration inbound flow', () => {
     ).resolves.toBe(1);
     await expect(prisma.payment.count({ where: { studentId: student.id } })).resolves.toBe(1);
     await expect(prisma.messageIntent.count({ where: { studentId: student.id } })).resolves.toBe(6);
+    await expect(
+      prisma.message.count({ where: { studentId: student.id, direction: 'INBOUND' } }),
+    ).resolves.toBe(6);
   });
 });
