@@ -319,7 +319,7 @@ export class MeetingService {
             'Meeting series requires an active or scheduled subscription.',
           );
         }
-        if (subscription.meetingSeries)
+        if (subscription.meetingSeries.length > 0)
           throw new ConflictException('Subscription already has a meeting series.');
 
         const occurrences = generateMeetingOccurrences(
