@@ -15,7 +15,11 @@ import {
   syncSystemEventRegistry,
 } from '@meditation/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { isValidFullName, RegistrationInboundProcessor } from './registration-inbound.js';
+import {
+  isValidFullName,
+  RegistrationInboundProcessor,
+  shouldHandleRegistrationMessage,
+} from './registration-inbound.js';
 
 const runDatabaseTests = process.env.RUN_DATABASE_TESTS === 'true';
 let prisma: PrismaClient;
@@ -26,6 +30,12 @@ describe('registration input validation', () => {
     expect(isValidFullName("Nil Gün O'Neil")).toBe(true);
     expect(isValidFullName('Ayşe')).toBe(false);
     expect(isValidFullName('12 34')).toBe(false);
+  });
+
+  it('releases completed student messages to the agent router', () => {
+    expect(shouldHandleRegistrationMessage(undefined, RegistrationStep.COMPLETE)).toBe(false);
+    expect(shouldHandleRegistrationMessage(undefined, RegistrationStep.NAME)).toBe(true);
+    expect(shouldHandleRegistrationMessage('KAYIT', RegistrationStep.COMPLETE)).toBe(true);
   });
 });
 

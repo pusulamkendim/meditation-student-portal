@@ -46,6 +46,14 @@ export function isValidFullName(value: string): boolean {
   );
 }
 
+export function shouldHandleRegistrationMessage(
+  exactCommand: unknown,
+  registrationStep: RegistrationStep | undefined,
+): boolean {
+  if (exactCommand === 'KAYIT') return true;
+  return registrationStep !== undefined && registrationStep !== RegistrationStep.COMPLETE;
+}
+
 export class RegistrationInboundProcessor {
   private readonly encryption: FieldEncryption;
 
@@ -89,7 +97,13 @@ export class RegistrationInboundProcessor {
           include: { student: true },
         })
       : null;
-    if (normalized.exactCommand !== 'KAYIT' && !knownIdentity) return 'unhandled';
+    if (
+      !shouldHandleRegistrationMessage(
+        normalized.exactCommand,
+        knownIdentity?.student.registrationStep,
+      )
+    )
+      return 'unhandled';
     if (
       normalized.exactCommand === 'KAYIT' &&
       (typeof normalized.senderEncrypted !== 'string' || typeof normalized.senderKeyId !== 'string')
