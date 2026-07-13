@@ -1,12 +1,21 @@
-import { Body, Controller, Get, Inject, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common';
 import { FieldEncryption, type ApplicationConfig } from '@meditation/core';
+import { MessageIntentStatus } from '@meditation/database';
 import { randomUUID } from 'node:crypto';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
 import { AdminSessionGuard } from '../auth/admin-session.guard.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 const replySchema = z.object({ content: z.string().min(1).max(4096) });
+const operationalIntentStatuses: MessageIntentStatus[] = [
+  MessageIntentStatus.PENDING,
+  MessageIntentStatus.CLAIMED,
+  MessageIntentStatus.FAILED,
+  MessageIntentStatus.DELIVERY_UNKNOWN,
+  MessageIntentStatus.SUPPRESSED,
+];
 @Controller('v1/admin/conversations')
 @UseGuards(AdminSessionGuard)
 export class ConversationsController {
@@ -25,7 +34,12 @@ export class ConversationsController {
   }
   @Get() async list() {
     const students = await this.prisma.student.findMany({
-      where: { OR: [{ messages: { some: {} } }, { messageIntents: { some: {} } }] },
+      where: {
+        OR: [
+          { messages: { some: {} } },
+          { messageIntents: { some: { status: { in: operationalIntentStatuses } } } },
+        ],
+      },
       select: {
         id: true,
         status: true,
@@ -38,6 +52,7 @@ export class ConversationsController {
           select: { occurredAt: true, direction: true, status: true },
         },
         messageIntents: {
+          where: { status: { in: operationalIntentStatuses } },
           take: 1,
           orderBy: { createdAt: 'desc' },
           select: { createdAt: true, category: true, status: true },
@@ -58,12 +73,21 @@ export class ConversationsController {
       })),
     };
   }
-  @Get(':studentId') async detail(@Param('studentId') studentId: string) {
+  @Get(':studentId')
+  async detail(@Param('studentId') studentId: string, @Req() request: FastifyRequest) {
     const student = await this.prisma.student.findUniqueOrThrow({
       where: { id: studentId },
       include: {
         defaultChannelIdentity: { include: { channelAccount: true } },
-        messageIntents: { take: 20, orderBy: { createdAt: 'desc' } },
+        messageIntents: {
+          where: {
+            status: {
+              in: operationalIntentStatuses,
+            },
+          },
+          take: 20,
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
     const items = await this.prisma.message.findMany({
@@ -81,6 +105,23 @@ export class ConversationsController {
         contentKeyId: true,
       },
     });
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          actorType: 'ADMIN',
+          actorId: request.admin!.id,
+          action: 'CONVERSATION_SENSITIVE_READ',
+          entityType: 'Student',
+          entityId: studentId,
+          safeDiff: { fields: ['messageContent'] },
+          reason: 'Conversation detail read in admin portal',
+          requestId: randomUUID(),
+          correlationId: randomUUID(),
+        },
+      });
+    } catch {
+      // Audit failure should not hide an otherwise authorized conversation view.
+    }
     return {
       student: {
         id: student.id,

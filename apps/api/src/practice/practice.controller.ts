@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
@@ -33,9 +33,11 @@ export class PracticeController {
         id: item.id,
         studentId: item.studentId,
         status: item.status,
+        version: item.version,
         startAt: item.startAt.toISOString(),
         durationMinutes: item.durationMinutes,
         slot: item.practiceSlot?.slotKey,
+        localTime: item.practiceSlot?.localTime,
         planRevision: item.practicePlan.revision,
         cancellationReason: item.cancellationReason,
         reflectionTags:
@@ -121,6 +123,24 @@ export class PracticeController {
     return this.practice.cancel(
       id,
       z.object({ reason: z.string().min(1) }).parse(body).reason,
+      request.admin!.id,
+    );
+  }
+  @Patch('admin/practice-sessions/:id')
+  @UseGuards(AdminSessionGuard, AdminCsrfGuard)
+  reschedule(@Param('id') id: string, @Body() body: unknown, @Req() request: FastifyRequest) {
+    const value = z
+      .object({
+        startAt: z.coerce.date(),
+        expectedVersion: z.number().int().positive(),
+        reason: z.string().min(1).max(500),
+      })
+      .parse(body);
+    return this.practice.reschedule(
+      id,
+      value.startAt,
+      value.expectedVersion,
+      value.reason,
       request.admin!.id,
     );
   }

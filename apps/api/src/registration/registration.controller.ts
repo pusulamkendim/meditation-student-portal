@@ -8,6 +8,7 @@ import { PaymentService } from './payment.service.js';
 import { RegistrationService } from './registration.service.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { InternalChannelGuard } from './internal-channel.guard.js';
+import { StudentAdminService } from './student-admin.service.js';
 const advance = z.object({
   command: z.enum([
     'START',
@@ -28,6 +29,7 @@ export class RegistrationController {
     @Inject(RegistrationService) private readonly registration: RegistrationService,
     @Inject(PaymentService) private readonly payments: PaymentService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(StudentAdminService) private readonly studentAdmin: StudentAdminService,
   ) {}
   @Get('admin/payments') @UseGuards(AdminSessionGuard) async listPayments() {
     const payments = await this.prisma.payment.findMany({
@@ -52,89 +54,16 @@ export class RegistrationController {
       })),
     };
   }
-  @Get('admin/students') @UseGuards(AdminSessionGuard) async listStudents() {
-    const students = await this.prisma.student.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-      include: {
-        subscriptions: { orderBy: { startDate: 'desc' }, take: 1 },
-        defaultChannelIdentity: { include: { channelAccount: true } },
-        _count: { select: { payments: true, practiceSessions: true } },
-      },
-    });
-    return {
-      items: students.map((student) => ({
-        id: student.id,
-        status: student.status,
-        registrationStep: student.registrationStep,
-        preferredLocale: student.preferredLocale,
-        timezone: student.timezone,
-        curriculumStage: student.curriculumStage,
-        version: student.version,
-        createdAt: student.createdAt.toISOString(),
-        channel: student.defaultChannelIdentity?.channelAccount.type,
-        subscription: student.subscriptions[0]
-          ? {
-              id: student.subscriptions[0].id,
-              status: student.subscriptions[0].status,
-              startDate: student.subscriptions[0].startDate.toISOString(),
-              endExclusive: student.subscriptions[0].endExclusive.toISOString(),
-            }
-          : undefined,
-        counts: student._count,
-      })),
-    };
+  @Get('admin/students') @UseGuards(AdminSessionGuard) async listStudents(
+    @Req() request: FastifyRequest,
+  ) {
+    return this.studentAdmin.list(request.admin?.id);
   }
   @Get('admin/students/:id') @UseGuards(AdminSessionGuard) async getStudent(
     @Param('id') id: string,
+    @Req() request: FastifyRequest,
   ) {
-    const student = await this.prisma.student.findUniqueOrThrow({
-      where: { id },
-      include: {
-        subscriptions: { orderBy: { startDate: 'desc' }, include: { creditEvents: true } },
-        channelIdentities: { include: { channelAccount: true } },
-        consents: { orderBy: { occurredAt: 'desc' } },
-        payments: { orderBy: { reportedAt: 'desc' } },
-      },
-    });
-    return {
-      id: student.id,
-      status: student.status,
-      registrationStep: student.registrationStep,
-      timezone: student.timezone,
-      preferredLocale: student.preferredLocale,
-      curriculumStage: student.curriculumStage,
-      version: student.version,
-      subscriptions: student.subscriptions.map((item) => ({
-        id: item.id,
-        status: item.status,
-        startDate: item.startDate.toISOString(),
-        endExclusive: item.endExclusive.toISOString(),
-        priceMinor: item.priceMinor.toString(),
-        currency: item.currency,
-        credits: item.creditEvents.reduce((sum, event) => sum + event.delta, 0),
-      })),
-      channels: student.channelIdentities.map((item) => ({
-        id: item.id,
-        type: item.channelAccount.type,
-        status: item.status,
-        isDefault: item.id === student.defaultChannelIdentityId,
-        lastInboundAt: item.lastInboundAt?.toISOString(),
-      })),
-      consents: student.consents.map((item) => ({
-        scope: item.scope,
-        status: item.status,
-        occurredAt: item.occurredAt.toISOString(),
-      })),
-      payments: student.payments.map((item) => ({
-        id: item.id,
-        status: item.status,
-        referenceCode: item.referenceCode,
-        amountMinor: item.amountMinor.toString(),
-        currency: item.currency,
-        reportedAt: item.reportedAt.toISOString(),
-      })),
-    };
+    return this.studentAdmin.detail(id, request.admin?.id);
   }
   @Post('registration/:studentId/advance') @UseGuards(InternalChannelGuard) advance(
     @Param('studentId') id: string,

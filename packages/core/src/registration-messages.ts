@@ -55,6 +55,21 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
     content:
       'Ödeme kontrolünde küçük bir desteğine ihtiyacım oldu. {{reference}} referanslı bildirim için şu bilgiyi paylaşabilir misin: {{actionText}}',
   },
+  {
+    eventKey: 'PRACTICE_CANCELLED',
+    content:
+      'Bilgi vermek istedim: {{startsAtText}} için planlanan pratiğini iptal ettim. Uygun olduğunda yeni bir saat belirleyebiliriz.',
+  },
+  {
+    eventKey: 'PRACTICE_RESTORED',
+    content:
+      'Pratiğini yeniden plana aldım. {{startsAtText}} tarihinde {{durationText}} birlikte devam ediyoruz.',
+  },
+  {
+    eventKey: 'PRACTICE_RESCHEDULED',
+    content:
+      'Pratik saatini güncelledim. Eski saat {{previousStartsAtText}}, yeni saat {{startsAtText}}. Süremiz {{durationText}}.',
+  },
 ] as const;
 
 export function getDefaultRegistrationMessage(eventKey: SystemEventKey): string | undefined {

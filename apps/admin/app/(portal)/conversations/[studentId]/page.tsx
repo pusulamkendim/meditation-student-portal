@@ -1,9 +1,24 @@
 'use client';
-import { Alert, Badge, Button, EmptyState, PageHeader, Skeleton } from '@meditation/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  EmptyState,
+  MessageBubble,
+  PageHeader,
+  Skeleton,
+} from '@meditation/ui';
 import { ArrowLeft, Send } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const statusLabels: Record<string, string> = {
+  PENDING: 'Bekliyor',
+  CLAIMED: 'İşleniyor',
+  FAILED: 'Gönderilemedi',
+  DELIVERY_UNKNOWN: 'Teslim durumu belirsiz',
+  SUPPRESSED: 'Gönderilmedi',
+};
 type Data = {
   student: {
     id: string;
@@ -117,41 +132,19 @@ export default function ConversationDetail() {
       />
       <div className="conversation-workspace">
         <section className="message-timeline">
-          {data.items.length === 0 && data.intents.length === 0 ? (
+          {data.items.length === 0 ? (
             <EmptyState title="Henüz mesaj yok" />
           ) : (
             <>
               {data.items.map((item) => (
-                <article
-                  className={`timeline-item timeline-item--${item.direction.toLowerCase()}`}
+                <MessageBubble
                   key={item.id}
+                  direction={item.direction === 'OUTBOUND' ? 'outbound' : 'inbound'}
+                  channel={item.status}
+                  time={new Date(item.occurredAt).toLocaleString('tr-TR')}
                 >
-                  <strong>{item.direction === 'INBOUND' ? 'Öğrenci' : 'Sistem'}</strong>
-                  <span>
-                    {item.status} · {new Date(item.occurredAt).toLocaleString('tr-TR')}
-                  </span>
-                  {item.content ? <p>{item.content}</p> : <small>İçerik mevcut değil</small>}
-                </article>
-              ))}
-              {data.intents.map((intent) => (
-                <article className="timeline-intent" key={intent.id}>
-                  <div>
-                    <strong>{intent.category}</strong>
-                    <span>{new Date(intent.createdAt).toLocaleString('tr-TR')}</span>
-                  </div>
-                  <Badge
-                    tone={
-                      intent.status === 'SENT'
-                        ? 'success'
-                        : intent.status === 'FAILED' || intent.status === 'SUPPRESSED'
-                          ? 'danger'
-                          : 'info'
-                    }
-                  >
-                    {intent.status}
-                  </Badge>
-                  {intent.suppressionReason ? <small>{intent.suppressionReason}</small> : null}
-                </article>
+                  {item.content ?? 'İçerik mevcut değil'}
+                </MessageBubble>
               ))}
             </>
           )}
@@ -179,6 +172,23 @@ export default function ConversationDetail() {
               Yanıtı kuyruğa al
             </Button>
           </form>
+          {data.intents.length ? (
+            <section className="conversation-operations">
+              <strong>Gönderim sorunları</strong>
+              <small>Mesaj akışından ayrı operasyon kayıtları</small>
+              {data.intents.map((intent) => (
+                <div key={intent.id}>
+                  <span>
+                    {intent.category} · {new Date(intent.createdAt).toLocaleString('tr-TR')}
+                  </span>
+                  <Badge tone={intent.status === 'FAILED' ? 'danger' : 'warning'}>
+                    {statusLabels[intent.status] ?? intent.status}
+                  </Badge>
+                  {intent.suppressionReason ? <small>{intent.suppressionReason}</small> : null}
+                </div>
+              ))}
+            </section>
+          ) : null}
         </aside>
       </div>
     </main>

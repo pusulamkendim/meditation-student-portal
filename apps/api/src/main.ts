@@ -21,6 +21,7 @@ async function bootstrap(): Promise<void> {
   app.enableCors({
     origin: config.ADMIN_ORIGIN ? [config.ADMIN_ORIGIN] : false,
     credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   });
   app
     .getHttpAdapter()

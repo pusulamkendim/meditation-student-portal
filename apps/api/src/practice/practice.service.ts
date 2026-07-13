@@ -7,6 +7,7 @@ import {
   LookupHmac,
   type ApplicationConfig,
   type Clock,
+  type SystemEventKey,
 } from '@meditation/core';
 import {
   AuditActorType,
@@ -19,6 +20,7 @@ import {
 } from '@meditation/database';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { SystemMessageOrchestrator } from '../message-catalog/system-message-orchestrator.js';
 
 type SlotInput = { slotKey: 'MORNING' | 'EVENING'; localTime: string; active: boolean };
 type Transaction = Prisma.TransactionClient;
@@ -31,6 +33,7 @@ export class PracticeService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CLOCK_TOKEN) private readonly clock: Clock,
     @Inject(APPLICATION_CONFIG) config: ApplicationConfig,
+    @Inject(SystemMessageOrchestrator) private readonly messages: SystemMessageOrchestrator,
   ) {
     if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID || !config.LOOKUP_HMAC_KEY)
       throw new Error('Practice encryption keys are required.');
@@ -299,6 +302,95 @@ export class PracticeService {
   async cancel(sessionId: string, reason: string, adminId: string) {
     return this.changeCancellation(sessionId, reason, adminId, false);
   }
+
+  async reschedule(
+    sessionId: string,
+    startAt: Date,
+    expectedVersion: number,
+    reason: string,
+    adminId: string,
+  ) {
+    const now = this.clock.now();
+    if (startAt <= now) throw new Error('Practice session must be scheduled in the future.');
+    const result = await this.prisma.$transaction(async (tx) => {
+      const session = await tx.practiceSession.findUniqueOrThrow({
+        where: { id: sessionId },
+        include: { student: { include: { defaultChannelIdentity: true } } },
+      });
+      if (session.version !== expectedVersion) throw new Error('Practice session state conflict.');
+      if (
+        session.status !== PracticeSessionStatus.SCHEDULED &&
+        session.status !== PracticeSessionStatus.REMINDED
+      )
+        throw new Error('Only upcoming sessions can be rescheduled.');
+      if (session.startAt <= now) throw new Error('Started sessions cannot be changed.');
+
+      const serviceDate = session.serviceDate.toISOString().slice(0, 10);
+      const targetDate = new Intl.DateTimeFormat('en-CA', {
+        timeZone: session.student.timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(startAt);
+      if (serviceDate !== targetDate)
+        throw new Error('Practice time must remain on the same local day.');
+
+      const changed = await tx.practiceSession.updateMany({
+        where: {
+          id: session.id,
+          version: expectedVersion,
+          status: { in: [PracticeSessionStatus.SCHEDULED, PracticeSessionStatus.REMINDED] },
+        },
+        data: {
+          startAt,
+          status: PracticeSessionStatus.SCHEDULED,
+          replyNonceHmac: null,
+          version: { increment: 1 },
+        },
+      });
+      if (changed.count !== 1) throw new Error('Practice session state conflict.');
+
+      await tx.messageIntent.updateMany({
+        where: {
+          payload: { path: ['practiceSessionId'], equals: session.id },
+          status: { in: ['PENDING', 'CLAIMED'] },
+        },
+        data: { status: 'SUPPRESSED', suppressionReason: 'SESSION_RESCHEDULED' },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorType: AuditActorType.ADMIN,
+          actorId: adminId,
+          action: 'PRACTICE_RESCHEDULED',
+          entityType: 'PracticeSession',
+          entityId: session.id,
+          reason,
+          safeDiff: {
+            previousStartAt: session.startAt.toISOString(),
+            startAt: startAt.toISOString(),
+          },
+          requestId: `practice-reschedule-${session.id}-${now.getTime()}`,
+          correlationId: `practice-${session.id}`,
+        },
+      });
+      return {
+        id: session.id,
+        studentId: session.studentId,
+        channelIdentityId: session.student.defaultChannelIdentityId,
+        locale: session.student.preferredLocale,
+        stage: session.student.curriculumStage,
+        timezone: session.student.timezone,
+        status: PracticeSessionStatus.SCHEDULED,
+        startAt: startAt.toISOString(),
+        durationMinutes: session.durationMinutes,
+        previousStartAt: session.startAt.toISOString(),
+        version: expectedVersion + 1,
+      };
+    });
+    await this.notifyPracticeChange(result, 'PRACTICE_RESCHEDULED');
+    return { id: result.id, status: result.status, startAt: result.startAt };
+  }
+
   async restore(sessionId: string, reason: string, adminId: string) {
     return this.changeCancellation(sessionId, reason, adminId, true);
   }
@@ -369,10 +461,13 @@ export class PracticeService {
     restore: boolean,
   ) {
     const now = this.clock.now();
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const session = await tx.practiceSession.findUniqueOrThrow({
         where: { id: sessionId },
-        include: { practicePlan: { include: { subscriptionPeriod: true } } },
+        include: {
+          practicePlan: { include: { subscriptionPeriod: true } },
+          student: true,
+        },
       });
       if (session.startAt <= now) throw new Error('Started sessions cannot be changed.');
       if (
@@ -423,8 +518,73 @@ export class PracticeService {
           correlationId: `practice-${session.practicePlanId}`,
         },
       });
-      return { id: session.id, status };
+      return {
+        id: session.id,
+        studentId: session.studentId,
+        channelIdentityId: session.student.defaultChannelIdentityId,
+        locale: session.student.preferredLocale,
+        stage: session.student.curriculumStage,
+        timezone: session.student.timezone,
+        startAt: session.startAt.toISOString(),
+        durationMinutes: session.durationMinutes,
+        status,
+        version: session.version + 1,
+      };
     });
+    await this.notifyPracticeChange(result, restore ? 'PRACTICE_RESTORED' : 'PRACTICE_CANCELLED');
+    return { id: result.id, status: result.status };
+  }
+
+  private async notifyPracticeChange(
+    input: {
+      id: string;
+      studentId: string;
+      channelIdentityId: string | null;
+      locale: string;
+      stage: string;
+      timezone: string;
+      startAt: string;
+      durationMinutes: number;
+      version: number;
+      previousStartAt?: string;
+    },
+    eventKey: SystemEventKey,
+  ) {
+    if (!input.channelIdentityId) return;
+    const startsAtText = new Intl.DateTimeFormat('tr-TR', {
+      timeZone: input.timezone,
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(new Date(input.startAt));
+    const variables: Record<string, string> =
+      eventKey === 'PRACTICE_CANCELLED'
+        ? { startsAtText }
+        : eventKey === 'PRACTICE_RESTORED'
+          ? { startsAtText, durationText: `${input.durationMinutes} dakika` }
+          : {
+              previousStartsAtText: input.previousStartAt
+                ? new Intl.DateTimeFormat('tr-TR', {
+                    timeZone: input.timezone,
+                    dateStyle: 'short',
+                    timeStyle: 'short',
+                  }).format(new Date(input.previousStartAt))
+                : startsAtText,
+              startsAtText,
+              durationText: `${input.durationMinutes} dakika`,
+            };
+    try {
+      await this.messages.createIntent({
+        eventKey,
+        studentId: input.studentId,
+        channelIdentityId: input.channelIdentityId,
+        idempotencyKey: `practice:${input.id}:${eventKey.toLowerCase()}:v${input.version}`,
+        locale: input.locale,
+        stage: input.stage,
+        variables,
+      });
+    } catch {
+      // Missing or unpublished templates must not roll back an admin state change.
+    }
   }
 
   async currentProgram(studentId: string) {

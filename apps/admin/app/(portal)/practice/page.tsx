@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   EmptyState,
+  Modal,
   PageHeader,
   Skeleton,
   TextField,
@@ -16,9 +17,11 @@ type Session = {
   id: string;
   studentId: string;
   status: string;
+  version: number;
   startAt: string;
   durationMinutes: number;
   slot?: string;
+  localTime?: string;
   planRevision: number;
   cancellationReason?: string;
   reflectionTags?: Array<{ tag: string; confidence: number }>;
@@ -50,7 +53,10 @@ export default function PracticePage() {
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
-  const [filter, setFilter] = useState('ALL');
+  const [filter, setFilter] = useState('HISTORY');
+  const [practiceDialog, setPracticeDialog] = useState<'reschedule' | 'cancel' | 'restore'>();
+  const [practiceDate, setPracticeDate] = useState('');
+  const [practiceReason, setPracticeReason] = useState('');
   const load = useCallback(async () => {
     setError(undefined);
     try {
@@ -64,15 +70,29 @@ export default function PracticePage() {
   useEffect(() => {
     void load();
   }, [load]);
-  const visible = useMemo(
-    () => sessions?.filter((s) => filter === 'ALL' || s.status === filter) ?? [],
-    [sessions, filter],
-  );
-  async function request(path: string, body: unknown) {
+  const visible = useMemo(() => {
+    const items = sessions ?? [];
+    if (filter === 'PLANNED')
+      return items
+        .filter(
+          (s) =>
+            ['SCHEDULED', 'REMINDED'].includes(s.status) &&
+            new Date(s.startAt).getTime() >= Date.now(),
+        )
+        .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+    if (filter === 'CANCELLED')
+      return items
+        .filter((s) => s.status === 'CANCELLED')
+        .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
+    return items
+      .filter((s) => ['COMPLETED', 'MISSED', 'SKIPPED', 'AWAITING_RESPONSE'].includes(s.status))
+      .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
+  }, [sessions, filter]);
+  async function request(path: string, body: unknown, method = 'POST') {
     setBusy(true);
     try {
       const r = await fetch(`${api}/v1/${path}`, {
-        method: 'POST',
+        method,
         credentials: 'include',
         headers: {
           'content-type': 'application/json',
@@ -90,6 +110,43 @@ export default function PracticePage() {
     } finally {
       setBusy(false);
     }
+  }
+  function toLocalDateTime(value: string) {
+    const date = new Date(value);
+    const offset = date.getTimezoneOffset();
+    return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
+  }
+  function openPracticeDialog(action: 'reschedule' | 'cancel' | 'restore') {
+    if (!selected) return;
+    setPracticeDialog(action);
+    setPracticeDate(action === 'reschedule' ? toLocalDateTime(selected.startAt) : '');
+    setPracticeReason(
+      action === 'cancel'
+        ? 'Admin iptali'
+        : action === 'restore'
+          ? 'Admin geri aldı'
+          : 'Admin saat güncellemesi',
+    );
+  }
+  async function submitPracticeDialog(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selected || !practiceDialog || !practiceReason.trim()) return;
+    if (practiceDialog === 'reschedule' && !practiceDate) return;
+    const path =
+      practiceDialog === 'reschedule'
+        ? `admin/practice-sessions/${selected.id}`
+        : `admin/practice-sessions/${selected.id}/${practiceDialog}`;
+    const body =
+      practiceDialog === 'reschedule'
+        ? {
+            startAt: new Date(practiceDate).toISOString(),
+            expectedVersion: selected.version,
+            reason: practiceReason.trim(),
+          }
+        : { reason: practiceReason.trim() };
+    await request(path, body, practiceDialog === 'reschedule' ? 'PATCH' : 'POST');
+    setPracticeDialog(undefined);
+    setSelected(undefined);
   }
   async function loadPlanFor(id: string) {
     const targetId = id.trim();
@@ -167,18 +224,12 @@ export default function PracticePage() {
           <div className="payment-toolbar">
             <div className="payment-filters">
               {[
-                'ALL',
-                'SCHEDULED',
-                'REMINDED',
-                'AWAITING_RESPONSE',
-                'COMPLETED',
-                'SKIPPED',
-                'MISSED',
-                'CANCELLED',
-                'SUPPRESSED',
-              ].map((key) => (
+                ['HISTORY', 'Oturum geçmişi'],
+                ['PLANNED', 'Planlanan'],
+                ['CANCELLED', 'İptal edilen'],
+              ].map(([key, text]) => (
                 <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>
-                  {key === 'ALL' ? 'Tümü' : key}
+                  {text}
                 </button>
               ))}
             </div>
@@ -207,7 +258,18 @@ export default function PracticePage() {
                     <span>{item.studentId.slice(0, 8)}</span>
                     <span>{new Date(item.startAt).toLocaleString('tr-TR')}</span>
                     <span>
-                      {item.slot} · {item.durationMinutes} dk
+                      {item.slot === 'MORNING'
+                        ? 'Sabah'
+                        : item.slot === 'EVENING'
+                          ? 'Akşam'
+                          : 'Pratik'}{' '}
+                      ·{' '}
+                      {item.localTime ??
+                        new Date(item.startAt).toLocaleTimeString('tr-TR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}{' '}
+                      · {item.durationMinutes} dk
                     </span>
                     <Badge tone={tones[item.status] ?? 'neutral'}>{item.status}</Badge>
                     <Clock3 />
@@ -224,7 +286,18 @@ export default function PracticePage() {
                     <div>
                       <small>Seans</small>
                       <h2>
-                        {selected.slot} · {selected.durationMinutes} dk
+                        {selected.slot === 'MORNING'
+                          ? 'Sabah'
+                          : selected.slot === 'EVENING'
+                            ? 'Akşam'
+                            : 'Pratik'}{' '}
+                        ·{' '}
+                        {selected.localTime ??
+                          new Date(selected.startAt).toLocaleTimeString('tr-TR', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}{' '}
+                        · {selected.durationMinutes} dk
                       </h2>
                     </div>
                     <Badge tone={tones[selected.status] ?? 'neutral'}>{selected.status}</Badge>
@@ -243,31 +316,33 @@ export default function PracticePage() {
                     </div>
                   ) : null}
                   {['SCHEDULED', 'REMINDED'].includes(selected.status) ? (
-                    <Button
-                      variant="danger"
-                      loading={busy}
-                      onClick={() =>
-                        void request(`admin/practice-sessions/${selected.id}/cancel`, {
-                          reason: 'Admin iptali',
-                        })
-                      }
-                    >
-                      <Ban />
-                      İptal et
-                    </Button>
+                    <>
+                      <Button
+                        variant="secondary"
+                        loading={busy}
+                        onClick={() => openPracticeDialog('reschedule')}
+                      >
+                        <Clock3 />
+                        Saati değiştir
+                      </Button>
+                      <Button
+                        variant="danger"
+                        loading={busy}
+                        onClick={() => openPracticeDialog('cancel')}
+                      >
+                        <Ban />
+                        İptal et
+                      </Button>
+                    </>
                   ) : null}
                   {selected.status === 'CANCELLED' ? (
                     <Button
                       variant="secondary"
                       loading={busy}
-                      onClick={() =>
-                        void request(`admin/practice-sessions/${selected.id}/restore`, {
-                          reason: 'Admin geri alma',
-                        })
-                      }
+                      onClick={() => openPracticeDialog('restore')}
                     >
                       <Play />
-                      Geri al
+                      İptali geri al
                     </Button>
                   ) : null}
                 </>
@@ -373,6 +448,61 @@ export default function PracticePage() {
           </section>
         </>
       )}
+      {practiceDialog ? (
+        <Modal
+          title={
+            practiceDialog === 'reschedule'
+              ? 'Pratik saatini değiştir'
+              : practiceDialog === 'cancel'
+                ? 'Pratiği iptal et'
+                : 'İptali geri al'
+          }
+          description="İşlem öğrencinin pratik kaydına ve gönderim planına audit kaydıyla uygulanır."
+          onClose={() => setPracticeDialog(undefined)}
+          actions={
+            <>
+              <Button variant="ghost" onClick={() => setPracticeDialog(undefined)}>
+                Vazgeç
+              </Button>
+              <Button
+                form="practice-page-session-form"
+                type="submit"
+                loading={busy}
+                variant={practiceDialog === 'cancel' ? 'danger' : 'primary'}
+              >
+                Kaydet
+              </Button>
+            </>
+          }
+        >
+          <form
+            id="practice-page-session-form"
+            className="student-modal-form"
+            onSubmit={submitPracticeDialog}
+          >
+            {practiceDialog === 'reschedule' ? (
+              <label>
+                <span>Yeni saat</span>
+                <input
+                  required
+                  type="datetime-local"
+                  value={practiceDate}
+                  onChange={(event) => setPracticeDate(event.target.value)}
+                />
+              </label>
+            ) : null}
+            <label>
+              <span>İşlem nedeni</span>
+              <textarea
+                required
+                maxLength={500}
+                value={practiceReason}
+                onChange={(event) => setPracticeReason(event.target.value)}
+              />
+            </label>
+          </form>
+        </Modal>
+      ) : null}
     </main>
   );
 }
