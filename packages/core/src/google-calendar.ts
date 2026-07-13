@@ -169,6 +169,7 @@ export class GoogleCalendarRestClient {
         method: 'PATCH',
         headers: etag ? { 'if-match': etag } : undefined,
         body: JSON.stringify({
+          status: 'confirmed',
           start: { dateTime: startsAt.toISOString(), timeZone: timezone },
           end: { dateTime: endsAt.toISOString(), timeZone: timezone },
         }),

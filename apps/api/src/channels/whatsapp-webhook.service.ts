@@ -12,6 +12,7 @@ import { ChannelType, MessageStatus, Prisma } from '@meditation/database';
 
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { shouldRouteToPractice } from './inbound-routing.js';
 
 @Injectable()
 export class WhatsAppWebhookService {
@@ -176,14 +177,38 @@ export class WhatsAppWebhookService {
           const replyEvent = (
             replySource?.messageIntent?.payload as Record<string, unknown> | undefined
           )?.eventKey;
+          const recentSource =
+            event.repliedToExternalMessageId || !event.sender
+              ? null
+              : await transaction.message.findFirst({
+                  where: {
+                    channelIdentity: {
+                      externalUserHmac: this.lookup.digest(event.sender),
+                      channelAccount: {
+                        type: ChannelType.WHATSAPP,
+                        externalId: event.accountExternalId,
+                      },
+                    },
+                    direction: 'OUTBOUND',
+                    messageIntentId: { not: null },
+                    occurredAt: { gte: new Date(event.occurredAt.getTime() - 24 * 60 * 60_000) },
+                  },
+                  orderBy: { occurredAt: 'desc' },
+                  include: { messageIntent: true },
+                });
+          const recentEvent = (
+            recentSource?.messageIntent?.payload as Record<string, unknown> | undefined
+          )?.eventKey;
           await transaction.outboxEvent.create({
             data: {
-              topic:
-                event.text?.startsWith('practice:') ||
-                (typeof replyEvent === 'string' && replyEvent.startsWith('PRACTICE_')) ||
-                (awaitingPractice && !replyEvent)
-                  ? 'practice.inbound'
-                  : 'channel.inbound',
+              topic: shouldRouteToPractice({
+                text: event.text,
+                replyEvent: typeof replyEvent === 'string' ? replyEvent : undefined,
+                recentEvent: typeof recentEvent === 'string' ? recentEvent : undefined,
+                hasAwaitingPractice: Boolean(awaitingPractice),
+              })
+                ? 'practice.inbound'
+                : 'channel.inbound',
               aggregateType: 'InboxEvent',
               aggregateId: inbox.id,
               eventType: event.eventType,

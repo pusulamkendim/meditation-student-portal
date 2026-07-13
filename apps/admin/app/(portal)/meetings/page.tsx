@@ -714,6 +714,12 @@ export default function MeetingsPage() {
           }
         >
           <div className="status-actions">
+            {selected.status !== 'SCHEDULED' ? (
+              <Button variant="secondary" onClick={() => void setStatus('SCHEDULED')}>
+                <RotateCcw />
+                Tekrar planlandı
+              </Button>
+            ) : null}
             <Button onClick={() => void setStatus('COMPLETED')}>
               <Check />
               Tamamlandı

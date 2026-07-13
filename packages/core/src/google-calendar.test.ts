@@ -62,4 +62,33 @@ describe('Google Calendar contract', () => {
       client.listEvents('token', 'portal', { syncToken: 'expired' }),
     ).rejects.toBeInstanceOf(GoogleCalendarSyncExpiredError);
   });
+
+  it('restores a cancelled instance when updating its schedule', async () => {
+    let requestBody = '';
+    const request = (async (_url: string, init?: RequestInit) => {
+      requestBody = String(init?.body ?? '');
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ id: 'instance-1', status: 'confirmed' }),
+      } as Response;
+    }) as unknown as typeof fetch;
+    const client = new GoogleCalendarRestClient(
+      'client',
+      'secret',
+      'http://localhost/callback',
+      request,
+    );
+
+    await client.updateEventInstance(
+      'token',
+      'portal',
+      'instance-1',
+      new Date('2026-07-14T07:00:00.000Z'),
+      new Date('2026-07-14T08:00:00.000Z'),
+      'Europe/Istanbul',
+    );
+
+    expect(JSON.parse(requestBody)).toMatchObject({ status: 'confirmed' });
+  });
 });
