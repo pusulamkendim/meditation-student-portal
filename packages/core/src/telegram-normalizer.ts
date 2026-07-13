@@ -10,6 +10,7 @@ const updateSchema = z
         text: z.string().optional(),
         chat: z.object({ id: z.number().int(), type: z.string() }),
         from: z.object({ id: z.number().int() }).optional(),
+        reply_to_message: z.object({ message_id: z.number().int() }).passthrough().optional(),
       })
       .optional(),
     callback_query: z
@@ -37,6 +38,7 @@ export interface NormalizedTelegramUpdate {
   text?: string;
   occurredAt: Date;
   ignored: boolean;
+  repliedToExternalMessageId?: string;
 }
 
 export function normalizeTelegramUpdate(
@@ -55,6 +57,9 @@ export function normalizeTelegramUpdate(
       : (update.callback_query?.id ?? String(update.update_id)),
     sender: sender === undefined ? 'ignored' : String(sender),
     text: update.message?.text ?? update.callback_query?.data,
+    repliedToExternalMessageId: update.message?.reply_to_message
+      ? String(update.message.reply_to_message.message_id)
+      : undefined,
     occurredAt: new Date((source?.date ?? 0) * 1000),
     ignored,
   };

@@ -164,6 +164,7 @@ type Conversation = {
     status: string;
     occurredAt: string;
     content?: string;
+    context?: { eventKey?: string; resolutionMethod: string };
   }>;
   intents: Array<{
     id: string;
@@ -1572,7 +1573,14 @@ function ConversationsTab({
                   channel={item.status}
                   time={formatDateTime(item.occurredAt)}
                 >
-                  {item.content ?? 'İçerik çözülemedi'}
+                  <div>
+                    {item.content ?? 'İçerik çözülemedi'}
+                    {item.context?.eventKey ? (
+                      <small className="message-context-label">
+                        Bağlam: {item.context.eventKey} · {item.context.resolutionMethod}
+                      </small>
+                    ) : null}
+                  </div>
                 </MessageBubble>
               ))
             ) : (

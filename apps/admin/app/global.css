@@ -801,6 +801,13 @@ a {
   border-radius: var(--radius-md);
   background: var(--color-surface);
 }
+
+.message-context-label {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
 .timeline-item {
   max-width: 70%;
   display: grid;

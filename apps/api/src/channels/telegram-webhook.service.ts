@@ -52,6 +52,7 @@ export class TelegramWebhookService {
           externalMessageId: event.externalMessageId,
           senderHmac: this.lookup.digest(event.sender),
           occurredAt: event.occurredAt.toISOString(),
+          repliedToExternalMessageId: event.repliedToExternalMessageId,
         };
         const sender = this.encryption.encrypt(event.sender, event.dedupeKey);
         normalized.senderEncrypted = sender.ciphertext.toString('base64');
@@ -108,10 +109,30 @@ export class TelegramWebhookService {
               select: { id: true },
             })
           : null;
+        const replySource = event.repliedToExternalMessageId
+          ? await transaction.message.findFirst({
+              where: {
+                channelIdentity: {
+                  externalUserHmac: this.lookup.digest(event.sender),
+                  channelAccount: {
+                    type: ChannelType.TELEGRAM,
+                    externalId: this.config.TELEGRAM_ACCOUNT_ID,
+                  },
+                },
+                externalMessageId: event.repliedToExternalMessageId,
+                direction: 'OUTBOUND',
+              },
+              include: { messageIntent: true },
+            })
+          : null;
+        const replyEvent = (replySource?.messageIntent?.payload as Record<string, unknown> | undefined)
+          ?.eventKey;
         await transaction.outboxEvent.create({
           data: {
             topic:
-              event.text?.startsWith('practice:') || awaitingPractice
+              event.text?.startsWith('practice:') ||
+              (typeof replyEvent === 'string' && replyEvent.startsWith('PRACTICE_')) ||
+              (awaitingPractice && !replyEvent)
                 ? 'practice.inbound'
                 : 'channel.inbound',
             aggregateType: 'InboxEvent',

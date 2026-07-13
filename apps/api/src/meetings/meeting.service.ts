@@ -695,6 +695,18 @@ export class MeetingService {
       timeStyle: 'short',
     });
     const startsAtText = formatter.format(meeting.startsAt);
+    const fullName =
+      meeting.meetingSeries.student.fullNameEncrypted &&
+      meeting.meetingSeries.student.fullNameKeyId
+        ? this.encryption.decrypt(
+            {
+              ciphertext: Buffer.from(meeting.meetingSeries.student.fullNameEncrypted),
+              keyId: meeting.meetingSeries.student.fullNameKeyId,
+            },
+            `student:${meeting.meetingSeries.studentId}:name`,
+          )
+        : '';
+    const studentDisplayName = fullName ? ` ${fullName.trim().split(/\s+/)[0]}` : '';
     let variables: Record<string, string>;
     if (eventKey === 'MEETING_RESCHEDULED') {
       if (
@@ -714,6 +726,7 @@ export class MeetingService {
         previousStartsAtText: formatter.format(new Date(context.previousStartsAt)),
         startsAtText,
         meetUrl,
+        studentDisplayName,
       };
     } else if (eventKey === 'MEETING_COMPLETED') {
       const next = meeting.meetingSeries.meetings.find((item) => item.startsAt > this.clock.now());

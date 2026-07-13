@@ -95,7 +95,8 @@ export class WhatsAppWebhookService {
             externalMessageId: event.externalMessageId,
             messageType: event.messageType,
             status: event.status,
-            occurredAt: event.occurredAt.toISOString(),
+              occurredAt: event.occurredAt.toISOString(),
+              repliedToExternalMessageId: event.repliedToExternalMessageId,
           };
           if (event.sender) {
             protectedData.senderHmac = this.lookup.digest(event.sender);
@@ -155,10 +156,32 @@ export class WhatsAppWebhookService {
                   select: { id: true },
                 })
               : null;
+          const replySource =
+            event.repliedToExternalMessageId && event.sender
+              ? await transaction.message.findFirst({
+                  where: {
+                    channelIdentity: {
+                      externalUserHmac: this.lookup.digest(event.sender),
+                      channelAccount: {
+                        type: ChannelType.WHATSAPP,
+                        externalId: event.accountExternalId,
+                      },
+                    },
+                    externalMessageId: event.repliedToExternalMessageId,
+                    direction: 'OUTBOUND',
+                  },
+                  include: { messageIntent: true },
+                })
+              : null;
+          const replyEvent = (
+            replySource?.messageIntent?.payload as Record<string, unknown> | undefined
+          )?.eventKey;
           await transaction.outboxEvent.create({
             data: {
               topic:
-                event.text?.startsWith('practice:') || awaitingPractice
+                event.text?.startsWith('practice:') ||
+                (typeof replyEvent === 'string' && replyEvent.startsWith('PRACTICE_')) ||
+                (awaitingPractice && !replyEvent)
                   ? 'practice.inbound'
                   : 'channel.inbound',
               aggregateType: 'InboxEvent',

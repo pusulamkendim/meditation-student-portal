@@ -313,6 +313,16 @@ export class PracticeService {
     });
     if (!student?.defaultChannelIdentityId) return;
     const active = plan.slots.filter((slot) => slot.active);
+    const fullName =
+      student.fullNameEncrypted && student.fullNameKeyId
+        ? this.encryption.decrypt(
+            {
+              ciphertext: Buffer.from(student.fullNameEncrypted),
+              keyId: student.fullNameKeyId,
+            },
+            `student:${student.id}:name`,
+          )
+        : '';
     const scheduleSummary = active
       .map((slot) => `${slot.slotKey === 'MORNING' ? 'Sabah' : 'Akşam'} ${slot.localTime} (${slot.durationMinutes} dakika)`)
       .join(', ');
@@ -322,7 +332,7 @@ export class PracticeService {
             morningTimeText: active.find((slot) => slot.slotKey === 'MORNING')?.localTime ?? 'kapalı',
             eveningTimeText: active.find((slot) => slot.slotKey === 'EVENING')?.localTime ?? 'kapalı',
             durationText: `${active[0]?.durationMinutes ?? 0} dakika`,
-            studentDisplayName: '',
+            studentDisplayName: fullName ? ` ${fullName.trim().split(/\s+/)[0]}` : '',
           }
         : { scheduleSummary };
     try {

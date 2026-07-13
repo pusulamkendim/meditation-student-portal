@@ -165,6 +165,7 @@ export class MessageDispatcher {
             direction: 'OUTBOUND',
             status: 'SENT',
             externalMessageId: result.providerMessageId,
+            messageIntentId: claimed.id,
             contentEncrypted: new Uint8Array(encrypted.ciphertext),
             contentKeyId: encrypted.keyId,
             occurredAt: this.clock.now(),

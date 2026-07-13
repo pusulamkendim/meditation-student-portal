@@ -806,12 +806,15 @@ model Message {
   contentKeyId      String?          @map("content_key_id")
   contentHmac       String?          @map("content_hmac")
   inboxEventId      String?          @unique @map("inbox_event_id") @db.Uuid
+  messageIntentId   String?          @unique @map("message_intent_id") @db.Uuid
+  replyToMessageId  String?          @map("reply_to_message_id") @db.Uuid
   occurredAt        DateTime         @map("occurred_at")
   createdAt         DateTime         @default(now()) @map("created_at")
 
   student         Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
   channelIdentity StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
   inboxEvent      InboxEvent?            @relation(fields: [inboxEventId], references: [id], onDelete: SetNull)
+  messageIntent   MessageIntent?         @relation(fields: [messageIntentId], references: [id], onDelete: SetNull)
 
   @@unique([channelIdentityId, externalMessageId])
   @@index([studentId, occurredAt])
@@ -837,6 +840,7 @@ model MessageIntent {
 
   student         Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
   channelIdentity StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
+  message         Message?
 
   @@index([status, dueAt])
   @@map("message_intents")
@@ -976,9 +980,27 @@ model InboxEvent {
 
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
   message Message?
+  contextResolution ConversationContextResolution?
 
   @@index([studentId, createdAt])
   @@map("inbox_events")
+}
+
+model ConversationContextResolution {
+  id                String   @id @default(uuid()) @db.Uuid
+  inboxEventId      String   @unique @map("inbox_event_id") @db.Uuid
+  sourceMessageId   String?  @map("source_message_id") @db.Uuid
+  eventKey           String?  @map("event_key")
+  entityType         String?  @map("entity_type")
+  entityId           String?  @map("entity_id") @db.Uuid
+  resolutionMethod   String   @map("resolution_method")
+  expiresAt          DateTime? @map("expires_at")
+  resolvedAt         DateTime @map("resolved_at")
+
+  inboxEvent InboxEvent @relation(fields: [inboxEventId], references: [id], onDelete: Cascade)
+
+  @@index([eventKey, resolvedAt])
+  @@map("conversation_context_resolutions")
 }
 
 model WebhookEvent {

@@ -19,5 +19,18 @@ describe('Telegram normalizer', () => {
         'bot',
       ).ignored,
     ).toBe(true);
+    expect(
+      normalizeTelegramUpdate(
+        {
+          ...base,
+          message: {
+            ...base.message,
+            chat: { id: 5, type: 'private' },
+            reply_to_message: { message_id: 99 },
+          },
+        },
+        'bot',
+      ).repliedToExternalMessageId,
+    ).toBe('99');
   });
 });

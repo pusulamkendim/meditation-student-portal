@@ -113,8 +113,20 @@ export class ConversationsController {
         dedupeKey: true,
         normalizedData: true,
         createdAt: true,
+        contextResolution: {
+          select: {
+            eventKey: true,
+            entityType: true,
+            entityId: true,
+            resolutionMethod: true,
+            resolvedAt: true,
+          },
+        },
       },
     });
+    const contextByInboxId = new Map(
+      inboxItems.map((item) => [item.id, item.contextResolution] as const),
+    );
     try {
       await this.prisma.auditLog.create({
         data: {
@@ -158,6 +170,7 @@ export class ConversationsController {
           occurredAt: item.occurredAt.toISOString(),
           channelIdentityId: item.channelIdentityId,
           content,
+          context: item.inboxEventId ? contextByInboxId.get(item.inboxEventId) : undefined,
         };
       }),
       ...inboxItems
@@ -193,6 +206,7 @@ export class ConversationsController {
                 : item.createdAt.toISOString(),
             channelIdentityId: student.defaultChannelIdentityId,
             content,
+            context: item.contextResolution,
           };
         }),
     ].sort((left, right) => left.occurredAt.localeCompare(right.occurredAt));

@@ -9,6 +9,7 @@ export interface NormalizedWhatsAppEvent {
   text?: string;
   messageType?: string;
   status?: string;
+  repliedToExternalMessageId?: string;
   occurredAt: Date;
 }
 
@@ -30,6 +31,7 @@ const payloadSchema = z
                           from: z.string().min(1),
                           type: z.string().min(1),
                           timestamp: z.string().regex(/^\d+$/),
+                          context: z.object({ id: z.string().min(1) }).optional(),
                           text: z.object({ body: z.string() }).optional(),
                           button: z
                             .object({ payload: z.string(), text: z.string().optional() })
@@ -80,6 +82,7 @@ export function normalizeWhatsAppPayload(payload: unknown): NormalizedWhatsAppEv
           text:
             message.text?.body ?? message.button?.payload ?? message.interactive?.button_reply?.id,
           messageType: message.type,
+          repliedToExternalMessageId: message.context?.id,
           occurredAt: new Date(Number(message.timestamp) * 1000),
         });
       }

@@ -16,6 +16,7 @@ describe('WhatsApp normalizer', () => {
                     from: '90500',
                     type: 'text',
                     timestamp: '1',
+                    context: { id: 'wamid.previous' },
                     text: { body: 'KAYIT' },
                   },
                 ],
@@ -27,6 +28,7 @@ describe('WhatsApp normalizer', () => {
       ],
     });
     expect(events).toHaveLength(2);
+    expect(events[0]?.repliedToExternalMessageId).toBe('wamid.previous');
     expect(events.map((event) => event.dedupeKey)).toEqual([
       'wa:phone-1:message:wamid.1',
       'wa:phone-1:status:wamid.out:delivered:2',

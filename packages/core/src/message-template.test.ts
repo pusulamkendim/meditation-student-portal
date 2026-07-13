@@ -24,6 +24,13 @@ describe('M2 message catalog domain', () => {
     expect(() => validateMessageTemplate('PRACTICE_REMINDER', '{{studentName}}')).toThrow(
       'Placeholder is not allowed',
     );
+    expect(
+      renderMessageTemplate(
+        'PRACTICE_REMINDER',
+        'Merhaba{{studentDisplayName}}, {{startsAtText}} · {{durationText}}',
+        { startsAtText: '08:00', durationText: '15 dakika' },
+      ),
+    ).toBe('Merhaba, 08:00 · 15 dakika');
   });
 
   it('rejects missing required placeholders and malformed locales', () => {

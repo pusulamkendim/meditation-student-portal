@@ -35,5 +35,7 @@ export function renderMessageTemplate(
   validateMessageTemplate(eventKey, template);
   const definition = getSystemEvent(eventKey);
   validateEventVariables(definition, variables);
-  return template.replace(placeholderPattern, (_match, key: string) => String(variables[key]));
+  return template.replace(placeholderPattern, (_match, key: string) =>
+    variables[key] === undefined || variables[key] === null ? '' : String(variables[key]),
+  );
 }

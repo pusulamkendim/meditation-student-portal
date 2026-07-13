@@ -83,7 +83,6 @@ export async function createMeetingIntent(
             `student:${meeting.meetingSeries.studentId}:name`,
           )
         : undefined;
-    if (eventKey === 'MEETING_SCHEDULED' && !studentDisplayName) return false;
     const variant = resolveMessageVariant(
       versions.map((version) => ({
         ...version,
@@ -108,7 +107,9 @@ export async function createMeetingIntent(
         timeStyle: 'short',
       }).format(meeting.startsAt),
       meetUrl,
-      ...(eventKey === 'MEETING_SCHEDULED' && studentDisplayName ? { studentDisplayName } : {}),
+      ...(studentDisplayName
+        ? { studentDisplayName: ` ${studentDisplayName.trim().split(/\s+/)[0]}` }
+        : {}),
     };
     const rendered = renderMessageTemplate(eventKey as SystemEventKey, variant.content, variables);
     const binding = variant.variant.providerBinding;
@@ -259,6 +260,19 @@ export async function createMeetingSeriesIntent(
         .map((meeting) => `${meeting.occurrenceNumber}. görüşme: ${formatter.format(meeting.startsAt)}`)
         .join('\n'),
       meetUrl,
+      studentDisplayName:
+        series.student.fullNameEncrypted && series.student.fullNameKeyId
+          ? ` ${encryption
+              .decrypt(
+                {
+                  ciphertext: Buffer.from(series.student.fullNameEncrypted),
+                  keyId: series.student.fullNameKeyId,
+                },
+                `student:${series.studentId}:name`,
+              )
+              .trim()
+              .split(/\s+/)[0]}`
+          : '',
     };
     const idempotencyKey = `meeting-series:${series.id}:scheduled:v${series.version}`;
     const occurrence = await tx.systemEventOccurrence.upsert({

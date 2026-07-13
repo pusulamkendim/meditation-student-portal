@@ -31,6 +31,7 @@ type Data = {
     status: string;
     occurredAt: string;
     content?: string;
+    context?: { eventKey?: string; resolutionMethod: string };
   }>;
   intents: Array<{
     id: string;
@@ -143,7 +144,14 @@ export default function ConversationDetail() {
                   channel={item.status}
                   time={new Date(item.occurredAt).toLocaleString('tr-TR')}
                 >
-                  {item.content ?? 'İçerik mevcut değil'}
+                  <div>
+                    {item.content ?? 'İçerik mevcut değil'}
+                    {item.context?.eventKey ? (
+                      <small className="message-context-label">
+                        Bağlam: {item.context.eventKey} · {item.context.resolutionMethod}
+                      </small>
+                    ) : null}
+                  </div>
                 </MessageBubble>
               ))}
             </>
