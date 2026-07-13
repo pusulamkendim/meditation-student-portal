@@ -64,6 +64,12 @@ export class StudentAdminService {
         },
         defaultChannelIdentity: { include: { channelAccount: true } },
         practiceSessions: {
+          where: {
+            OR: [
+              { cancellationReason: null },
+              { cancellationReason: { not: 'PLAN_SUPERSEDED' } },
+            ],
+          },
           orderBy: { startAt: 'desc' },
           take: 24,
           select: { status: true, startAt: true },
@@ -305,7 +311,7 @@ export class StudentAdminService {
           status: session.status,
           version: session.version,
           slot: session.practiceSlot?.slotKey,
-          localTime: session.practiceSlot?.localTime,
+          localTime: formatLocalTime(session.startAt, student.timezone),
           cancellationReason: session.cancellationReason,
           reflection: session.reflection
             ? {
@@ -493,6 +499,15 @@ function incrementPracticeCount(
 function complianceRate(counts: PracticeStatusCounts): number {
   const total = counts.completed + counts.missed + counts.skipped;
   return total === 0 ? 0 : Math.round((counts.completed / total) * 100);
+}
+
+function formatLocalTime(value: Date, timezone: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(value);
 }
 
 function stageLabel(stage: string): string {

@@ -138,8 +138,8 @@ export class PracticeService {
         await tx.practiceSession.updateMany({
           where: { id: { in: sessionIds } },
           data: {
-            status: PracticeSessionStatus.CANCELLED,
-            cancelledAt: now,
+            status: PracticeSessionStatus.SUPPRESSED,
+            cancelledAt: null,
             cancellationReason: 'PLAN_SUPERSEDED',
             version: { increment: 1 },
           },

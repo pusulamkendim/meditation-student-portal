@@ -1351,7 +1351,7 @@ function PracticeRow({
         </small>
       </div>
       <div className="student-session-time">
-        <strong>{session.localTime ?? formatTime(session.startAt)}</strong>
+        <strong>{formatTime(session.startAt)}</strong>
         <small>{session.durationMinutes} dk</small>
       </div>
       <Badge tone={statusTone[session.status] ?? 'neutral'}>{label(session.status)}</Badge>

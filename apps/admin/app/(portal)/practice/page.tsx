@@ -264,11 +264,10 @@ export default function PracticePage() {
                           ? 'Akşam'
                           : 'Pratik'}{' '}
                       ·{' '}
-                      {item.localTime ??
-                        new Date(item.startAt).toLocaleTimeString('tr-TR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}{' '}
+                      {new Date(item.startAt).toLocaleTimeString('tr-TR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}{' '}
                       · {item.durationMinutes} dk
                     </span>
                     <Badge tone={tones[item.status] ?? 'neutral'}>{item.status}</Badge>
@@ -292,11 +291,10 @@ export default function PracticePage() {
                             ? 'Akşam'
                             : 'Pratik'}{' '}
                         ·{' '}
-                        {selected.localTime ??
-                          new Date(selected.startAt).toLocaleTimeString('tr-TR', {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}{' '}
+                        {new Date(selected.startAt).toLocaleTimeString('tr-TR', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}{' '}
                         · {selected.durationMinutes} dk
                       </h2>
                     </div>

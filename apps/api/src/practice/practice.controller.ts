@@ -24,9 +24,17 @@ export class PracticeController {
   ) {}
   @Get('admin/practice-sessions') @UseGuards(AdminSessionGuard) async sessions() {
     const items = await this.prisma.practiceSession.findMany({
+      where: {
+        OR: [{ cancellationReason: null }, { cancellationReason: { not: 'PLAN_SUPERSEDED' } }],
+      },
       take: 200,
       orderBy: { startAt: 'desc' },
-      include: { practiceSlot: true, practicePlan: true, reflection: { include: { tags: true } } },
+      include: {
+        student: { select: { timezone: true } },
+        practiceSlot: true,
+        practicePlan: true,
+        reflection: { include: { tags: true } },
+      },
     });
     return {
       items: items.map((item) => ({
@@ -37,7 +45,12 @@ export class PracticeController {
         startAt: item.startAt.toISOString(),
         durationMinutes: item.durationMinutes,
         slot: item.practiceSlot?.slotKey,
-        localTime: item.practiceSlot?.localTime,
+        localTime: new Intl.DateTimeFormat('en-GB', {
+          timeZone: item.student.timezone,
+          hour: '2-digit',
+          minute: '2-digit',
+          hourCycle: 'h23',
+        }).format(item.startAt),
         planRevision: item.practicePlan.revision,
         cancellationReason: item.cancellationReason,
         reflectionTags:
