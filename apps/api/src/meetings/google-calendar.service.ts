@@ -86,13 +86,12 @@ export class GoogleCalendarService {
     };
   }
 
-  async callback(state: string, code: string, adminId?: string) {
+  async callback(state: string, code: string) {
     if (!this.client) throw new BadRequestException('Google Calendar OAuth is not configured.');
     const stateHash = hash(state);
     const oauthState = await this.prisma.googleOAuthState.findUnique({ where: { stateHash } });
     if (
       !oauthState ||
-      (adminId && oauthState.adminUserId !== adminId) ||
       oauthState.usedAt ||
       oauthState.expiresAt <= this.clock.now()
     )

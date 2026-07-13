@@ -10,17 +10,14 @@ import {
   Put,
   Query,
   Req,
-  Res,
   UseGuards,
 } from '@nestjs/common';
-import type { ApplicationConfig } from '@meditation/core';
 import { MeetingStatus } from '@meditation/database';
-import type { FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
 import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
 import { AdminSessionGuard } from '../auth/admin-session.guard.js';
-import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 import { GoogleCalendarService } from './google-calendar.service.js';
 import { MeetingService } from './meeting.service.js';
 
@@ -46,7 +43,6 @@ export class MeetingController {
   constructor(
     @Inject(MeetingService) private readonly meetings: MeetingService,
     @Inject(GoogleCalendarService) private readonly google: GoogleCalendarService,
-    @Inject(APPLICATION_CONFIG) private readonly config: ApplicationConfig,
   ) {}
 
   @Get('meetings')
@@ -198,21 +194,6 @@ export class MeetingController {
   @Get('google-calendar/oauth/start')
   startOauth(@Req() request: FastifyRequest) {
     return this.google.start(request.admin!.id);
-  }
-
-  @Get('google-calendar/oauth/callback')
-  async callback(
-    @Query('state') state: string,
-    @Query('code') code: string,
-    @Req() request: FastifyRequest,
-    @Res() reply: FastifyReply,
-  ) {
-    if (!state || !code) throw new BadRequestException('Google OAuth callback is incomplete.');
-    const result = await this.google.callback(state, code, request.admin!.id);
-    if (this.config.ADMIN_ORIGIN) {
-      return reply.redirect(`${this.config.ADMIN_ORIGIN}/meetings?calendar=connected`);
-    }
-    return reply.send(result);
   }
 
   @Post('google-calendar/disconnect')

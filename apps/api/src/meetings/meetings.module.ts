@@ -4,12 +4,13 @@ import { AuthModule } from '../auth/auth.module.js';
 import { MessageCatalogModule } from '../message-catalog/message-catalog.module.js';
 
 import { MeetingController } from './meeting.controller.js';
+import { GoogleCalendarOAuthController } from './google-calendar-oauth.controller.js';
 import { GoogleCalendarService } from './google-calendar.service.js';
 import { MeetingService } from './meeting.service.js';
 
 @Module({
   imports: [AuthModule, MessageCatalogModule],
-  controllers: [MeetingController],
+  controllers: [MeetingController, GoogleCalendarOAuthController],
   providers: [
     MeetingService,
     GoogleCalendarService,
