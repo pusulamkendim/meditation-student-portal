@@ -82,7 +82,10 @@ export class PracticeService {
         adminId,
       );
     });
-    await this.notifyPlanChange(plan, plan.revision === 1 ? 'PRACTICE_PLAN_CONFIRMED' : 'PRACTICE_PLAN_UPDATED');
+    await this.notifyPlanChange(
+      plan,
+      plan.revision === 1 ? 'PRACTICE_PLAN_CONFIRMED' : 'PRACTICE_PLAN_UPDATED',
+    );
     return plan;
   }
 
@@ -304,7 +307,17 @@ export class PracticeService {
   }
 
   private async notifyPlanChange(
-    plan: { id: string; studentId: string; revision: number; slots: Array<{ slotKey: string; localTime: string; active: boolean; durationMinutes: number }> },
+    plan: {
+      id: string;
+      studentId: string;
+      revision: number;
+      slots: Array<{
+        slotKey: string;
+        localTime: string;
+        active: boolean;
+        durationMinutes: number;
+      }>;
+    },
     eventKey: 'PRACTICE_PLAN_CONFIRMED' | 'PRACTICE_PLAN_UPDATED',
   ) {
     const student = await this.prisma.student.findUnique({
@@ -313,6 +326,15 @@ export class PracticeService {
     });
     if (!student?.defaultChannelIdentityId) return;
     const active = plan.slots.filter((slot) => slot.active);
+    const firstSession = await this.prisma.practiceSession.findFirst({
+      where: {
+        practicePlanId: plan.id,
+        status: { in: [PracticeSessionStatus.SCHEDULED, PracticeSessionStatus.REMINDED] },
+      },
+      orderBy: { startAt: 'asc' },
+      select: { durationMinutes: true },
+    });
+    const currentDurationMinutes = firstSession?.durationMinutes ?? active[0]?.durationMinutes ?? 0;
     const fullName =
       student.fullNameEncrypted && student.fullNameKeyId
         ? this.encryption.decrypt(
@@ -324,14 +346,19 @@ export class PracticeService {
           )
         : '';
     const scheduleSummary = active
-      .map((slot) => `${slot.slotKey === 'MORNING' ? 'Sabah' : 'Akşam'} ${slot.localTime} (${slot.durationMinutes} dakika)`)
+      .map(
+        (slot) =>
+          `${slot.slotKey === 'MORNING' ? 'Sabah' : 'Akşam'} ${slot.localTime} (${currentDurationMinutes} dakika)`,
+      )
       .join(', ');
     const variables =
       eventKey === 'PRACTICE_PLAN_CONFIRMED'
         ? {
-            morningTimeText: active.find((slot) => slot.slotKey === 'MORNING')?.localTime ?? 'kapalı',
-            eveningTimeText: active.find((slot) => slot.slotKey === 'EVENING')?.localTime ?? 'kapalı',
-            durationText: `${active[0]?.durationMinutes ?? 0} dakika`,
+            morningTimeText:
+              active.find((slot) => slot.slotKey === 'MORNING')?.localTime ?? 'kapalı',
+            eveningTimeText:
+              active.find((slot) => slot.slotKey === 'EVENING')?.localTime ?? 'kapalı',
+            durationText: `${currentDurationMinutes} dakika`,
             studentDisplayName: fullName ? ` ${fullName.trim().split(/\s+/)[0]}` : '',
           }
         : { scheduleSummary };

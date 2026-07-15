@@ -233,6 +233,7 @@ enum LlmModelStatus {
 }
 
 enum LlmTask {
+  INBOUND_INTENT
   AGENT_REPLY
   REFLECTION_TAGGING
   WEEKLY_SUMMARY
@@ -335,6 +336,7 @@ model Student {
   agentContextReads      AgentContextRead[]
   knowledgeQueryLogs     RagQueryLog[]
   handoffs               Handoff[]
+  inboundIntentDecisions InboundIntentDecision[]
 
   @@index([status])
   @@map("students")
@@ -981,9 +983,33 @@ model InboxEvent {
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
   message Message?
   contextResolution ConversationContextResolution?
+  intentDecision    InboundIntentDecision?
 
   @@index([studentId, createdAt])
   @@map("inbox_events")
+}
+
+model InboundIntentDecision {
+  id              String   @id @default(uuid()) @db.Uuid
+  inboxEventId    String   @unique @map("inbox_event_id") @db.Uuid
+  studentId       String   @map("student_id") @db.Uuid
+  operationId     String   @unique @map("operation_id")
+  domain          String
+  action          String
+  confidence      Int
+  contextSource   String   @map("context_source")
+  contextSnapshot Json     @map("context_snapshot")
+  status          String   @default("CLASSIFIED")
+  appliedAt       DateTime? @map("applied_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  inboxEvent InboxEvent @relation(fields: [inboxEventId], references: [id], onDelete: Cascade)
+  student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId, createdAt])
+  @@index([domain, action, createdAt])
+  @@map("inbound_intent_decisions")
 }
 
 model ConversationContextResolution {

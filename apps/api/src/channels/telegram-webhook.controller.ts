@@ -16,7 +16,7 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
 export class TelegramWebhookController {
   constructor(
     @Inject(APPLICATION_CONFIG) private readonly config: ApplicationConfig,
-    private readonly webhook: TelegramWebhookService,
+    @Inject(TelegramWebhookService) private readonly webhook: TelegramWebhookService,
   ) {}
   @Post()
   receive(

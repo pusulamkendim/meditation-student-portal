@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import {
   endOfLocalServiceDate,
+  createPracticeResponsePayload,
   LookupHmac,
   practiceTiming,
   renderMessageTemplate,
@@ -156,11 +157,11 @@ export async function createPracticeLifecycleIntent(
             eventKey === 'PRACTICE_CHECKIN'
               ? [
                   {
-                    id: `practice:${session.id}:${nonce}:COMPLETED`,
+                    id: createPracticeResponsePayload(session.id, nonce, 'COMPLETED'),
                     title: 'Yaptım',
                   },
                   {
-                    id: `practice:${session.id}:${nonce}:SKIPPED`,
+                    id: createPracticeResponsePayload(session.id, nonce, 'SKIPPED'),
                     title: 'Bugün yapamadım',
                   },
                 ]

@@ -96,8 +96,8 @@ export class WhatsAppWebhookService {
             externalMessageId: event.externalMessageId,
             messageType: event.messageType,
             status: event.status,
-              occurredAt: event.occurredAt.toISOString(),
-              repliedToExternalMessageId: event.repliedToExternalMessageId,
+            occurredAt: event.occurredAt.toISOString(),
+            repliedToExternalMessageId: event.repliedToExternalMessageId,
           };
           if (event.sender) {
             protectedData.senderHmac = this.lookup.digest(event.sender);

@@ -20,6 +20,7 @@
     "typecheck": "pnpm --recursive --if-present run typecheck",
     "test": "pnpm --recursive --if-present run test",
     "test:db": "DATABASE_URL=postgresql://meditation:meditation@localhost:5433/meditation?schema=public RUN_DATABASE_TESTS=true pnpm --filter @meditation/database test",
+    "e2e:registration": "node scripts/run-registration-e2e.mjs",
     "db:generate": "pnpm --filter @meditation/database prisma:generate",
     "db:migrate": "pnpm --filter @meditation/database prisma:migrate",
     "secrets:generate": "node scripts/generate-dev-secrets.mjs",

@@ -19,6 +19,8 @@ import { KnowledgeIngestionProcessor } from './knowledge-ingestion.js';
 import { ReflectionTaggingProcessor } from './reflection-tagging.js';
 import { WeeklySummaryAiProcessor } from './weekly-summary-ai.js';
 import { RegistrationInboundProcessor } from './registration-inbound.js';
+import { InboundIntentClassifier } from './inbound-intent.js';
+import { InboundIntentRouter } from './inbound-intent-router.js';
 
 async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
@@ -32,6 +34,14 @@ async function bootstrap(): Promise<void> {
   const reflectionTagging = new ReflectionTaggingProcessor(prisma, config, systemClock);
   const weeklySummaryAi = new WeeklySummaryAiProcessor(prisma, config, systemClock);
   const registrationInbound = new RegistrationInboundProcessor(prisma, config, systemClock);
+  const inboundIntentClassifier = new InboundIntentClassifier(prisma, config, systemClock);
+  const inboundIntentRouter = new InboundIntentRouter(
+    prisma,
+    config,
+    systemClock,
+    inboundIntentClassifier,
+    llmAgent,
+  );
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
   await syncSystemEventRegistry(prisma);
   await syncDefaultRegistrationMessages(prisma);
@@ -196,7 +206,7 @@ async function bootstrap(): Promise<void> {
     for (const job of jobs) {
       if (!job.data.inboxEventId) continue;
       const result = await registrationInbound.process(job.data.inboxEventId);
-      if (result === 'unhandled') await llmAgent.process(job.data.inboxEventId);
+      if (result === 'unhandled') await inboundIntentRouter.process(job.data.inboxEventId);
     }
   });
   await boss.work<{ inboxEventId: string; retryOperationId?: string }>(

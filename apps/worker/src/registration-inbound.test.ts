@@ -30,6 +30,7 @@ describe('registration input validation', () => {
     expect(isValidFullName("Nil Gün O'Neil")).toBe(true);
     expect(isValidFullName('Ayşe')).toBe(false);
     expect(isValidFullName('12 34')).toBe(false);
+    expect(isValidFullName('süper çok sevindim')).toBe(false);
   });
 
   it('releases completed student messages to the agent router', () => {

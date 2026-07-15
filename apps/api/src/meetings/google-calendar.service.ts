@@ -90,11 +90,7 @@ export class GoogleCalendarService {
     if (!this.client) throw new BadRequestException('Google Calendar OAuth is not configured.');
     const stateHash = hash(state);
     const oauthState = await this.prisma.googleOAuthState.findUnique({ where: { stateHash } });
-    if (
-      !oauthState ||
-      oauthState.usedAt ||
-      oauthState.expiresAt <= this.clock.now()
-    )
+    if (!oauthState || oauthState.usedAt || oauthState.expiresAt <= this.clock.now())
       throw new UnauthorizedException('OAuth state expired or already used.');
     const claimed = await this.prisma.googleOAuthState.updateMany({
       where: { id: oauthState.id, usedAt: null },

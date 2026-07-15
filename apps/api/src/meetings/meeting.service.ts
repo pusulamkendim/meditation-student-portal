@@ -666,11 +666,7 @@ export class MeetingService {
 
   private async notifyMeetingChange(
     meetingId: string,
-    eventKey:
-      | 'MEETING_RESCHEDULED'
-      | 'MEETING_CANCELLED'
-      | 'MEETING_COMPLETED'
-      | 'MEETING_NO_SHOW',
+    eventKey: 'MEETING_RESCHEDULED' | 'MEETING_CANCELLED' | 'MEETING_COMPLETED' | 'MEETING_NO_SHOW',
     context: { previousStartsAt?: string } = {},
   ) {
     const meeting = await this.prisma.weeklyMeeting.findUnique({
@@ -696,8 +692,7 @@ export class MeetingService {
     });
     const startsAtText = formatter.format(meeting.startsAt);
     const fullName =
-      meeting.meetingSeries.student.fullNameEncrypted &&
-      meeting.meetingSeries.student.fullNameKeyId
+      meeting.meetingSeries.student.fullNameEncrypted && meeting.meetingSeries.student.fullNameKeyId
         ? this.encryption.decrypt(
             {
               ciphertext: Buffer.from(meeting.meetingSeries.student.fullNameEncrypted),

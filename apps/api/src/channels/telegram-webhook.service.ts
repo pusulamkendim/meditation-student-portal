@@ -126,8 +126,9 @@ export class TelegramWebhookService {
               include: { messageIntent: true },
             })
           : null;
-        const replyEvent = (replySource?.messageIntent?.payload as Record<string, unknown> | undefined)
-          ?.eventKey;
+        const replyEvent = (
+          replySource?.messageIntent?.payload as Record<string, unknown> | undefined
+        )?.eventKey;
         const recentSource = event.repliedToExternalMessageId
           ? null
           : await transaction.message.findFirst({

@@ -18,7 +18,14 @@ Nefesin gözlem alanı iki şekilde olabilir:
 
     2. Nefesi karın bölgesinde gözlemlemek. (Mahasi yöntemi) Başlangıç olarak bazı öğrenciler için bu yöntem daha kolay olabilir. Nefes alındığında karın şişer, verildiğinde ise içeri geçer. Bu hareket meditasyon objesi olarak gözlemlenir. Gözlem bedenin bu bölgesindeki hareketi ile sınırlı kalır. Eğer öğrenci için bu hareket alanı çok büyük ise öğrenci göbek deliğinin altındaki sabit bir noktaya odaklanabilir. Eğer kontanstrasyon tam değilse ve zihin düşüncelere dalmaya meyilli ise etiketleme yöntemi kullanılabilir. Kişi nefes aldığında zihninden 'yükseliyor', nefes verdiğinde 'alçalıyor' kelimelerini tekrar eder. Ancak yine odak her zaman hareket alanında kalmalıdır. Eğer zihin sakin bir yapıda ise etiketleme bırakılabilir.
 
-## Yürüme meditasyonu
+## Yürüyüş meditasyonu
+
+Yürüyüş meditasyonu, hem bedeni hem de zihni gözlemlemek için ideal bir meditasyon çeşididir. Gözler açık yapılır. Her adım dikkatlice izlenir. Yürüyüş için 7-8 metrelik bir alan idealdir. Uzun alanlarda yürümek, konstrasyonu bozabilr o yüzden meditasyon sınırlı bir alanda olmalıdır. Adımlar yavaş ve farkındalıkla atılır. 
+Başlangıçta iki ayak yan yana omurga dik pozisyonda, eller önde ya da arkada örülü haldedir. Ve zihinden üç kere -ayaktayım- -ayaktayım- -ayaktayım- etiketi söylenir ve kişi ayakta olduğunu farkeder. 
+Sağ adım atıldığında önce ayak hava kaldırılır zihinden -sağ adımı- etiketi söylenir. Adım ileriye götürülüp yere basıldığında zihinden -atıyorum- etiketi söylenir. Aynı süreç sol adım için geçerlidir. 
+Bakışlar ayaklara değil 45 derecelik açı ile karşıda tutulmalıdır. Yürüyüş sırasında odak bozulduğunda ayaklar yan yana getirilir. Odağı bozan ne ise o etiketlenir. Örneğin zihne bir düşünce gelmiş ise üç kere -düşünce, düşünce, düşünce- etiketi söylenir. Ve meditasyona devam edilir.
+Ya da odak bir görüntüye takılmıştır. Yine yürüyüş tamamlanır, ayaklar yanyana getirilir, ve zihinden -görüntü, görüntü, görüntü- etiketi tekrarlanır. Eğer odak duyulan bir sese kaymışsa zihinden -ses, ses, ses- etiketi tekrar edilir. Eğer odak bir kokuya kaymışsa -koku, koku, koku- etiketi, eğer bedensel bir duyuma kaymışsa -duyum, duyum, duyum-, ağızdaki bir tata kaymışsa -tat, tat, tat- etiketleri tekrar edilir ve meditasyona devam edilir. 
+
 
 ## Beden taraması
 

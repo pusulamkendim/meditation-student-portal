@@ -889,6 +889,22 @@ URL/secret davranışlarını devralmaz.
 
 ### 13.8 Agent Reply Yetki Sınırı
 
+Aktif öğrenciden gelen her serbest metin, kayıt processor'ı mesajı tüketmediyse
+önce `INBOUND_INTENT` görevinden geçer. Sınıflandırıcı mevcut mesaj ile en fazla
+dört önceki izinli mesajı, explicit reply/recent system event anahtarını ve
+minimal öğrenci durum bayraklarını kullanır. Çıktı yalnızca `domain`, `action`,
+`confidence` ve `source` alanlarını içerir; `temperature=0` ve en fazla 64 output
+token kullanılır. Karar `inbound_intent_decisions` tablosunda inbox başına tekil
+ve audit edilebilir olarak saklanır.
+
+Sınıflandırıcı doğrudan mesaj üretmez. Yalnızca yüksek güvenli
+`PRACTICE/COMPLETE`, `PRACTICE/SKIP` ve `PRACTICE/REFLECT` kararları mevcut
+deterministik practice command'ine aktarılır. `COMPLETE/SKIP` için eşik 90,
+`REFLECT` için 80'dir. Düşük güven durum değiştirmez ve standart belirsiz cevap
+akışına gider. `CHANGE`, `HANDOFF`, `SAFETY`, geçersiz output ve iki provider
+denemesinin de başarısız olması fail-closed handoff üretir. Diğer domain'ler
+yalnızca seçilmiş student-context section ile `AGENT_REPLY` akışına yönlenir.
+
 `AGENT_REPLY` yalnızca `AGENT_REPLY_AI` izni aktif, safety hold/handoff kapalı ve
 kanal send policy uygun olduğunda çalışır. İzinli alan bilgi bankasındaki genel
 meditasyon/pratik açıklamaları, kayıt/paket süreci, mevcut programın okunması ve
@@ -1046,13 +1062,15 @@ SYSTEM_STANDARD_MESSAGE | AGENT_CONTEXTUAL | ADMIN_HANDOFF | NO_REPLY
 - Button/exact command/expected state cevabı domain command'i çalıştırır,
   system event occurrence ve standart message intent'ini aynı transaction'da
   oluşturur; LLM çağrılmaz.
-- Belirsiz doğal dil için opsiyonel intent classifier yalnızca
-  `{proposedIntent, confidence, requiredConfirmation}` döndürür.
+- Kayıt tarafından tüketilmeyen serbest metin aktif `INBOUND_INTENT`
+  sınıflandırıcısından geçer; yalnızca minimal structured karar döner.
 - Payment approval/refund, consent withdrawal, deletion, channel switch,
   practice cancel/restore, pause/resume, schedule/meeting change ve safety gibi
   state-changing command'ler LLM önerisiyle doğrudan uygulanmaz.
-- Yüksek güvenli allowlist intent bile standart confirmation event/button üretir;
-  öğrenci onayından sonra command ve standart sonuç mesajı çalışır.
+- Yalnızca yüksek güvenli aktif-pratik `COMPLETE`, `SKIP` ve tamamlanan pratiğe
+  `REFLECT` allowlist'i confirmation olmadan deterministik command'e aktarılır.
+  Diğer durum değişiklikleri admin handoff veya mevcut confirmation/button
+  akışını kullanır.
 - System event inbound mesajı tüketirse aynı mesaj için `AGENT_REPLY` job'u
   oluşturulmaz. Event yoksa `AGENT_CONTEXTUAL` kişisel read-model ve/veya RAG
   kullanır; gerekli veri/kaynak yoksa handoff response owner olur.
@@ -1510,6 +1528,10 @@ anahtarları test-run bazında üretilir ve CI loglarına yazılmaz.
 | `E2E-REG-02` | API + worker | AI decline sonrası kayıt/ödeme devamı ve sıfır kişisel AI job'u |
 | `E2E-REG-03` | Webhook/outbox | Duplicate `update_id`/`wamid`, tekrar `KAYIT`, retry sonrası tek aggregate |
 | `E2E-ROUTE-01` | Router + agent | `COMPLETE` öğrenci sorusunun registration processor tarafından sahiplenilmemesi |
+| `E2E-ROUTE-02` | Router + fake LLM | Son beş mesaj sınırı, explicit event/current-topic önceliği ve section routing |
+| `E2E-ROUTE-03` | Router + DB | Düşük güvenli completion'da sıfır state mutation ve standart clarification |
+| `E2E-ROUTE-04` | Router + DB | Geçersiz output/fallback failure'da handoff ve sıfır state mutation |
+| `E2E-ROUTE-05` | Router + DB | Provider/webhook retry'da tek karar, tek response owner ve tek intent etkisi |
 | `E2E-PAY-01` | API + DB + worker | Optimistic approve, tek subscription, dört credit, approval intent ve delivery |
 | `E2E-PRAC-01` | Admin UI + worker | Plan revizyonu, session üretimi, `PRACTICE_PLAN_CONFIRMED/UPDATED` öğrenci mesajı |
 | `E2E-PRAC-02` | Fake clock + worker | Reminder/check-in/completed ve her eşikte tek provider çağrısı |

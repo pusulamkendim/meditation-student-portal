@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   agentReplyOutputSchema,
+  inboundIntentOutputSchema,
   type AgentReplyOutput,
   type LlmModelCandidate,
   reflectionTagOutputSchema,
@@ -13,6 +14,7 @@ export interface LlmGenerateInput {
   userPrompt: string;
   maxOutputTokens: number;
   operationId: string;
+  temperature?: number;
 }
 
 export interface LlmGenerateResult {
@@ -24,7 +26,7 @@ export interface LlmGenerateResult {
 }
 
 export interface StructuredGenerateInput extends LlmGenerateInput {
-  outputSchema?: 'agent-reply' | 'reflection-tags' | 'weekly-summary';
+  outputSchema?: 'agent-reply' | 'inbound-intent' | 'reflection-tags' | 'weekly-summary';
 }
 
 export interface StructuredGenerateResult<T> {
@@ -90,7 +92,7 @@ export class GeminiPaidAdapter {
         systemInstruction: { parts: [{ text: input.systemPrompt }] },
         contents: [{ role: 'user', parts: [{ text: input.userPrompt }] }],
         generationConfig: {
-          temperature: 0.2,
+          temperature: input.temperature ?? 0.2,
           maxOutputTokens: input.maxOutputTokens,
           responseMimeType: 'application/json',
         },
@@ -118,11 +120,13 @@ export class GeminiPaidAdapter {
       throw new LlmProviderError('Gemini returned invalid JSON.', 'INVALID_OUTPUT');
     }
     const output =
-      input.outputSchema === 'reflection-tags'
-        ? reflectionTagOutputSchema.safeParse(json)
-        : input.outputSchema === 'weekly-summary'
-          ? weeklySummaryOutputSchema.safeParse(json)
-          : agentReplyOutputSchema.safeParse(json);
+      input.outputSchema === 'inbound-intent'
+        ? inboundIntentOutputSchema.safeParse(json)
+        : input.outputSchema === 'reflection-tags'
+          ? reflectionTagOutputSchema.safeParse(json)
+          : input.outputSchema === 'weekly-summary'
+            ? weeklySummaryOutputSchema.safeParse(json)
+            : agentReplyOutputSchema.safeParse(json);
     if (!output.success)
       throw new LlmProviderError('Gemini output failed schema validation.', 'INVALID_OUTPUT');
     const usage = parsed.data.usageMetadata;

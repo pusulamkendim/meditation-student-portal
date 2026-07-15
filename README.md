@@ -32,6 +32,16 @@ yazar; ikinci admin bootstrap denemesi veritabanı tarafından reddedilir.
 API sağlık uçları `http://localhost:3000/health/live` ve
 `http://localhost:3000/health/ready` adreslerinde çalışır.
 
+Kayıt akışının Telegram webhook'tan ödeme bildirimine kadar olan yerel E2E testi,
+gerçek provider'a çıkmadan tek komutla çalışır:
+
+```bash
+pnpm e2e:registration
+```
+
+Komut PostgreSQL'i başlatır, run'a özel geçici bir veritabanı oluşturur, migration'ları
+uygular, fake Telegram provider ile akışı doğrular ve veritabanını sonunda siler.
+
 M6 görüşme yönetimi admin portalındaki `http://localhost:3001/meetings` ekranındadır.
 Google Calendar bağlantısı kullanılacaksa `.env` içinde mevcut Google OAuth client'ı
 deployment secret olarak `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` ve

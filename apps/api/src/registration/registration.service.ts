@@ -71,16 +71,16 @@ export class RegistrationService {
           },
         });
       if (command === 'AI_ACCEPTED' || command === 'AI_DECLINED')
-        await tx.consent.create({
-          data: {
+        await tx.consent.createMany({
+          data: [ConsentScope.AGENT_REPLY_AI, ConsentScope.REFLECTION_STORAGE].map((scope) => ({
             studentId,
-            scope: ConsentScope.AGENT_REPLY_AI,
+            scope,
             status: command === 'AI_ACCEPTED' ? ConsentStatus.GRANTED : ConsentStatus.WITHDRAWN,
             textVersion: 'v1',
             channel: input.channel,
             externalMessageId: input.externalMessageId,
             occurredAt: now,
-          },
+          })),
         });
       const data: Record<string, unknown> = { registrationStep: next, version: { increment: 1 } };
       if (command === 'NAME_RECEIVED' && input.name) {

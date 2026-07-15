@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 export const llmTaskSchema = z.enum([
+  'INBOUND_INTENT',
   'AGENT_REPLY',
   'REFLECTION_TAGGING',
   'WEEKLY_SUMMARY',
@@ -42,6 +43,35 @@ export const agentReplyOutputSchema = z.object({
   supported: z.boolean().default(true),
 });
 export type AgentReplyOutput = z.infer<typeof agentReplyOutputSchema>;
+
+export const inboundIntentOutputSchema = z.object({
+  domain: z.enum([
+    'REGISTRATION',
+    'PRACTICE',
+    'MEETING',
+    'PAYMENT',
+    'MEMBERSHIP',
+    'ACCOUNT',
+    'KNOWLEDGE',
+    'GENERAL',
+    'SAFETY',
+  ]),
+  action: z.enum([
+    'QUERY',
+    'COMPLETE',
+    'SKIP',
+    'REFLECT',
+    'CHANGE',
+    'CONFIRM',
+    'DECLINE',
+    'SMALL_TALK',
+    'HANDOFF',
+    'UNKNOWN',
+  ]),
+  confidence: z.number().int().min(0).max(100),
+  source: z.enum(['REPLY', 'EVENT', 'HISTORY', 'CURRENT']),
+});
+export type InboundIntentOutput = z.infer<typeof inboundIntentOutputSchema>;
 
 export const reflectionTagOutputSchema = z.object({
   tags: z

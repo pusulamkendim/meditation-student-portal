@@ -19,7 +19,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'AGENT_REPLY_AI_CONSENT_REQUEST',
     content:
-      'Bir de küçük bir tercih soracağım. Sorularına daha hızlı yanıt verebilmek ve paylaştığın deneyimleri anlamlandırmana yardımcı olmak için yapay zeka desteği kullanabilirim. Bu özellik isteğe bağlıdır; hayır desen de programın aynen devam eder. Taslak AI izin özeti: {{privacyNoticeUrl}}. Kabul ediyorsan EVET, istemiyorsan HAYIR yazabilirsin.',
+      'Bir de küçük bir tercih soracağım. Sorularına daha hızlı yanıt verebilmek, pratik sonrasında paylaştığın refleksiyonları saklamak ve deneyimlerini anlamlandırmana yardımcı olmak için yapay zeka desteği kullanabilirim. Bu özellik isteğe bağlıdır; hayır desen de programın aynen devam eder. Taslak AI ve refleksiyon izin özeti: {{privacyNoticeUrl}}. Kabul ediyorsan EVET, istemiyorsan HAYIR yazabilirsin.',
   },
   {
     eventKey: 'NAME_REQUEST',

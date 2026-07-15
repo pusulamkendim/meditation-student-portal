@@ -26,6 +26,7 @@ const demos = [
     stage: 'WEEK_1' as const,
     morning: '07:30',
     evening: '21:00',
+    completedMeetings: 0,
   },
   {
     id: 'd0000000-0000-4000-8000-000000000002',
@@ -35,6 +36,7 @@ const demos = [
     stage: 'WEEK_2' as const,
     morning: '08:15',
     evening: '20:30',
+    completedMeetings: 1,
   },
   {
     id: 'd0000000-0000-4000-8000-000000000003',
@@ -44,6 +46,7 @@ const demos = [
     stage: 'WEEK_3' as const,
     morning: '06:45',
     evening: '22:00',
+    completedMeetings: 2,
   },
 ];
 
@@ -90,7 +93,7 @@ try {
         fullNameKeyId: encryptedName.keyId,
       },
     });
-    const externalEncrypted = encryption.encrypt(demo.external, `demo-channel:${demo.id}`);
+    const externalEncrypted = encryption.encrypt(demo.external, `channel:${account.id}`);
     const identity = await prisma.studentChannelIdentity.upsert({
       where: {
         channelAccountId_externalUserHmac: {
@@ -108,12 +111,46 @@ try {
         verifiedAt: new Date(),
         lastInboundAt: new Date(Date.now() - index * 3_600_000),
       },
-      update: { status: 'ACTIVE', lastInboundAt: new Date(Date.now() - index * 3_600_000) },
+      update: {
+        studentId: student.id,
+        externalUserEncrypted: externalEncrypted.ciphertext,
+        externalUserKeyId: externalEncrypted.keyId,
+        status: 'ACTIVE',
+        lastInboundAt: new Date(Date.now() - index * 3_600_000),
+      },
     });
     await prisma.student.update({
       where: { id: student.id },
       data: { defaultChannelIdentityId: identity.id },
     });
+    await prisma.messagingPreference.upsert({
+      where: { studentId: student.id },
+      create: { studentId: student.id, proactiveEnabled: true },
+      update: { proactiveEnabled: true, pausedAt: null, pauseReason: null },
+    });
+
+    for (const [consentIndex, scope] of [
+      'MESSAGING',
+      'AGENT_REPLY_AI',
+      'REFLECTION_STORAGE',
+      'REFLECTION_AI',
+    ].entries()) {
+      const consentId = `d4000000-0000-4000-8000-${String(index * 4 + consentIndex + 1).padStart(12, '0')}`;
+      await prisma.consent.upsert({
+        where: { id: consentId },
+        create: {
+          id: consentId,
+          studentId: student.id,
+          scope: scope as 'MESSAGING' | 'AGENT_REPLY_AI' | 'REFLECTION_STORAGE' | 'REFLECTION_AI',
+          status: 'GRANTED',
+          textVersion: 'demo-v1',
+          channel: demo.channel,
+          externalMessageId: `demo-consent-${index + 1}-${consentIndex + 1}`,
+          occurredAt: new Date(),
+        },
+        update: { status: 'GRANTED', channel: demo.channel, occurredAt: new Date() },
+      });
+    }
 
     const subscription = await prisma.subscriptionPeriod.upsert({
       where: { id: `d1000000-0000-4000-8000-00000000000${index + 1}` },
@@ -126,6 +163,24 @@ try {
       },
       update: { status: 'ACTIVE' },
     });
+    const payment = await prisma.payment.upsert({
+      where: { id: `d2000000-0000-4000-8000-00000000000${index + 1}` },
+      create: {
+        id: `d2000000-0000-4000-8000-00000000000${index + 1}`,
+        studentId: student.id,
+        status: 'APPROVED',
+        amountMinor: BigInt(400000),
+        currency: 'TRY',
+        referenceCode: `DEMO-PAY-${index + 1}`,
+        reportedAt: new Date(Date.now() - 2 * 86_400_000),
+        approvedAt: new Date(Date.now() - 86_400_000),
+      },
+      update: { status: 'APPROVED', approvedAt: new Date(Date.now() - 86_400_000) },
+    });
+    await prisma.subscriptionPeriod.update({
+      where: { id: subscription.id },
+      data: { paymentId: payment.id },
+    });
     const plan = await prisma.practicePlan.upsert({
       where: { studentId_revision: { studentId: student.id, revision: 1 } },
       create: {
@@ -137,10 +192,20 @@ try {
       },
       update: { status: 'ACTIVE' },
     });
+    const legacySlots = await prisma.practiceSlot.findMany({
+      where: { practicePlanId: plan.id, slotKey: { in: ['morning', 'evening'] } },
+      select: { id: true, slotKey: true },
+    });
+    for (const slot of legacySlots) {
+      await prisma.practiceSlot.update({
+        where: { id: slot.id },
+        data: { slotKey: slot.slotKey.toUpperCase() },
+      });
+    }
     const slots = await Promise.all(
       [
-        ['morning', demo.morning],
-        ['evening', demo.evening],
+        ['MORNING', demo.morning],
+        ['EVENING', demo.evening],
       ].map(([slotKey, localTime]) =>
         prisma.practiceSlot.upsert({
           where: { practicePlanId_slotKey: { practicePlanId: plan.id, slotKey } },
@@ -149,9 +214,11 @@ try {
         }),
       ),
     );
-    for (let day = 0; day < 4; day++) {
+    const seedToday = new Date();
+    seedToday.setUTCHours(0, 0, 0, 0);
+    for (let day = 0; day < 5; day++) {
       for (const [slotIndex, slot] of slots.entries()) {
-        const date = new Date(Date.UTC(2026, 6, 12 - day));
+        const date = new Date(seedToday.getTime() + (1 - day) * 86_400_000);
         const [hour, minute] = (slotIndex ? demo.evening : demo.morning).split(':').map(Number);
         const startsAt = new Date(date);
         startsAt.setUTCHours(hour! - 3, minute!, 0, 0);
@@ -178,6 +245,29 @@ try {
         });
       }
     }
+    const reflectionSession = await prisma.practiceSession.findFirst({
+      where: { studentId: student.id, status: 'COMPLETED' },
+      orderBy: { startAt: 'desc' },
+    });
+    if (reflectionSession) {
+      const reflection = encryption.encrypt(
+        index === 0
+          ? 'Bugün nefesime dönmek kolaydı, pratik sonrası daha sakin hissettim.'
+          : index === 1
+            ? 'Düşünceler sık geldi ama onları fark edip pratiğe geri dönebildim.'
+            : 'Başlangıçta zorlandım; süre uzadıkça bedensel gevşemeyi fark ettim.',
+        `practice:${reflectionSession.id}:reflection`,
+      );
+      await prisma.practiceReflection.upsert({
+        where: { practiceSessionId: reflectionSession.id },
+        create: {
+          practiceSessionId: reflectionSession.id,
+          contentEncrypted: reflection.ciphertext,
+          contentKeyId: reflection.keyId,
+        },
+        update: { contentEncrypted: reflection.ciphertext, contentKeyId: reflection.keyId },
+      });
+    }
 
     const series = await prisma.meetingSeries.upsert({
       where: { subscriptionPeriodId: subscription.id },
@@ -191,8 +281,33 @@ try {
       },
       update: { calendarSyncStatus: 'SYNCED' },
     });
+    const meetUrl = encryption.encrypt(
+      `https://meet.google.com/demo-meditation-${index + 1}`,
+      `meeting-series:${series.id}:meet-url`,
+    );
+    await prisma.meetingSeries.update({
+      where: { id: series.id },
+      data: {
+        conferenceStatus: 'MANUAL_OVERRIDE',
+        meetUrlEncrypted: meetUrl.ciphertext,
+        meetUrlKeyId: meetUrl.keyId,
+      },
+    });
+    await prisma.meetingCreditEvent.upsert({
+      where: { idempotencyKey: `demo-subscription:${subscription.id}:meeting-credit:grant` },
+      create: {
+        subscriptionPeriodId: subscription.id,
+        delta: 4,
+        reason: 'PACKAGE_GRANT',
+        idempotencyKey: `demo-subscription:${subscription.id}:meeting-credit:grant`,
+      },
+      update: { delta: 4 },
+    });
     for (let occurrence = 1; occurrence <= 4; occurrence++) {
-      const startsAt = new Date(Date.UTC(2026, 6, 13 + index + (occurrence - 1) * 7, 16, 0));
+      const offsetWeeks =
+        demo.completedMeetings > 0 ? occurrence - demo.completedMeetings - 1 : occurrence - 1;
+      const startsAt = new Date(Date.now() + offsetWeeks * 7 * 86_400_000);
+      startsAt.setUTCHours(16, 0, 0, 0);
       await prisma.weeklyMeeting.upsert({
         where: {
           meetingSeriesId_occurrenceNumber: {
@@ -205,7 +320,7 @@ try {
           occurrenceNumber: occurrence,
           startsAt,
           endsAt: new Date(startsAt.getTime() + 60 * 60_000),
-          status: occurrence === 1 && index === 2 ? 'COMPLETED' : 'SCHEDULED',
+          status: occurrence <= demo.completedMeetings ? 'COMPLETED' : 'SCHEDULED',
           calendarSyncStatus: 'SYNCED',
         },
         update: {},

@@ -65,10 +65,7 @@ export class StudentAdminService {
         defaultChannelIdentity: { include: { channelAccount: true } },
         practiceSessions: {
           where: {
-            OR: [
-              { cancellationReason: null },
-              { cancellationReason: { not: 'PLAN_SUPERSEDED' } },
-            ],
+            OR: [{ cancellationReason: null }, { cancellationReason: { not: 'PLAN_SUPERSEDED' } }],
           },
           orderBy: { startAt: 'desc' },
           take: 24,

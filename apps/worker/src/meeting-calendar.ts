@@ -130,8 +130,7 @@ export class MeetingCalendarWorker {
         },
       });
       await this.mapInstances(series.id, event.id, access.accessToken, access.calendarId);
-      if (meetUrl)
-        await createMeetingSeriesIntent(this.prisma, this.clock, this.config, series.id);
+      if (meetUrl) await createMeetingSeriesIntent(this.prisma, this.clock, this.config, series.id);
     } catch (error) {
       await this.prisma.meetingSeries.update({
         where: { id: series.id },

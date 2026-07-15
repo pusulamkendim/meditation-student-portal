@@ -92,6 +92,16 @@ async function createResponseIntent(
       payload: { intentId: intent.id },
     },
   });
+  return intent.id;
+}
+
+export function parseTypedPracticeResponse(content: string): 'COMPLETED' | 'SKIPPED' | undefined {
+  const normalized = content
+    .normalize('NFKC')
+    .trim()
+    .toLocaleLowerCase('tr-TR')
+    .replaceAll('ı', 'i');
+  return normalized === 'yaptim' ? 'COMPLETED' : normalized === 'yapamadim' ? 'SKIPPED' : undefined;
 }
 
 export async function processPracticeResponse(
@@ -99,6 +109,7 @@ export async function processPracticeResponse(
   clock: Clock,
   config: ApplicationConfig,
   inboxEventId: string,
+  classifiedResponse?: 'COMPLETED' | 'SKIPPED' | 'REFLECT',
 ): Promise<boolean> {
   if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID || !config.LOOKUP_HMAC_KEY)
     throw new Error('Practice response encryption configuration is required.');
@@ -125,13 +136,7 @@ export async function processPracticeResponse(
     inbox.dedupeKey,
   );
   const parsedPayload = parsePracticeResponsePayload(content);
-  const normalizedResponse = content.trim().toLocaleUpperCase('tr-TR');
-  const typedResponse =
-    normalizedResponse === 'YAPTIM'
-      ? 'COMPLETED'
-      : normalizedResponse === 'YAPAMADIM'
-        ? 'SKIPPED'
-        : undefined;
+  const typedResponse = parseTypedPracticeResponse(content);
   const identity = await prisma.studentChannelIdentity.findFirst({
     where: {
       externalUserHmac: normalized.senderHmac,
@@ -141,31 +146,48 @@ export async function processPracticeResponse(
   if (!identity) return false;
   const now = clock.now();
   return prisma.$transaction(async (tx) => {
+    const resolvedContext = parsedPayload
+      ? null
+      : await tx.conversationContextResolution.findUnique({
+          where: { inboxEventId: inbox.id },
+          select: { entityType: true, entityId: true },
+        });
+    const contextualSessionId =
+      resolvedContext?.entityType === 'PracticeSession' ? resolvedContext.entityId : null;
     const session = await tx.practiceSession.findFirst({
       where: parsedPayload
         ? { id: parsedPayload.sessionId }
-        : {
-            studentId: identity.studentId,
-            OR: [
-              { status: PracticeSessionStatus.AWAITING_RESPONSE, startAt: { lte: now } },
-              {
-                status: PracticeSessionStatus.COMPLETED,
-                updatedAt: { gte: new Date(now.getTime() - 60 * 60_000) },
-                reflection: { is: null },
-              },
-            ],
-          },
+        : contextualSessionId
+          ? { id: contextualSessionId }
+          : {
+              studentId: identity.studentId,
+              OR: [
+                { status: PracticeSessionStatus.AWAITING_RESPONSE, startAt: { lte: now } },
+                {
+                  status: PracticeSessionStatus.COMPLETED,
+                  updatedAt: { gte: new Date(now.getTime() - 60 * 60_000) },
+                  reflection: { is: null },
+                },
+              ],
+            },
       orderBy: parsedPayload ? undefined : { startAt: 'desc' },
       include: { student: true },
     });
     if (!session) return false;
-    if (!parsedPayload && session.status === PracticeSessionStatus.COMPLETED) {
+    if (
+      !parsedPayload &&
+      session.status === PracticeSessionStatus.COMPLETED &&
+      (!classifiedResponse || classifiedResponse === 'REFLECT')
+    ) {
       const consent = await tx.consent.findFirst({
         where: { studentId: identity.studentId, scope: ConsentScope.REFLECTION_STORAGE },
         orderBy: { occurredAt: 'desc' },
       });
       if (consent?.status !== ConsentStatus.GRANTED) return false;
-      const encryptedReflection = encryption.encrypt(content.trim(), `practice:${session.id}:reflection`);
+      const encryptedReflection = encryption.encrypt(
+        content.trim(),
+        `practice:${session.id}:reflection`,
+      );
       const reflection = await tx.practiceReflection.create({
         data: {
           practiceSessionId: session.id,
@@ -205,22 +227,33 @@ export async function processPracticeResponse(
           payload: { reflectionId: reflection.id, studentId: identity.studentId },
         },
       });
+      await tx.inboundResponseOwnership.create({
+        data: { inboundMessageId: inbox.id, owner: 'NO_REPLY' },
+      });
       await tx.inboxEvent.update({
         where: { id: inbox.id },
         data: { processedAt: now, studentId: identity.studentId },
       });
       return true;
     }
+    const canSkipReminder =
+      classifiedResponse === 'SKIPPED' &&
+      !parsedPayload &&
+      session.status === PracticeSessionStatus.REMINDED;
     if (
       session.studentId !== identity.studentId ||
-      session.status !== PracticeSessionStatus.AWAITING_RESPONSE ||
-      !session.replyNonceHmac ||
-      (parsedPayload && !lookup.verify(parsedPayload.nonce, session.replyNonceHmac)) ||
-      now < session.startAt ||
+      (session.status !== PracticeSessionStatus.AWAITING_RESPONSE && !canSkipReminder) ||
+      (!canSkipReminder && !session.replyNonceHmac) ||
+      (parsedPayload && !lookup.verify(parsedPayload.nonce, session.replyNonceHmac ?? '')) ||
+      (!canSkipReminder && now < session.startAt) ||
       now >= endOfLocalServiceDate(session.serviceDate, session.student.timezone)
     )
       return false;
-    const response = parsedPayload?.response ?? typedResponse;
+    const response =
+      parsedPayload?.response ??
+      (classifiedResponse === 'COMPLETED' || classifiedResponse === 'SKIPPED'
+        ? classifiedResponse
+        : typedResponse);
     if (!response) {
       const existingMessage = await tx.message.findUnique({
         where: { inboxEventId: inbox.id },
@@ -245,7 +278,7 @@ export async function processPracticeResponse(
           },
         });
       }
-      await createResponseIntent(tx, now, {
+      const intentId = await createResponseIntent(tx, now, {
         eventKey: 'PRACTICE_RESPONSE_AMBIGUOUS',
         studentId: identity.studentId,
         channelIdentityId: identity.id,
@@ -254,6 +287,13 @@ export async function processPracticeResponse(
         aggregateVersion: session.student.version,
         idempotencyKey: `practice:${session.id}:ambiguous:${inbox.id}`,
         variables: {},
+      });
+      await tx.inboundResponseOwnership.create({
+        data: {
+          inboundMessageId: inbox.id,
+          owner: intentId ? 'SYSTEM_STANDARD_MESSAGE' : 'NO_REPLY',
+          referenceId: intentId,
+        },
       });
       await tx.inboxEvent.update({
         where: { id: inbox.id },
@@ -265,7 +305,7 @@ export async function processPracticeResponse(
       where: {
         id: session.id,
         version: session.version,
-        status: PracticeSessionStatus.AWAITING_RESPONSE,
+        status: session.status,
       },
       data: { status: response, version: { increment: 1 } },
     });
@@ -306,9 +346,8 @@ export async function processPracticeResponse(
           timeStyle: 'short',
         }).format(next.startAt)}.`
       : '';
-    await createResponseIntent(tx, now, {
-      eventKey:
-        response === 'COMPLETED' ? 'PRACTICE_COMPLETED_ACK' : 'PRACTICE_SKIPPED_ACK',
+    const acknowledgementIntentId = await createResponseIntent(tx, now, {
+      eventKey: response === 'COMPLETED' ? 'PRACTICE_COMPLETED_ACK' : 'PRACTICE_SKIPPED_ACK',
       studentId: identity.studentId,
       channelIdentityId: identity.id,
       locale: session.student.preferredLocale,
@@ -328,6 +367,13 @@ export async function processPracticeResponse(
         idempotencyKey: `practice:${session.id}:reflection-request`,
         variables: {},
       });
+    await tx.inboundResponseOwnership.create({
+      data: {
+        inboundMessageId: inbox.id,
+        owner: acknowledgementIntentId ? 'SYSTEM_STANDARD_MESSAGE' : 'NO_REPLY',
+        referenceId: acknowledgementIntentId,
+      },
+    });
     await tx.inboxEvent.update({
       where: { id: inbox.id },
       data: { processedAt: now, studentId: identity.studentId },

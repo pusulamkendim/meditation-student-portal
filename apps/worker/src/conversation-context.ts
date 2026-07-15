@@ -40,14 +40,14 @@ export class ConversationContextResolver {
     const recent = input.repliedToExternalMessageId
       ? null
       : await this.prisma.message.findFirst({
-        where: {
-          studentId: input.studentId,
-          direction: 'OUTBOUND',
-          messageIntentId: { not: null },
-          occurredAt: { gte: new Date(now.getTime() - 24 * 60 * 60_000), lte: now },
-        },
-        orderBy: { occurredAt: 'desc' },
-        include: { messageIntent: true },
+          where: {
+            studentId: input.studentId,
+            direction: 'OUTBOUND',
+            messageIntentId: { not: null },
+            occurredAt: { gte: new Date(now.getTime() - 24 * 60 * 60_000), lte: now },
+          },
+          orderBy: { occurredAt: 'desc' },
+          include: { messageIntent: true },
         });
     const source = explicit ?? recent;
     const payload = source?.messageIntent?.payload as Record<string, unknown> | undefined;
@@ -75,7 +75,8 @@ export class ConversationContextResolver {
         Object.entries(eventPayload).filter(
           ([key, value]) =>
             typeof value === 'string' &&
-            (/Text$/.test(key) || /^(eventKey|practiceSessionId|meetingId|meetingSeriesId)$/.test(key)),
+            (/Text$/.test(key) ||
+              /^(eventKey|practiceSessionId|meetingId|meetingSeriesId)$/.test(key)),
         ),
       ),
       expiresAt: expiresAt.toISOString(),
@@ -103,7 +104,12 @@ export class ConversationContextResolver {
     return resolved;
   }
 
-  private async persist(inboxEventId: string, sourceMessageId: string | null, method: string, now: Date) {
+  private async persist(
+    inboxEventId: string,
+    sourceMessageId: string | null,
+    method: string,
+    now: Date,
+  ) {
     await this.prisma.conversationContextResolution.upsert({
       where: { inboxEventId },
       create: { inboxEventId, sourceMessageId, resolutionMethod: method, resolvedAt: now },
@@ -112,7 +118,9 @@ export class ConversationContextResolver {
   }
 }
 
-export function sectionForEvent(eventKey: string): 'PRACTICE' | 'MEETINGS' | 'PAYMENT' | 'MEMBERSHIP' | null {
+export function sectionForEvent(
+  eventKey: string,
+): 'PRACTICE' | 'MEETINGS' | 'PAYMENT' | 'MEMBERSHIP' | null {
   if (eventKey.startsWith('PRACTICE_')) return 'PRACTICE';
   if (eventKey.startsWith('MEETING_') || eventKey === 'MEET_LINK_UNAVAILABLE') return 'MEETINGS';
   if (eventKey.startsWith('PAYMENT_')) return 'PAYMENT';

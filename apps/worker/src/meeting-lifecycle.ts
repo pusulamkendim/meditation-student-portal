@@ -257,21 +257,26 @@ export async function createMeetingSeriesIntent(
     });
     const variables = {
       meetingScheduleSummary: series.meetings
-        .map((meeting) => `${meeting.occurrenceNumber}. görüşme: ${formatter.format(meeting.startsAt)}`)
+        .map(
+          (meeting) =>
+            `${meeting.occurrenceNumber}. görüşme: ${formatter.format(meeting.startsAt)}`,
+        )
         .join('\n'),
       meetUrl,
       studentDisplayName:
         series.student.fullNameEncrypted && series.student.fullNameKeyId
-          ? ` ${encryption
-              .decrypt(
-                {
-                  ciphertext: Buffer.from(series.student.fullNameEncrypted),
-                  keyId: series.student.fullNameKeyId,
-                },
-                `student:${series.studentId}:name`,
-              )
-              .trim()
-              .split(/\s+/)[0]}`
+          ? ` ${
+              encryption
+                .decrypt(
+                  {
+                    ciphertext: Buffer.from(series.student.fullNameEncrypted),
+                    keyId: series.student.fullNameKeyId,
+                  },
+                  `student:${series.studentId}:name`,
+                )
+                .trim()
+                .split(/\s+/)[0]
+            }`
           : '',
     };
     const idempotencyKey = `meeting-series:${series.id}:scheduled:v${series.version}`;
@@ -301,11 +306,7 @@ export async function createMeetingSeriesIntent(
           eventKey: 'MEETING_SERIES_SCHEDULED',
           meetingSeriesId: series.id,
           standardMessageVersionId: variant.id,
-          rendered: renderMessageTemplate(
-            'MEETING_SERIES_SCHEDULED',
-            variant.content,
-            variables,
-          ),
+          rendered: renderMessageTemplate('MEETING_SERIES_SCHEDULED', variant.content, variables),
           locale: variant.variant.locale,
         },
       },

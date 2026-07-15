@@ -23,10 +23,13 @@ import {
 const DRAFT_PRIVACY_TEXT =
   'Ad, iletişim, ödeme, program ve pratik verilerin yalnızca hizmetin sunulması, hatırlatmalar ve görüşme planlaması amacıyla güvenli biçimde işlenir. Bu metin yayından önce hukuk uzmanı tarafından güncellenecektir.';
 const DRAFT_AI_CONSENT_TEXT =
-  'Onay verirsen sorularını yanıtlamak ve pratik geri bildirimlerini özetlemek için paylaştığın içerikler yapay zeka sağlayıcısına veri minimizasyonu uygulanarak iletilebilir. İznini daha sonra geri çekebilirsin.';
-const acceptancePattern = /^(evet|onay|onaylıyorum|onayliyorum|kabul|kabul ediyorum)$/u;
+  'Onay verirsen sorularını yanıtlamak, pratik sonrasında paylaştığın refleksiyonları saklamak ve geri bildirimlerini özetlemek için içeriklerin işlenebilir. Yapay zeka sağlayıcısına aktarım yapılırken veri minimizasyonu uygulanır. İznini daha sonra geri çekebilirsin.';
+const acceptancePattern =
+  /^(evet|onay|onayladım|onayladim|onaylıyorum|onayliyorum|kabul|kabul ediyorum|tamam|olur|uygun)$/u;
 const declinePattern = /^(hayır|hayir|istemiyorum|kabul etmiyorum)$/u;
 const paymentPattern = /^(ödeme yaptım|odeme yaptim|ödemeyi yaptım|odemeyi yaptim|dekont)$/u;
+const conversationalNonNamePattern =
+  /\b(tamam|evet|hayır|hayir|süper|super|sevindim|teşekkür|tesekkur|sağ ol|sag ol)\b/iu;
 
 function normalizeAnswer(value: string): string {
   return value.normalize('NFKC').trim().replace(/\s+/g, ' ');
@@ -42,6 +45,7 @@ export function isValidFullName(value: string): boolean {
     normalized.length >= 3 &&
     normalized.length <= 200 &&
     normalized.split(' ').length >= 2 &&
+    !conversationalNonNamePattern.test(normalized) &&
     /^[\p{L}][\p{L}' -]*[\p{L}]$/u.test(normalized)
   );
 }
@@ -316,16 +320,16 @@ export class RegistrationInboundProcessor {
         const accepted = acceptancePattern.test(answer);
         if (!accepted && !declinePattern.test(answer))
           return this.promptForCurrentStep(tx, student);
-        await tx.consent.create({
-          data: {
+        await tx.consent.createMany({
+          data: [ConsentScope.AGENT_REPLY_AI, ConsentScope.REFLECTION_STORAGE].map((scope) => ({
             studentId: student.id,
-            scope: ConsentScope.AGENT_REPLY_AI,
+            scope,
             status: accepted ? ConsentStatus.GRANTED : ConsentStatus.WITHDRAWN,
             textVersion: 'draft-v1',
             channel: inbox.channel,
             externalMessageId,
             occurredAt: now,
-          },
+          })),
         });
         await this.updateStep(tx, student.id, student.version, RegistrationStep.NAME);
         return { eventKey: 'NAME_REQUEST', variables: {} };

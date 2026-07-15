@@ -3,6 +3,7 @@ import {
   durationForPackageDay,
   generatePracticeSchedule,
   parsePracticeResponsePayload,
+  createPracticeResponsePayload,
   practiceTiming,
 } from './practice-schedule.js';
 
@@ -60,5 +61,18 @@ describe('practice schedule', () => {
       response: 'COMPLETED',
     });
     expect(parsePracticeResponsePayload('Yaptım')).toBeUndefined();
+  });
+
+  it('creates Telegram-safe compact response payloads', () => {
+    const sessionId = '10000000-0000-4000-8000-000000000003';
+    const nonce = '12345678901234567890123456789012';
+    const payload = createPracticeResponsePayload(sessionId, nonce, 'COMPLETED');
+
+    expect(Buffer.byteLength(payload, 'utf8')).toBeLessThanOrEqual(64);
+    expect(parsePracticeResponsePayload(payload)).toEqual({
+      sessionId,
+      nonce,
+      response: 'COMPLETED',
+    });
   });
 });
