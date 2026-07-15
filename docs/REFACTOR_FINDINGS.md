@@ -190,6 +190,48 @@ dogrulamak yerine sistemin bugunku sonucunu gozlemler. Kanitlar
   ogrencilere admin yaniti gonderilebilir; izin/kanal engeli varsa admin bunu
   acik bir hata durumu olarak gorur.
 
+## RF-012 - Ilk gorusme programi mesaji eski aggregate olarak bastiriliyor
+
+- Onem: Kritik
+- Durum: Kapatildi
+- Kanit: `MEETING-ADMIN-01`
+- Gozlem: Admin dort gorusmelik seriyi olusturup Meet baglantisini hazirladiginda
+  `MEETING_SERIES_SCHEDULED` intent'i uretiliyor. Intent `meetingSeries.version`
+  degerini aggregate version olarak tasiyor; dispatcher ise `meetingSeriesId`
+  payload'ini tanimadigi icin bu degeri `student.version` ile karsilastiriyor.
+  Sonuc `STALE_AGGREGATE` ve mesaj ogrenciye teslim edilmiyor.
+- Etki: Ogrencinin gorusme kayitlari sistemde dogru olmasina ragmen dort haftalik
+  program ve Meet baglantisi ilk kurulumda ogrenciye ulasmiyor.
+- Refaktor: Dispatcher'a `meetingSeriesId` aggregate dogrulamasi ekle veya intent
+  aggregate turunu acik bicimde sakla. Seri durumu, surumu, abonelik ve konferans
+  baglantisi gonderim aninda birlikte dogrulanmali.
+- Kabul olcutu: Hazir Meet baglantili aktif seri mesaji bir kez teslim edilir;
+  seri surumu degismisse eski intent bastirilir ve provider retry cift mesaj
+  uretmez.
+- Uygulama: Dispatcher `meetingSeriesId` tasiyan intent'lerde seri surumunu,
+  abonelik durumunu, planlanmis gorusme varligini ve konferans hazirligini birlikte
+  dogruluyor. Seri aggregate'i artik ogrenci surumuyle karsilastirilmiyor.
+
+## RF-013 - Iptalden geri alinan gorusme ogrenciye bildirilmiyor
+
+- Onem: Yuksek
+- Durum: Kapatildi
+- Kanit: `MEETING-ADMIN-02`
+- Gozlem: Admin `CANCELLED` gorusmeyi yeniden `SCHEDULED` yaptiginda DB durumu ve
+  versiyon dogru guncelleniyor, fakat bu gecis icin bir sistem eventi veya mesaj
+  intent'i uretilmiyor. Iptal mesaji daha once ogrenciye teslim edildigi icin son
+  bildigi durum yanlis kaliyor.
+- Etki: Admin panelinde gorusme aktif gorunurken ogrenci gorusmenin hala iptal
+  oldugunu dusunebilir ve gorusmeyi kacirabilir.
+- Refaktor: `MEETING_RESTORED` eventi ve varsayilan mesajini tanimla ya da acik
+  bir yeniden-planlama eventi kullan. Mesaj yeni tarih, saat ve Meet baglantisini
+  icermeli; durum degisikligiyle ayni operasyonel zincirde kuyruga alinmali.
+- Kabul olcutu: `CANCELLED -> SCHEDULED` gecisinde ogrenci tek bir guncel program
+  mesaji alir ve konusma gecmisinde gorunur.
+- Uygulama: Mevcut `MEETING_SCHEDULED` eventi icin varsayilan mesaj eklendi.
+  `CANCELLED -> SCHEDULED` gecisi yeni tarih/saat ve Meet baglantisiyla bu mesaji
+  kuyruga aliyor.
+
 ## Test Altyapisi Notu
 
 Kesif kosusu sirasinda yayinlanmis varsayilan mesajlarin `effectiveAt` degeri

@@ -68,7 +68,7 @@ export class PracticeController {
     const plan = await this.prisma.practicePlan.findFirst({
       where: { studentId: id, status: { in: ['ACTIVE', 'PAUSED', 'DRAFT'] } },
       orderBy: { revision: 'desc' },
-      include: { slots: true, sessions: { take: 30, orderBy: { startAt: 'asc' } } },
+      include: { slots: true, sessions: { take: 120, orderBy: { startAt: 'asc' } } },
     });
     const subscriptions = await this.prisma.subscriptionPeriod.findMany({
       where: { studentId: id, status: { in: ['ACTIVE', 'SCHEDULED'] } },

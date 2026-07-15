@@ -650,7 +650,13 @@ export class MeetingService {
         to: status,
         creditDelta: delta,
       });
-      return { id: meetingId, status, version: expectedVersion + 1, creditDelta: delta };
+      return {
+        id: meetingId,
+        status,
+        version: expectedVersion + 1,
+        creditDelta: delta,
+        previousStatus: meeting.status,
+      };
     });
     const eventKey =
       status === MeetingStatus.CANCELLED
@@ -659,14 +665,22 @@ export class MeetingService {
           ? 'MEETING_COMPLETED'
           : status === MeetingStatus.NO_SHOW
             ? 'MEETING_NO_SHOW'
-            : undefined;
+            : status === MeetingStatus.SCHEDULED &&
+                result.previousStatus === MeetingStatus.CANCELLED
+              ? 'MEETING_SCHEDULED'
+              : undefined;
     if (eventKey) await this.notifyMeetingChange(meetingId, eventKey);
     return result;
   }
 
   private async notifyMeetingChange(
     meetingId: string,
-    eventKey: 'MEETING_RESCHEDULED' | 'MEETING_CANCELLED' | 'MEETING_COMPLETED' | 'MEETING_NO_SHOW',
+    eventKey:
+      | 'MEETING_SCHEDULED'
+      | 'MEETING_RESCHEDULED'
+      | 'MEETING_CANCELLED'
+      | 'MEETING_COMPLETED'
+      | 'MEETING_NO_SHOW',
     context: { previousStartsAt?: string } = {},
   ) {
     const meeting = await this.prisma.weeklyMeeting.findUnique({
@@ -703,9 +717,9 @@ export class MeetingService {
         : '';
     const studentDisplayName = fullName ? ` ${fullName.trim().split(/\s+/)[0]}` : '';
     let variables: Record<string, string>;
-    if (eventKey === 'MEETING_RESCHEDULED') {
+    if (eventKey === 'MEETING_RESCHEDULED' || eventKey === 'MEETING_SCHEDULED') {
       if (
-        !context.previousStartsAt ||
+        (eventKey === 'MEETING_RESCHEDULED' && !context.previousStartsAt) ||
         !meeting.meetingSeries.meetUrlEncrypted ||
         !meeting.meetingSeries.meetUrlKeyId
       )
@@ -718,7 +732,9 @@ export class MeetingService {
         `meeting-series:${meeting.meetingSeries.id}:meet-url`,
       );
       variables = {
-        previousStartsAtText: formatter.format(new Date(context.previousStartsAt)),
+        ...(eventKey === 'MEETING_RESCHEDULED'
+          ? { previousStartsAtText: formatter.format(new Date(context.previousStartsAt!)) }
+          : {}),
         startsAtText,
         meetUrl,
         studentDisplayName,

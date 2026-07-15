@@ -131,6 +131,11 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
       'Merhaba{{studentDisplayName}}, görüşme programını oluşturdum. Bu paket kapsamında dört online görüşmemiz olacak:\n\n{{meetingScheduleSummary}}\n\nGörüşmelerimizi Google Meet üzerinden yapacağız. Katılım bağlantın: {{meetUrl}}\nHer görüşmeden önce bağlantıyı tekrar hatırlatacağım.',
   },
   {
+    eventKey: 'MEETING_SCHEDULED',
+    content:
+      'Merhaba{{studentDisplayName}}, görüşmemiz {{startsAtText}} için planlandı. Google Meet bağlantın:\n{{meetUrl}}',
+  },
+  {
     eventKey: 'MEETING_REMINDER_24H',
     content:
       'Merhaba{{studentDisplayName}}, yarın {{startsAtText}} tarihinde online görüşmemiz var. Görüşmeye şu bağlantıdan katılabilirsin:\n\n{{meetUrl}}\n\nÖzellikle konuşmak istediğin bir konu varsa önceden bana yazabilirsin.',

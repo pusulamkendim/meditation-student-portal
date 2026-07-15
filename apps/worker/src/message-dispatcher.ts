@@ -58,6 +58,16 @@ export class MessageDispatcher {
               include: { meetingSeries: { include: { subscriptionPeriod: true } } },
             })
           : undefined;
+      const meetingSeries =
+        typeof payload.meetingSeriesId === 'string'
+          ? await tx.meetingSeries.findUnique({
+              where: { id: payload.meetingSeriesId },
+              include: {
+                subscriptionPeriod: true,
+                meetings: { where: { status: 'SCHEDULED' }, select: { id: true }, take: 1 },
+              },
+            })
+          : undefined;
       const practiceStateValid = practiceSession
         ? practiceSession.practicePlan.status === 'ACTIVE' &&
           practiceSession.practicePlan.subscriptionPeriod.status === 'ACTIVE' &&
@@ -70,6 +80,14 @@ export class MessageDispatcher {
         ? meeting.status === 'SCHEDULED' &&
           meeting.version === intent.aggregateVersion &&
           meeting.meetingSeries.subscriptionPeriod.status === 'ACTIVE'
+        : true;
+      const meetingSeriesStateValid = meetingSeries
+        ? meetingSeries.version === intent.aggregateVersion &&
+          (meetingSeries.subscriptionPeriod.status === 'ACTIVE' ||
+            meetingSeries.subscriptionPeriod.status === 'SCHEDULED') &&
+          meetingSeries.meetings.length > 0 &&
+          (meetingSeries.conferenceStatus === 'READY' ||
+            meetingSeries.conferenceStatus === 'MANUAL_OVERRIDE')
         : true;
       const decision = evaluateSendPolicy(
         {
@@ -90,7 +108,9 @@ export class MessageDispatcher {
             ? practiceStateValid
             : meeting
               ? meetingStateValid
-              : intent.aggregateVersion === intent.student.version,
+              : meetingSeries
+                ? meetingSeriesStateValid
+                : intent.aggregateVersion === intent.student.version,
         },
         this.clock,
       );

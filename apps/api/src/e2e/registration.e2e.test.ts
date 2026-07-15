@@ -25,6 +25,7 @@ import { AdminPanelNotificationProcessor } from '../../../worker/src/admin-panel
 import { InboundIntentClassifier } from '../../../worker/src/inbound-intent.js';
 import { InboundIntentRouter } from '../../../worker/src/inbound-intent-router.js';
 import { MessageDispatcher } from '../../../worker/src/message-dispatcher.js';
+import { createMeetingSeriesIntent } from '../../../worker/src/meeting-lifecycle.js';
 import { processPracticeLifecycle } from '../../../worker/src/practice-lifecycle.js';
 import { processPracticeResponse } from '../../../worker/src/practice-response.js';
 import { RegistrationInboundProcessor } from '../../../worker/src/registration-inbound.js';
@@ -39,6 +40,8 @@ import { PrismaService } from '../database/prisma.service.js';
 import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
 import { AdminSessionGuard } from '../auth/admin-session.guard.js';
 import { SystemMessageOrchestrator } from '../message-catalog/system-message-orchestrator.js';
+import { MeetingService } from '../meetings/meeting.service.js';
+import { PracticeController } from '../practice/practice.controller.js';
 import { PracticeService } from '../practice/practice.service.js';
 import { PaymentService } from '../registration/payment.service.js';
 
@@ -87,6 +90,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
   let intentRouter: InboundIntentRouter;
   let practice: PracticeService;
   let payments: PaymentService;
+  let meetings: MeetingService;
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasourceUrl: databaseUrl });
@@ -106,10 +110,17 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       update: { active: true },
     });
     const module = await Test.createTestingModule({
-      controllers: [TelegramWebhookController, ConversationsController, OperationsController],
+      controllers: [
+        TelegramWebhookController,
+        ConversationsController,
+        OperationsController,
+        PracticeController,
+      ],
       providers: [
         TelegramWebhookService,
         PrismaService,
+        PracticeService,
+        SystemMessageOrchestrator,
         { provide: APPLICATION_CONFIG, useValue: config },
         { provide: CLOCK_TOKEN, useValue: clock },
       ],
@@ -143,13 +154,14 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       new InboundIntentClassifier(prisma, config, clock),
       agent,
     );
-    practice = new PracticeService(
+    practice = module.get(PracticeService);
+    payments = new PaymentService(prisma as PrismaService, clock);
+    meetings = new MeetingService(
       prisma as PrismaService,
       clock,
       config,
       new SystemMessageOrchestrator(prisma as PrismaService, clock),
     );
-    payments = new PaymentService(prisma as PrismaService, clock);
     await prisma.llmProvider.update({
       where: { adapterId: 'gemini' },
       data: { status: 'ENABLED' },
@@ -411,6 +423,24 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     for (const intent of intents) await dispatcher.dispatch(intent.id);
   }
 
+  async function sentEvents(studentId: string, sentFrom: number) {
+    const sent = collector.sent.slice(sentFrom);
+    const intents = await prisma.messageIntent.findMany({
+      where: { studentId, id: { in: sent.map((message) => message.intentId) } },
+      select: { id: true, payload: true },
+    });
+    const eventByIntent = new Map(
+      intents.map((intent) => [
+        intent.id,
+        (intent.payload as Record<string, unknown>).eventKey as string | undefined,
+      ]),
+    );
+    return sent.map((message) => ({
+      eventKey: eventByIntent.get(message.intentId),
+      content: message.content,
+    }));
+  }
+
   async function processAgentInbox(inboxId: string) {
     const result = await intentRouter.process(inboxId);
     const ownership = await prisma.inboundResponseOwnership.findUniqueOrThrow({
@@ -450,6 +480,39 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       orderBy: { startAt: 'asc' },
     });
     return { ...current, studentId, sessionId: session.id };
+  }
+
+  async function createTwoSlotPracticePlan() {
+    clock.set('2026-07-15T09:00:00.000Z');
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    const subscription = await activateStudent(studentId, { withPractice: false });
+    const plan = await practice.createPlan(
+      studentId,
+      subscription.id,
+      [
+        { slotKey: 'MORNING', localTime: '12:20', active: true },
+        { slotKey: 'EVENING', localTime: '21:00', active: true },
+      ],
+      undefined,
+      15,
+      e2eAdminId,
+    );
+    return { ...current, studentId, subscriptionId: subscription.id, planId: plan.id };
+  }
+
+  async function createMeetingStage() {
+    clock.set('2026-07-15T09:00:00.000Z');
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    const subscription = await activateStudent(studentId, { withPractice: false });
+    const series = await meetings.createSeries(
+      subscription.id,
+      new Date('2026-07-17T15:00:00.000Z'),
+      e2eAdminId,
+    );
+    await meetings.setMeetOverride(series.id, 'https://meet.google.com/e2e-test-room', e2eAdminId);
+    return { ...current, studentId, subscriptionId: subscription.id, seriesId: series.id };
   }
 
   it('REG-01 completes the standard registration with AI consent', async () => {
@@ -764,6 +827,300 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       intentStatus: 'SUPPRESSED',
       suppressionReason: 'STUDENT_INACTIVE',
     });
+  });
+
+  it('PRACTICE-ADMIN-01 preserves every planned session across pause and resume projections', async () => {
+    const current = await createTwoSlotPracticePlan();
+    const expected = await prisma.practiceSession.findMany({
+      where: { practicePlanId: current.planId, status: 'SCHEDULED' },
+      orderBy: { startAt: 'asc' },
+      select: { id: true },
+    });
+    expect(expected.length).toBeGreaterThan(30);
+
+    const before = await app.inject({
+      method: 'GET',
+      url: `/v1/admin/students/${current.studentId}/practice-plan`,
+    });
+    expect(before.statusCode).toBe(200);
+    expect(before.json<{ plan: { sessions: Array<{ id: string }> } }>().plan.sessions).toHaveLength(
+      expected.length,
+    );
+
+    const paused = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/students/${current.studentId}/practice/pause`,
+      payload: { paused: true, reason: 'E2E pause projection check' },
+    });
+    expect(paused.statusCode).toBe(201);
+    expect(
+      await prisma.practiceSession.count({
+        where: {
+          practicePlanId: current.planId,
+          status: 'SUPPRESSED',
+          cancellationReason: 'PRACTICE_PAUSED',
+        },
+      }),
+    ).toBe(expected.length);
+
+    const resumed = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/students/${current.studentId}/practice/pause`,
+      payload: { paused: false, reason: 'E2E resume projection check' },
+    });
+    expect(resumed.statusCode).toBe(201);
+    const after = await app.inject({
+      method: 'GET',
+      url: `/v1/admin/students/${current.studentId}/practice-plan`,
+    });
+    const afterSessions = after
+      .json<{ plan: { sessions: Array<{ id: string; status: string }> } }>()
+      .plan.sessions.filter((session) => session.status === 'SCHEDULED');
+    expect(afterSessions.map((session) => session.id).sort()).toEqual(
+      expected.map((session) => session.id).sort(),
+    );
+  });
+
+  it('PRACTICE-ADMIN-02 keeps terminal and cancelled sessions unchanged during pause cycles', async () => {
+    const current = await createTwoSlotPracticePlan();
+    const sessions = await prisma.practiceSession.findMany({
+      where: { practicePlanId: current.planId },
+      orderBy: { startAt: 'asc' },
+      take: 3,
+    });
+    await prisma.practiceSession.update({
+      where: { id: sessions[0]!.id },
+      data: { status: 'COMPLETED' },
+    });
+    await prisma.practiceSession.update({
+      where: { id: sessions[1]!.id },
+      data: {
+        status: 'CANCELLED',
+        cancelledAt: clock.now(),
+        cancellationReason: 'ADMIN_CANCELLED',
+      },
+    });
+
+    await practice.pause(current.studentId, true, 'E2E terminal-state check', e2eAdminId);
+    await practice.pause(current.studentId, false, 'E2E terminal-state check', e2eAdminId);
+
+    expect(
+      await prisma.practiceSession.findUniqueOrThrow({ where: { id: sessions[0]!.id } }),
+    ).toMatchObject({ status: 'COMPLETED' });
+    expect(
+      await prisma.practiceSession.findUniqueOrThrow({ where: { id: sessions[1]!.id } }),
+    ).toMatchObject({ status: 'CANCELLED', cancellationReason: 'ADMIN_CANCELLED' });
+  });
+
+  it('PRACTICE-ADMIN-03 does not lose sessions over repeated pause and resume cycles', async () => {
+    const current = await createTwoSlotPracticePlan();
+    const initial = await prisma.practiceSession.findMany({
+      where: { practicePlanId: current.planId },
+      select: { id: true },
+    });
+
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      await practice.pause(current.studentId, true, `E2E cycle ${cycle}`, e2eAdminId);
+      await practice.pause(current.studentId, false, `E2E cycle ${cycle}`, e2eAdminId);
+    }
+
+    const final = await prisma.practiceSession.findMany({
+      where: { practicePlanId: current.planId },
+      select: { id: true, status: true, cancellationReason: true },
+    });
+    expect(final.map((session) => session.id).sort()).toEqual(
+      initial.map((session) => session.id).sort(),
+    );
+    expect(new Set(final.map((session) => session.status))).toEqual(new Set(['SCHEDULED']));
+    expect(final.every((session) => session.cancellationReason === null)).toBe(true);
+  });
+
+  it('PRACTICE-ADMIN-04 sends plan, pause and resume messages with matching student state', async () => {
+    const current = await createTwoSlotPracticePlan();
+    await dispatchPending(current.studentId);
+    const planEvents = await sentEvents(current.studentId, current.sentFrom);
+    expect(planEvents).toContainEqual(
+      expect.objectContaining({ eventKey: 'PRACTICE_PLAN_CONFIRMED' }),
+    );
+
+    const pauseSentFrom = collector.sent.length;
+    await practice.pause(current.studentId, true, 'Öğrenci talebi', e2eAdminId);
+    await dispatchPending(current.studentId);
+    expect(
+      await prisma.practicePlan.findUniqueOrThrow({ where: { id: current.planId } }),
+    ).toMatchObject({ status: 'PAUSED' });
+    expect(await sentEvents(current.studentId, pauseSentFrom)).toContainEqual(
+      expect.objectContaining({ eventKey: 'PRACTICE_PAUSED' }),
+    );
+
+    const resumeSentFrom = collector.sent.length;
+    await practice.pause(current.studentId, false, 'Öğrenci devam ediyor', e2eAdminId);
+    await dispatchPending(current.studentId);
+    expect(
+      await prisma.practicePlan.findUniqueOrThrow({ where: { id: current.planId } }),
+    ).toMatchObject({ status: 'ACTIVE' });
+    expect(await sentEvents(current.studentId, resumeSentFrom)).toContainEqual(
+      expect.objectContaining({ eventKey: 'PRACTICE_RESUMED' }),
+    );
+  });
+
+  it('PRACTICE-ADMIN-05 keeps state and student messages aligned for reschedule, cancel and restore', async () => {
+    const current = await createTwoSlotPracticePlan();
+    await dispatchPending(current.studentId);
+    const session = await prisma.practiceSession.findFirstOrThrow({
+      where: { practicePlanId: current.planId, status: 'SCHEDULED' },
+      orderBy: { startAt: 'asc' },
+    });
+
+    const rescheduleSentFrom = collector.sent.length;
+    await practice.reschedule(
+      session.id,
+      new Date('2026-07-15T10:00:00.000Z'),
+      session.version,
+      'Öğrenci saat değişikliği',
+      e2eAdminId,
+    );
+    await dispatchPending(current.studentId);
+    const rescheduled = await prisma.practiceSession.findUniqueOrThrow({
+      where: { id: session.id },
+    });
+    expect(rescheduled).toMatchObject({
+      status: 'SCHEDULED',
+      startAt: new Date('2026-07-15T10:00:00.000Z'),
+    });
+    expect(await sentEvents(current.studentId, rescheduleSentFrom)).toContainEqual(
+      expect.objectContaining({ eventKey: 'PRACTICE_RESCHEDULED' }),
+    );
+
+    const cancelSentFrom = collector.sent.length;
+    await practice.cancel(session.id, 'Öğrenci bu oturumu yapamayacak', e2eAdminId);
+    await dispatchPending(current.studentId);
+    expect(
+      await prisma.practiceSession.findUniqueOrThrow({ where: { id: session.id } }),
+    ).toMatchObject({ status: 'CANCELLED' });
+    expect(await sentEvents(current.studentId, cancelSentFrom)).toContainEqual(
+      expect.objectContaining({ eventKey: 'PRACTICE_CANCELLED' }),
+    );
+
+    const restoreSentFrom = collector.sent.length;
+    await practice.restore(session.id, 'İptal geri alındı', e2eAdminId);
+    await dispatchPending(current.studentId);
+    expect(
+      await prisma.practiceSession.findUniqueOrThrow({ where: { id: session.id } }),
+    ).toMatchObject({ status: 'SCHEDULED', cancellationReason: null });
+    expect(await sentEvents(current.studentId, restoreSentFrom)).toContainEqual(
+      expect.objectContaining({ eventKey: 'PRACTICE_RESTORED' }),
+    );
+  });
+
+  it('MEETING-ADMIN-01 observes series creation and initial schedule-message delivery', async () => {
+    const current = await createMeetingStage();
+    expect(await prisma.weeklyMeeting.count({ where: { meetingSeriesId: current.seriesId } })).toBe(
+      4,
+    );
+    expect(await createMeetingSeriesIntent(prisma, clock, config, current.seriesId)).toBe(true);
+    await dispatchPending(current.studentId);
+
+    const intent = await prisma.messageIntent.findFirstOrThrow({
+      where: {
+        studentId: current.studentId,
+        payload: { path: ['eventKey'], equals: 'MEETING_SERIES_SCHEDULED' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const observation = {
+      meetingCount: 4,
+      intentStatus: intent.status,
+      suppressionReason: intent.suppressionReason,
+      delivered: collector.sent.some((message) => message.intentId === intent.id),
+    };
+    console.info(`MEETING_SERIES_ADMIN_OBSERVATION ${JSON.stringify(observation, null, 2)}`);
+    expect(observation).toEqual({
+      meetingCount: 4,
+      intentStatus: 'SENT',
+      suppressionReason: null,
+      delivered: true,
+    });
+  });
+
+  it('MEETING-ADMIN-02 checks reschedule, cancel and restore state against student messages', async () => {
+    const current = await createMeetingStage();
+    const meeting = await prisma.weeklyMeeting.findFirstOrThrow({
+      where: { meetingSeriesId: current.seriesId },
+      orderBy: { occurrenceNumber: 'asc' },
+    });
+
+    const rescheduleSentFrom = collector.sent.length;
+    const rescheduled = await meetings.rescheduleMeeting(
+      meeting.id,
+      new Date('2026-07-18T15:00:00.000Z'),
+      meeting.version,
+      'Öğrenci talebi',
+      e2eAdminId,
+    );
+    await dispatchPending(current.studentId);
+    expect(rescheduled.startsAt).toBe('2026-07-18T15:00:00.000Z');
+    expect(await sentEvents(current.studentId, rescheduleSentFrom)).toContainEqual(
+      expect.objectContaining({ eventKey: 'MEETING_RESCHEDULED' }),
+    );
+
+    const cancelSentFrom = collector.sent.length;
+    const cancelled = await meetings.setStatus(
+      meeting.id,
+      'CANCELLED',
+      rescheduled.version,
+      'Görüşme iptal edildi',
+      e2eAdminId,
+    );
+    await dispatchPending(current.studentId);
+    expect(cancelled.status).toBe('CANCELLED');
+    expect(await sentEvents(current.studentId, cancelSentFrom)).toContainEqual(
+      expect.objectContaining({ eventKey: 'MEETING_CANCELLED' }),
+    );
+
+    const restoreSentFrom = collector.sent.length;
+    const restored = await meetings.setStatus(
+      meeting.id,
+      'SCHEDULED',
+      cancelled.version,
+      'Görüşme yeniden planlandı',
+      e2eAdminId,
+    );
+    await dispatchPending(current.studentId);
+    const restoreEvents = await sentEvents(current.studentId, restoreSentFrom);
+    const observation = {
+      restoredStatus: restored.status,
+      studentMessageEvents: restoreEvents.map((event) => event.eventKey),
+    };
+    console.info(`MEETING_RESTORE_ADMIN_OBSERVATION ${JSON.stringify(observation, null, 2)}`);
+    expect(restored.status).toBe('SCHEDULED');
+    expect(observation.studentMessageEvents).toContain('MEETING_SCHEDULED');
+  });
+
+  it('MEETING-ADMIN-03 updates completion state, credit and student notification together', async () => {
+    const current = await createMeetingStage();
+    const meeting = await prisma.weeklyMeeting.findFirstOrThrow({
+      where: { meetingSeriesId: current.seriesId },
+      orderBy: { occurrenceNumber: 'asc' },
+    });
+    const sentFrom = collector.sent.length;
+    const completed = await meetings.setStatus(
+      meeting.id,
+      'COMPLETED',
+      meeting.version,
+      'Görüşme tamamlandı',
+      e2eAdminId,
+    );
+    await dispatchPending(current.studentId);
+    const balance = await prisma.meetingCreditEvent.aggregate({
+      where: { subscriptionPeriodId: current.subscriptionId },
+      _sum: { delta: true },
+    });
+    expect(completed).toMatchObject({ status: 'COMPLETED', creditDelta: -1 });
+    expect(balance._sum.delta).toBe(3);
+    expect(await sentEvents(current.studentId, sentFrom)).toContainEqual(
+      expect.objectContaining({ eventKey: 'MEETING_COMPLETED' }),
+    );
   });
 
   it('LLM-01 answers when the next practice starts from student context', async () => {
