@@ -21,6 +21,7 @@ import { WeeklySummaryAiProcessor } from './weekly-summary-ai.js';
 import { RegistrationInboundProcessor } from './registration-inbound.js';
 import { InboundIntentClassifier } from './inbound-intent.js';
 import { InboundIntentRouter } from './inbound-intent-router.js';
+import { AdminPanelNotificationProcessor } from './admin-panel-notification.js';
 
 async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
@@ -42,6 +43,7 @@ async function bootstrap(): Promise<void> {
     inboundIntentClassifier,
     llmAgent,
   );
+  const adminPanelNotifications = new AdminPanelNotificationProcessor(prisma);
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
   await syncSystemEventRegistry(prisma);
   await syncDefaultRegistrationMessages(prisma);
@@ -77,6 +79,7 @@ async function bootstrap(): Promise<void> {
               'knowledge.document-parse',
               'llm.reflection-tagging',
               'llm.weekly-summary',
+              'admin.notifications',
             ],
           },
         },
@@ -102,6 +105,7 @@ async function bootstrap(): Promise<void> {
           retryOperationId?: string;
           versionId?: string;
           reflectionId?: string;
+          outboxEventId?: string;
         };
         let queueName: string;
         let data: Record<string, string | undefined>;
@@ -133,6 +137,10 @@ async function bootstrap(): Promise<void> {
           case 'llm.weekly-summary':
             queueName = 'llm.weekly-summary';
             data = { meetingId: payload.meetingId };
+            break;
+          case 'admin.notifications':
+            queueName = 'admin.notification';
+            data = { outboxEventId: event.id };
             break;
           case 'channel.inbound':
             queueName = 'channel.inbound';
@@ -232,6 +240,11 @@ async function bootstrap(): Promise<void> {
   await boss.work<{ meetingId: string }>('llm.weekly-summary', async (jobs) => {
     for (const job of jobs)
       if (job.data.meetingId) await weeklySummaryAi.process(job.data.meetingId);
+  });
+  await boss.createQueue('admin.notification');
+  await boss.work<{ outboxEventId: string }>('admin.notification', async (jobs) => {
+    for (const job of jobs)
+      if (job.data.outboxEventId) await adminPanelNotifications.process(job.data.outboxEventId);
   });
   await boss.createQueue('meeting.reminder-24h');
   await boss.work('meeting.reminder-24h', async () => {

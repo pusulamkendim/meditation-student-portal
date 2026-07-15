@@ -35,6 +35,7 @@ export interface LoginResult {
   sessionToken: string;
   csrfToken: string;
   expiresAt: Date;
+  absoluteExpiresAt: Date;
   admin: { id: string; email: string; role: AdminRole };
 }
 
@@ -199,6 +200,7 @@ export class AdminAuthService {
       sessionToken,
       csrfToken,
       expiresAt,
+      absoluteExpiresAt,
       admin: { id: admin.id, email: admin.email, role: admin.role },
     };
   }

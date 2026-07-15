@@ -21,6 +21,7 @@ import {
   Clock3,
   CreditCard,
   MessageCircle,
+  LifeBuoy,
   Pause,
   Play,
   RefreshCw,
@@ -172,6 +173,14 @@ type Conversation = {
     status: string;
     createdAt: string;
     suppressionReason?: string;
+  }>;
+  handoffs: Array<{
+    id: string;
+    reason: string;
+    status: 'OPEN' | 'RESOLVED';
+    sourceMessageId?: string;
+    createdAt: string;
+    resolvedAt?: string;
   }>;
 };
 
@@ -564,6 +573,25 @@ export default function StudentDetailPage() {
     await loadConversation();
   }
 
+  async function resolveHandoff(handoffId: string, content?: string) {
+    try {
+      setBusy(true);
+      await requestJson(`/v1/admin/conversations/${studentId}/handoffs/${handoffId}/resolve`, {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify(content ? { content } : {}),
+      });
+      setNotice(
+        content ? 'Yanıt gönderim kuyruğuna alındı ve handover kapatıldı.' : 'Handover kapatıldı.',
+      );
+      await Promise.all([load(), loadConversation()]);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Handover kapatılamadı.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function approvePayment(paymentId: string) {
     await runMutation(
       `/v1/admin/payments/${paymentId}/approve`,
@@ -714,6 +742,7 @@ export default function StudentDetailPage() {
           error={conversationError}
           onReload={loadConversation}
           onReply={reply}
+          onResolveHandoff={resolveHandoff}
           busy={busy}
         />
       ) : null}
@@ -1535,6 +1564,7 @@ function ConversationsTab({
   error,
   onReload,
   onReply,
+  onResolveHandoff,
   busy,
 }: {
   data: Detail;
@@ -1543,6 +1573,7 @@ function ConversationsTab({
   error?: string;
   onReload: () => Promise<void>;
   onReply: (event: FormEvent<HTMLFormElement>) => Promise<void>;
+  onResolveHandoff: (handoffId: string, content?: string) => Promise<void>;
   busy: boolean;
 }) {
   return (
@@ -1563,73 +1594,161 @@ function ConversationsTab({
       ) : loading && !conversation ? (
         <Skeleton className="conversation-skeleton" />
       ) : conversation ? (
-        <div className="student-conversation-layout">
-          <div className="student-message-timeline">
-            {conversation.items.length ? (
-              conversation.items.map((item) => (
-                <MessageBubble
-                  key={item.id}
-                  direction={item.direction === 'OUTBOUND' ? 'outbound' : 'inbound'}
-                  channel={item.status}
-                  time={formatDateTime(item.occurredAt)}
-                >
-                  <div>
-                    {item.content ?? 'İçerik çözülemedi'}
-                    {item.context?.eventKey ? (
-                      <small className="message-context-label">
-                        Bağlam: {item.context.eventKey} · {item.context.resolutionMethod}
-                      </small>
-                    ) : null}
-                  </div>
-                </MessageBubble>
-              ))
-            ) : (
-              <EmptyState
-                title="Konuşma yok"
-                description="Bu öğrenciyle henüz mesajlaşma gerçekleşmemiş."
-                icon={MessageCircle}
-              />
-            )}
-          </div>
-          <aside className="student-reply-panel">
-            <div>
-              <span className="eyebrow">ADMİN YANITI</span>
-              <h3>Öğrenciye mesaj gönder</h3>
-              <p>Mesaj varsayılan kanal üzerinden gönderim kuyruğuna alınır.</p>
+        <>
+          <HandoffQueue
+            handoffs={conversation.handoffs}
+            messages={conversation.items}
+            busy={busy}
+            onResolve={onResolveHandoff}
+          />
+          <div className="student-conversation-layout">
+            <div className="student-message-timeline">
+              {conversation.items.length ? (
+                conversation.items.map((item) => (
+                  <MessageBubble
+                    key={item.id}
+                    direction={item.direction === 'OUTBOUND' ? 'outbound' : 'inbound'}
+                    channel={item.status}
+                    time={formatDateTime(item.occurredAt)}
+                  >
+                    <div>
+                      {item.content ?? 'İçerik çözülemedi'}
+                      {item.context?.eventKey ? (
+                        <small className="message-context-label">
+                          Bağlam: {item.context.eventKey} · {item.context.resolutionMethod}
+                        </small>
+                      ) : null}
+                    </div>
+                  </MessageBubble>
+                ))
+              ) : (
+                <EmptyState
+                  title="Konuşma yok"
+                  description="Bu öğrenciyle henüz mesajlaşma gerçekleşmemiş."
+                  icon={MessageCircle}
+                />
+              )}
             </div>
-            <form onSubmit={onReply}>
-              <textarea
-                name="content"
-                required
-                maxLength={4096}
-                placeholder="Samimi ve kısa bir yanıt yazın..."
-              />
-              <Button type="submit" loading={busy}>
-                <Send aria-hidden="true" />
-                Gönder
-              </Button>
-            </form>
-            {conversation.intents.length ? (
-              <div className="student-intent-list">
-                <strong>Gönderim sorunları</strong>
-                <small className="muted">Mesaj akışından ayrı operasyon kayıtları</small>
-                {conversation.intents.slice(0, 5).map((intent) => (
-                  <div key={intent.id}>
-                    <span>{label(intent.category)}</span>
-                    <Badge tone={statusTone[intent.status] ?? 'neutral'}>
-                      {label(intent.status)}
-                    </Badge>
-                    {intent.suppressionReason ? (
-                      <small className="student-intent-reason">{intent.suppressionReason}</small>
-                    ) : null}
-                  </div>
-                ))}
+            <aside className="student-reply-panel">
+              <div>
+                <span className="eyebrow">ADMİN YANITI</span>
+                <h3>Öğrenciye mesaj gönder</h3>
+                <p>Mesaj varsayılan kanal üzerinden gönderim kuyruğuna alınır.</p>
               </div>
-            ) : null}
-          </aside>
-        </div>
+              <form onSubmit={onReply}>
+                <textarea
+                  name="content"
+                  required
+                  maxLength={4096}
+                  placeholder="Samimi ve kısa bir yanıt yazın..."
+                />
+                <Button type="submit" loading={busy}>
+                  <Send aria-hidden="true" />
+                  Gönder
+                </Button>
+              </form>
+              {conversation.intents.length ? (
+                <div className="student-intent-list">
+                  <strong>Gönderim sorunları</strong>
+                  <small className="muted">Mesaj akışından ayrı operasyon kayıtları</small>
+                  {conversation.intents.slice(0, 5).map((intent) => (
+                    <div key={intent.id}>
+                      <span>{label(intent.category)}</span>
+                      <Badge tone={statusTone[intent.status] ?? 'neutral'}>
+                        {label(intent.status)}
+                      </Badge>
+                      {intent.suppressionReason ? (
+                        <small className="student-intent-reason">{intent.suppressionReason}</small>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </aside>
+          </div>
+        </>
       ) : null}
     </div>
+  );
+}
+
+function HandoffQueue({
+  handoffs,
+  messages,
+  busy,
+  onResolve,
+}: {
+  handoffs: Conversation['handoffs'];
+  messages: Conversation['items'];
+  busy: boolean;
+  onResolve: (handoffId: string, content?: string) => Promise<void>;
+}) {
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const open = handoffs.filter((handoff) => handoff.status === 'OPEN');
+  const resolved = handoffs.filter((handoff) => handoff.status === 'RESOLVED');
+  return (
+    <section className="student-handoff-queue">
+      <div className="section-heading">
+        <div>
+          <span className="eyebrow">ADMİN AKSİYONU</span>
+          <h3>Handover kayıtları</h3>
+        </div>
+        <Badge tone={open.length ? 'warning' : 'success'}>{open.length} açık</Badge>
+      </div>
+      {open.length ? (
+        <div className="student-handoff-list">
+          {open.map((handoff) => {
+            const content = drafts[handoff.id]?.trim() ?? '';
+            const sourceMessage = messages.find(
+              (message) => message.id === handoff.sourceMessageId,
+            );
+            return (
+              <article key={handoff.id}>
+                <div className="student-handoff-meta">
+                  <LifeBuoy aria-hidden="true" />
+                  <strong>Yanıt bekliyor</strong>
+                  <span>{formatDateTime(handoff.createdAt)}</span>
+                </div>
+                <div className="student-handoff-context">
+                  <strong>Öğrencinin mesajı</strong>
+                  <p>{sourceMessage?.content ?? 'Kaynak mesaj içeriği görüntülenemedi.'}</p>
+                  <small>Yönlendirme: {handoff.reason}</small>
+                </div>
+                <textarea
+                  value={drafts[handoff.id] ?? ''}
+                  onChange={(event) =>
+                    setDrafts((current) => ({ ...current, [handoff.id]: event.target.value }))
+                  }
+                  maxLength={4096}
+                  placeholder="İsterseniz öğrenciye gönderilecek mesajı yazın..."
+                />
+                <Button
+                  type="button"
+                  loading={busy}
+                  onClick={() => void onResolve(handoff.id, content || undefined)}
+                >
+                  {content ? <Send aria-hidden="true" /> : <Check aria-hidden="true" />}
+                  {content ? 'Yanıtı gönder ve kapat' : 'Mesajsız kapat'}
+                </Button>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="muted">Yanıt bekleyen handover bulunmuyor.</p>
+      )}
+      {resolved.length ? (
+        <details className="student-handoff-history">
+          <summary>Çözülen handover’lar ({resolved.length})</summary>
+          {resolved.map((handoff) => (
+            <div key={handoff.id}>
+              <span>{handoff.resolvedAt ? formatDateTime(handoff.resolvedAt) : 'Çözüldü'}</span>
+              <p>{handoff.reason}</p>
+            </div>
+          ))}
+        </details>
+      ) : null}
+    </section>
   );
 }
 

@@ -1,10 +1,10 @@
 'use client';
 import { Alert, Badge, Button, EmptyState, Metric, PageHeader, Skeleton } from '@meditation/ui';
-import { AlertTriangle, Clock3, Inbox, RefreshCw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Clock3, Inbox, LifeBuoy, RefreshCw, ShieldCheck } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 type Data = {
-  counts: { pending: number; failed: number; suppressed: number };
+  counts: { pending: number; failed: number; suppressed: number; openHandoffs: number };
   recentIntents: Array<{
     id: string;
     category: string;
@@ -27,6 +27,13 @@ type Data = {
     attempts: number;
     errorCode?: string;
     updatedAt: string;
+  }>;
+  handoffs: Array<{
+    id: string;
+    studentId: string;
+    reason: string;
+    createdAt: string;
+    student: { status: string };
   }>;
 };
 const tone = (status: string): 'success' | 'warning' | 'danger' | 'neutral' =>
@@ -95,7 +102,46 @@ export default function OperationsPage() {
               value={data.counts.suppressed}
               detail="Politika nedeniyle"
             />
+            <Metric
+              icon={LifeBuoy}
+              label="Açık handover"
+              value={data.counts.openHandoffs}
+              detail="Admin yanıtı bekliyor"
+            />
           </div>
+          <section className="operation-handoffs">
+            <div className="section-heading">
+              <h2>Yanıt bekleyen handover’lar</h2>
+              <Badge tone={data.handoffs.length ? 'warning' : 'success'}>
+                {data.handoffs.length}
+              </Badge>
+            </div>
+            {data.handoffs.length ? (
+              <div className="operation-list">
+                {data.handoffs.map((handoff) => (
+                  <article key={handoff.id}>
+                    <div>
+                      <a href={`/students/${handoff.studentId}`}>
+                        Öğrenci {handoff.studentId.slice(0, 8)}
+                      </a>
+                      <small>
+                        {handoff.student.status} ·{' '}
+                        {new Date(handoff.createdAt).toLocaleString('tr-TR')}
+                      </small>
+                    </div>
+                    <Badge tone="warning">Yanıt bekliyor</Badge>
+                    <p className="operation-handoff-reason">{handoff.reason}</p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={LifeBuoy}
+                title="Açık handover yok"
+                description="Admin yanıtı bekleyen öğrenci mesajı bulunmuyor."
+              />
+            )}
+          </section>
           <div className="operations-grid">
             <section>
               <div className="section-heading">

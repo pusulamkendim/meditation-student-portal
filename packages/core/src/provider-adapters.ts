@@ -12,6 +12,9 @@ export class WhatsAppCloudAdapter implements ChannelAdapter {
     private readonly request: Fetch = fetch,
   ) {}
   async send(message: OutboundChannelMessage): Promise<ChannelSendResult> {
+    if ((message.quickReplies?.length ?? 0) > 3) {
+      throw new Error('WhatsApp supports at most 3 quick-reply buttons.');
+    }
     const response = await this.request(
       `https://graph.facebook.com/${this.graphVersion}/${this.phoneNumberId}/messages`,
       {

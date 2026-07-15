@@ -39,6 +39,26 @@ function normalizeCommand(value: string): string {
   return normalizeAnswer(value).toLocaleLowerCase('tr-TR');
 }
 
+export function registrationQuickReplies(
+  eventKey: SystemEventKey,
+): Array<{ id: string; title: string }> | undefined {
+  switch (eventKey) {
+    case 'PRIVACY_NOTICE_SENT':
+      return [{ id: 'ONAYLIYORUM', title: 'Onaylıyorum' }];
+    case 'CHANNEL_OPT_IN_REQUEST':
+      return [{ id: 'EVET', title: 'Evet' }];
+    case 'AGENT_REPLY_AI_CONSENT_REQUEST':
+      return [
+        { id: 'EVET', title: 'Evet' },
+        { id: 'HAYIR', title: 'Hayır' },
+      ];
+    case 'PAYMENT_INSTRUCTIONS':
+      return [{ id: 'ÖDEME YAPTIM', title: 'Ödeme yaptım' }];
+    default:
+      return undefined;
+  }
+}
+
 export function isValidFullName(value: string): boolean {
   const normalized = normalizeAnswer(value);
   return (
@@ -232,7 +252,12 @@ export class RegistrationInboundProcessor {
           dueAt: now,
           expiresAt: new Date(now.getTime() + 86400000),
           aggregateVersion: student.version,
-          payload: { rendered, reactive: true, eventKey },
+          payload: {
+            rendered,
+            reactive: true,
+            eventKey,
+            quickReplies: registrationQuickReplies(eventKey),
+          },
         },
       });
       await tx.inboxEvent.update({

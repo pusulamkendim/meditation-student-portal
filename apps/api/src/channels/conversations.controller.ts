@@ -1,5 +1,17 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common';
-import { FieldEncryption, type ApplicationConfig } from '@meditation/core';
+import {
+  BadRequestException,
+  Body,
+  ConflictException,
+  Controller,
+  Get,
+  Inject,
+  NotFoundException,
+  Param,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { CLOCK_TOKEN, FieldEncryption, type ApplicationConfig, type Clock } from '@meditation/core';
 import { MessageIntentStatus } from '@meditation/database';
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
@@ -9,6 +21,7 @@ import { AdminSessionGuard } from '../auth/admin-session.guard.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 const replySchema = z.object({ content: z.string().min(1).max(4096) });
+const resolveHandoffSchema = z.object({ content: z.string().trim().min(1).max(4096).optional() });
 const operationalIntentStatuses: MessageIntentStatus[] = [
   MessageIntentStatus.PENDING,
   MessageIntentStatus.CLAIMED,
@@ -23,6 +36,7 @@ export class ConversationsController {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(APPLICATION_CONFIG) config: ApplicationConfig,
+    @Inject(CLOCK_TOKEN) private readonly clock: Clock,
   ) {
     if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID)
       throw new Error('Message encryption keys are required.');
@@ -88,6 +102,7 @@ export class ConversationsController {
           take: 20,
           orderBy: { createdAt: 'desc' },
         },
+        handoffs: { take: 50, orderBy: { createdAt: 'desc' } },
       },
     });
     const items = await this.prisma.message.findMany({
@@ -231,6 +246,14 @@ export class ConversationsController {
         createdAt: intent.createdAt.toISOString(),
         suppressionReason: intent.suppressionReason,
       })),
+      handoffs: student.handoffs.map((handoff) => ({
+        id: handoff.id,
+        reason: handoff.reason,
+        status: handoff.status,
+        sourceMessageId: handoff.sourceMessageId,
+        createdAt: handoff.createdAt.toISOString(),
+        resolvedAt: handoff.resolvedAt?.toISOString(),
+      })),
     };
   }
   @Post(':studentId/reply')
@@ -240,7 +263,7 @@ export class ConversationsController {
     const student = await this.prisma.student.findUniqueOrThrow({ where: { id: studentId } });
     if (!student.defaultChannelIdentityId) throw new Error('Student has no default channel.');
     return this.prisma.$transaction(async (tx) => {
-      const now = new Date();
+      const now = this.clock.now();
       const encrypted = this.encryption.encrypt(value.content, `admin-reply:${studentId}`);
       const intent = await tx.messageIntent.create({
         data: {
@@ -269,6 +292,97 @@ export class ConversationsController {
       return intent;
     });
   }
+
+  @Post(':studentId/handoffs/:handoffId/resolve')
+  @UseGuards(AdminCsrfGuard)
+  async resolveHandoff(
+    @Param('studentId') studentId: string,
+    @Param('handoffId') handoffId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const value = resolveHandoffSchema.parse(body);
+    return this.prisma.$transaction(async (tx) => {
+      const [handoff, student] = await Promise.all([
+        tx.handoff.findUnique({ where: { id: handoffId } }),
+        tx.student.findUnique({ where: { id: studentId } }),
+      ]);
+      if (!handoff || handoff.studentId !== studentId)
+        throw new NotFoundException('Handover bulunamadı.');
+      if (!student) throw new NotFoundException('Öğrenci bulunamadı.');
+      if (handoff.status !== 'OPEN') throw new ConflictException('Handover zaten kapatılmış.');
+      if (value.content && !student.defaultChannelIdentityId)
+        throw new BadRequestException('Öğrencinin varsayılan mesaj kanalı bulunmuyor.');
+
+      const resolved = await tx.handoff.updateMany({
+        where: { id: handoffId, studentId, status: 'OPEN' },
+        data: {
+          status: 'RESOLVED',
+          resolvedByAdminId: request.admin!.id,
+          resolvedAt: this.clock.now(),
+        },
+      });
+      if (resolved.count !== 1) throw new ConflictException('Handover eş zamanlı kapatıldı.');
+
+      let intentId: string | undefined;
+      if (value.content) {
+        const now = this.clock.now();
+        const encrypted = this.encryption.encrypt(value.content, `admin-reply:${studentId}`);
+        const intent = await tx.messageIntent.create({
+          data: {
+            studentId,
+            channelIdentityId: student.defaultChannelIdentityId!,
+            category: 'ADMIN_REPLY',
+            idempotencyKey: `handoff-resolution:${handoffId}`,
+            dueAt: now,
+            expiresAt: new Date(now.getTime() + 3600000),
+            aggregateVersion: student.version,
+            payload: {
+              contentEncrypted: encrypted.ciphertext.toString('base64'),
+              contentKeyId: encrypted.keyId,
+              handoffId,
+            },
+          },
+        });
+        intentId = intent.id;
+        await tx.outboxEvent.create({
+          data: {
+            topic: 'message.intents',
+            aggregateType: 'MessageIntent',
+            aggregateId: intent.id,
+            eventType: 'MessageIntentCreated',
+            payload: { intentId: intent.id },
+          },
+        });
+      }
+
+      await Promise.all([
+        tx.notificationDelivery.updateMany({
+          where: {
+            eventType: 'ADMIN_HANDOFF_REQUIRED',
+            providerMessageId: handoffId,
+            status: 'SENT',
+          },
+          data: { status: 'RESOLVED' },
+        }),
+        tx.auditLog.create({
+          data: {
+            actorType: 'ADMIN',
+            actorId: request.admin!.id,
+            action: value.content ? 'HANDOFF_RESOLVED_WITH_REPLY' : 'HANDOFF_RESOLVED',
+            entityType: 'Handoff',
+            entityId: handoffId,
+            safeDiff: { studentId, replyQueued: Boolean(value.content) },
+            reason: 'Admin resolved student handover',
+            requestId: randomUUID(),
+            correlationId: randomUUID(),
+          },
+        }),
+      ]);
+
+      return { id: handoffId, status: 'RESOLVED', intentId };
+    });
+  }
 }
 
 @Controller('v1/admin/operations')
@@ -278,10 +392,20 @@ export class OperationsController {
 
   @Get()
   async overview() {
-    const [pending, failed, suppressed, recentIntents, webhooks, deliveries] = await Promise.all([
+    const [
+      pending,
+      failed,
+      suppressed,
+      openHandoffCount,
+      recentIntents,
+      webhooks,
+      deliveries,
+      handoffs,
+    ] = await Promise.all([
       this.prisma.messageIntent.count({ where: { status: 'PENDING' } }),
       this.prisma.messageIntent.count({ where: { status: 'FAILED' } }),
       this.prisma.messageIntent.count({ where: { status: 'SUPPRESSED' } }),
+      this.prisma.handoff.count({ where: { status: 'OPEN' } }),
       this.prisma.messageIntent.findMany({
         where: { status: { in: ['PENDING', 'FAILED', 'SUPPRESSED'] } },
         take: 20,
@@ -312,7 +436,25 @@ export class OperationsController {
           updatedAt: true,
         },
       }),
+      this.prisma.handoff.findMany({
+        where: { status: 'OPEN' },
+        take: 20,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          studentId: true,
+          reason: true,
+          createdAt: true,
+          student: { select: { status: true } },
+        },
+      }),
     ]);
-    return { counts: { pending, failed, suppressed }, recentIntents, webhooks, deliveries };
+    return {
+      counts: { pending, failed, suppressed, openHandoffs: openHandoffCount },
+      recentIntents,
+      webhooks,
+      deliveries,
+      handoffs,
+    };
   }
 }

@@ -55,6 +55,7 @@ export class AdminAuthController {
   ): Promise<{
     csrfToken: string;
     expiresAt: string;
+    absoluteExpiresAt: string;
     admin: { id: string; email: string; role: string };
   }> {
     const parsed = loginSchema.safeParse(body);
@@ -70,12 +71,13 @@ export class AdminAuthController {
       secure: this.config.NODE_ENV === 'staging' || this.config.NODE_ENV === 'production',
       sameSite: 'strict',
       path: '/v1/admin',
-      expires: result.expiresAt,
+      expires: result.absoluteExpiresAt,
     });
     reply.header('cache-control', 'no-store');
     return {
       csrfToken: result.csrfToken,
       expiresAt: result.expiresAt.toISOString(),
+      absoluteExpiresAt: result.absoluteExpiresAt.toISOString(),
       admin: result.admin,
     };
   }

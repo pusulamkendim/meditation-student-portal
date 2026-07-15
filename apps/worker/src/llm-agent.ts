@@ -487,6 +487,19 @@ export class LlmAgentProcessor {
             responseOwnerId: intent.id,
           },
         });
+        await tx.outboxEvent.create({
+          data: {
+            topic: 'admin.notifications',
+            aggregateType: 'Handoff',
+            aggregateId: handoff.id,
+            eventType: 'ADMIN_HANDOFF_REQUIRED',
+            payload: {
+              studentId,
+              handoffId: handoff.id,
+              sourceMessageId: inbox.message?.id,
+            },
+          },
+        });
         if (ragQueryLogId)
           await tx.ragQueryLog.update({
             where: { id: ragQueryLogId },

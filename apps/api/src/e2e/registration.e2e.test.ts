@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 import {
   FakeClock,
+  CLOCK_TOKEN,
   FieldEncryption,
   loadApplicationConfig,
   type ApplicationConfig,
@@ -20,6 +21,7 @@ import {
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { LlmAgentProcessor } from '../../../worker/src/llm-agent.js';
+import { AdminPanelNotificationProcessor } from '../../../worker/src/admin-panel-notification.js';
 import { InboundIntentClassifier } from '../../../worker/src/inbound-intent.js';
 import { InboundIntentRouter } from '../../../worker/src/inbound-intent-router.js';
 import { MessageDispatcher } from '../../../worker/src/message-dispatcher.js';
@@ -28,8 +30,14 @@ import { processPracticeResponse } from '../../../worker/src/practice-response.j
 import { RegistrationInboundProcessor } from '../../../worker/src/registration-inbound.js';
 import { TelegramWebhookController } from '../channels/telegram-webhook.controller.js';
 import { TelegramWebhookService } from '../channels/telegram-webhook.service.js';
+import {
+  ConversationsController,
+  OperationsController,
+} from '../channels/conversations.controller.js';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 import { PrismaService } from '../database/prisma.service.js';
+import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
+import { AdminSessionGuard } from '../auth/admin-session.guard.js';
 import { SystemMessageOrchestrator } from '../message-catalog/system-message-orchestrator.js';
 import { PracticeService } from '../practice/practice.service.js';
 
@@ -81,14 +89,33 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     prisma = new PrismaClient({ datasourceUrl: databaseUrl });
     await syncSystemEventRegistry(prisma);
     await syncDefaultRegistrationMessages(prisma);
+    await prisma.standardMessageVersion.updateMany({
+      where: { status: 'PUBLISHED' },
+      data: { effectiveAt: new Date('2026-07-01T00:00:00.000Z') },
+    });
     const module = await Test.createTestingModule({
-      controllers: [TelegramWebhookController],
+      controllers: [TelegramWebhookController, ConversationsController, OperationsController],
       providers: [
         TelegramWebhookService,
         PrismaService,
         { provide: APPLICATION_CONFIG, useValue: config },
+        { provide: CLOCK_TOKEN, useValue: clock },
       ],
-    }).compile();
+    })
+      .overrideGuard(AdminSessionGuard)
+      .useValue({
+        canActivate: (context: {
+          switchToHttp: () => { getRequest: () => Record<string, unknown> };
+        }) => {
+          context.switchToHttp().getRequest().admin = {
+            id: '00000000-0000-4000-8000-000000000001',
+          };
+          return true;
+        },
+      })
+      .overrideGuard(AdminCsrfGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
     app = module.createNestApplication<NestFastifyApplication>(new FastifyAdapter(), {
       rawBody: true,
     });
@@ -640,7 +667,16 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       '00000000-0000-4000-8000-000000000001',
     );
     await dispatchPending(studentId);
-    const planConfirmation = collector.sent.at(-1)?.content ?? '';
+    const planConfirmationIntent = await prisma.messageIntent.findFirstOrThrow({
+      where: {
+        studentId,
+        payload: { path: ['eventKey'], equals: 'PRACTICE_PLAN_CONFIRMED' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const planConfirmation =
+      collector.sent.find((message) => message.intentId === planConfirmationIntent.id)?.content ??
+      '';
     expect(planConfirmation).toContain('her pratik 15 dakika');
     expect(planConfirmation).not.toContain('her pratik 30 dakika');
     const planReply = await sendPracticeResponse(current.senderId, 'ONAYLIYORUM');
@@ -815,6 +851,390 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     expect(observations).toHaveLength(4);
   });
 
+  it('FLOW-05 replays the latest production question sequence', async () => {
+    clock.set('2026-07-15T09:00:00.000Z');
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+    const plan = await prisma.practicePlan.findFirstOrThrow({
+      where: { studentId, status: 'ACTIVE' },
+      include: { slots: true },
+    });
+    await prisma.practiceSession.create({
+      data: {
+        studentId,
+        practicePlanId: plan.id,
+        practiceSlotId: plan.slots[0]!.id,
+        serviceDate: new Date('2026-07-15T00:00:00.000Z'),
+        startAt: new Date('2026-07-15T05:00:00.000Z'),
+        durationMinutes: 15,
+        status: 'COMPLETED',
+      },
+    });
+    const handoffsBefore = await prisma.handoff.count({ where: { studentId } });
+    const observations = [];
+
+    for (const item of [
+      { text: 'Merhaba en son pratigim ne zamandi', result: 'processed' as const },
+      { text: 'Uyelik durumum nasil', result: 'processed' as const },
+      { text: 'Ismim ne', result: 'handoff' as const },
+      { text: 'Ne zaman ileteceksin', result: 'handoff' as const },
+    ]) {
+      const response = await sendAgentQuestion(current.senderId, item.text, item.result);
+      const sourceMessage = await prisma.message.findUniqueOrThrow({
+        where: { inboxEventId: response.inboxId },
+      });
+      const [decision, usage] = await Promise.all([
+        prisma.inboundIntentDecision.findUniqueOrThrow({
+          where: { inboxEventId: response.inboxId },
+        }),
+        prisma.llmUsageLog.findMany({
+          where: {
+            OR: [
+              { sourceMessageId: sourceMessage.id },
+              { metadata: { path: ['inboxEventId'], equals: response.inboxId } },
+            ],
+          },
+          orderBy: { createdAt: 'asc' },
+        }),
+      ]);
+      observations.push({
+        text: item.text,
+        decision: {
+          domain: decision.domain,
+          action: decision.action,
+          confidence: decision.confidence,
+          source: decision.contextSource,
+        },
+        owner: response.ownership.owner,
+        answer: response.answer,
+        usage: usage.map((row) => ({
+          task: row.task,
+          status: row.status,
+          inputTokens: row.inputTokens,
+          outputTokens: row.outputTokens,
+          totalTokens: row.totalTokens,
+          estimatedMicroUsd: row.estimatedMicroUsd.toString(),
+        })),
+      });
+    }
+
+    const handoffDelta = (await prisma.handoff.count({ where: { studentId } })) - handoffsBefore;
+    console.info(
+      `PRODUCTION_QUESTION_REPLAY ${JSON.stringify({ observations, handoffDelta }, null, 2)}`,
+    );
+    expect(observations).toHaveLength(4);
+    expect(observations.every((item) => item.usage.length >= 1)).toBe(true);
+    expect(observations[0]!.answer).toContain('15.07.2026 08:00');
+  });
+
+  it('EXPL-01 observes whether a multi-domain question answers both parts', async () => {
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+
+    const response = await sendAgentQuestion(
+      current.senderId,
+      'Paketim ne zaman bitiyor ve görüşmem ne zaman?',
+    );
+    const decision = await prisma.inboundIntentDecision.findUniqueOrThrow({
+      where: { inboxEventId: response.inboxId },
+    });
+
+    expect(decision.domain).toBe('MEETING');
+    expect(response.answer).toContain('17.07.2026 18:00');
+    expect(response.answer).not.toContain('2026-08-15');
+  });
+
+  it('EXPL-02 observes whether a compound practice question preserves time and duration', async () => {
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+
+    const response = await sendAgentQuestion(
+      current.senderId,
+      'Bir sonraki pratiğim saat kaçta ve kaç dakika?',
+    );
+
+    expect(response.answer).toContain('30 dakika');
+    expect(response.answer).not.toContain('16.07.2026 08:00');
+  });
+
+  it('EXPL-03 observes whether an available Meet URL can reach the agent response', async () => {
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+    const meeting = await prisma.weeklyMeeting.findFirstOrThrow({
+      where: { meetingSeries: { studentId } },
+    });
+    await prisma.weeklyMeeting.update({
+      where: { id: meeting.id },
+      data: { meetUrlEncrypted: Buffer.from('encrypted-meet-url'), meetUrlKeyId: 'e2e' },
+    });
+
+    const response = await sendAgentQuestion(current.senderId, 'Görüşme linkim ne?');
+    const contextRead = await prisma.agentContextRead.findFirstOrThrow({
+      where: { studentId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    expect(contextRead.sections).toContain('MEETINGS');
+    expect(contextRead.rowCount).toBeGreaterThan(0);
+    expect(response.answer).not.toContain('meet.google.com');
+  });
+
+  it('EXPL-04 observes reflection loss in a combined completion and reflection message', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    const result = await sendPracticeResponse(
+      current.senderId,
+      'Yaptım, başta odaklanmakta zorlandım ama sonra sakinleştim.',
+    );
+
+    expect(result.processed).toBe(true);
+    expect(
+      (await prisma.practiceSession.findUniqueOrThrow({ where: { id: current.sessionId } })).status,
+    ).toBe('COMPLETED');
+    expect(
+      await prisma.practiceReflection.count({
+        where: { practiceSessionId: current.sessionId },
+      }),
+    ).toBe(0);
+  });
+
+  it('EXPL-05 observes how contradictory completion and skip language changes state', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    const result = await sendPracticeResponse(
+      current.senderId,
+      'Yaptım diyecektim ama aslında yapamadım.',
+    );
+    const decision = await prisma.inboundIntentDecision.findUniqueOrThrow({
+      where: { inboxEventId: result.inboxId },
+    });
+
+    expect(decision).toMatchObject({ domain: 'PRACTICE', action: 'SKIP' });
+    expect(
+      (await prisma.practiceSession.findUniqueOrThrow({ where: { id: current.sessionId } })).status,
+    ).toBe('SKIPPED');
+  });
+
+  it('EXPL-06 observes a retrospective completion report for a missed practice', async () => {
+    clock.set('2026-07-17T09:00:00.000Z');
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+    const session = await prisma.practiceSession.findFirstOrThrow({ where: { studentId } });
+    await prisma.practiceSession.update({
+      where: { id: session.id },
+      data: { status: 'MISSED', startAt: new Date('2026-07-16T18:00:00.000Z') },
+    });
+
+    const result = await sendPracticeResponse(current.senderId, 'Dünkü akşam pratiğimi yaptım.');
+
+    expect(result.processed).toBe(false);
+    expect(
+      (await prisma.practiceSession.findUniqueOrThrow({ where: { id: session.id } })).status,
+    ).toBe('MISSED');
+  });
+
+  it('EXPL-07 observes whether the student can query their registered name', async () => {
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+
+    const response = await sendAgentQuestion(
+      current.senderId,
+      'Sistemde kayıtlı ismim ne?',
+      'handoff',
+    );
+
+    expect(response.ownership.owner).toBe('ADMIN_HANDOFF');
+    expect(response.answer).not.toContain('Ayşe Yılmaz');
+  });
+
+  it('EXPL-08 observes whether a handoff follow-up reuses the open handoff', async () => {
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+    const before = await prisma.handoff.count({ where: { studentId, status: 'OPEN' } });
+
+    await sendAgentQuestion(current.senderId, 'Sistemde kayıtlı ismim ne?', 'handoff');
+    await sendAgentQuestion(current.senderId, 'Ne zaman dönüş yapacaksın?', 'handoff');
+
+    expect((await prisma.handoff.count({ where: { studentId, status: 'OPEN' } })) - before).toBe(2);
+  });
+
+  it('EXPL-09 keeps a practice awaiting when a safety message arrives', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    const result = await sendPracticeResponse(
+      current.senderId,
+      'Pratiği yaptım ama kendime zarar vermeyi düşünüyorum.',
+    );
+    const decision = await prisma.inboundIntentDecision.findUniqueOrThrow({
+      where: { inboxEventId: result.inboxId },
+    });
+
+    expect(decision).toMatchObject({ domain: 'SAFETY', action: 'HANDOFF' });
+    expect(
+      (await prisma.practiceSession.findUniqueOrThrow({ where: { id: current.sessionId } })).status,
+    ).toBe('AWAITING_RESPONSE');
+  });
+
+  it('EXPL-10 observes next-practice visibility beyond the first context page', async () => {
+    clock.set('2026-08-10T09:00:00.000Z');
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+    const plan = await prisma.practicePlan.findFirstOrThrow({
+      where: { studentId, status: 'ACTIVE' },
+      include: { slots: { orderBy: { slotKey: 'asc' } } },
+    });
+    await prisma.practiceSession.deleteMany({ where: { studentId } });
+    const historical = Array.from({ length: 50 }, (_, index) => {
+      const dayOffset = Math.floor(index / 2);
+      const slot = plan.slots[index % 2]!;
+      const serviceDate = new Date(Date.UTC(2026, 6, 15 + dayOffset));
+      const startAt = new Date(serviceDate);
+      startAt.setUTCHours(index % 2 === 0 ? 5 : 18);
+      return {
+        studentId,
+        practicePlanId: plan.id,
+        practiceSlotId: slot.id,
+        serviceDate,
+        startAt,
+        durationMinutes: 15,
+        status: 'COMPLETED' as const,
+      };
+    });
+    await prisma.practiceSession.createMany({ data: historical });
+    const future = await prisma.practiceSession.create({
+      data: {
+        studentId,
+        practicePlanId: plan.id,
+        practiceSlotId: plan.slots[0]!.id,
+        serviceDate: new Date('2026-08-11T00:00:00.000Z'),
+        startAt: new Date('2026-08-11T05:00:00.000Z'),
+        durationMinutes: 15,
+      },
+    });
+
+    const response = await sendAgentQuestion(
+      current.senderId,
+      'Bir sonraki pratiğim ne zaman?',
+      'handoff',
+    );
+
+    expect(future.status).toBe('SCHEDULED');
+    expect(response.ownership.owner).toBe('ADMIN_HANDOFF');
+  });
+
+  it('HANDOFF-01 delivers a handoff to admin surfaces and resolves it with a student reply', async () => {
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+
+    await sendAgentQuestion(current.senderId, 'Sistemde kayıtlı ismim ne?', 'handoff');
+    const handoff = await prisma.handoff.findFirstOrThrow({
+      where: { studentId, status: 'OPEN' },
+      orderBy: { createdAt: 'desc' },
+    });
+    const notificationEvent = await prisma.outboxEvent.findFirstOrThrow({
+      where: {
+        topic: 'admin.notifications',
+        aggregateType: 'Handoff',
+        aggregateId: handoff.id,
+        eventType: 'ADMIN_HANDOFF_REQUIRED',
+      },
+    });
+    const adminNotifications = new AdminPanelNotificationProcessor(prisma);
+    expect(await adminNotifications.process(notificationEvent.id)).toBe('processed');
+    expect(await adminNotifications.process(notificationEvent.id)).toBe('processed');
+    expect(
+      await prisma.notificationDelivery.count({
+        where: { deliveryKey: `admin-panel:${notificationEvent.id}` },
+      }),
+    ).toBe(1);
+
+    const operations = await app.inject({ method: 'GET', url: '/v1/admin/operations' });
+    expect(operations.statusCode).toBe(200);
+    const overview = operations.json<{
+      counts: { openHandoffs: number };
+      handoffs: Array<{ id: string; studentId: string }>;
+      deliveries: Array<{ eventType: string; status: string }>;
+    }>();
+    expect(overview.counts.openHandoffs).toBeGreaterThan(0);
+    expect(overview.handoffs).toContainEqual(
+      expect.objectContaining({ id: handoff.id, studentId }),
+    );
+    expect(overview.deliveries).toContainEqual(
+      expect.objectContaining({ eventType: 'ADMIN_HANDOFF_REQUIRED', status: 'SENT' }),
+    );
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/v1/admin/conversations/${studentId}`,
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(
+      detail.json<{ handoffs: Array<{ id: string; status: string }> }>().handoffs,
+    ).toContainEqual(expect.objectContaining({ id: handoff.id, status: 'OPEN' }));
+
+    const adminReply = 'Merhaba Ayşe, kayıtlı adını kontrol ettim. Sistemde Ayşe Yılmaz görünüyor.';
+    const resolved = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/conversations/${studentId}/handoffs/${handoff.id}/resolve`,
+      payload: { content: adminReply },
+    });
+    expect(resolved.statusCode).toBe(201);
+    const resolution = resolved.json<{ status: string; intentId: string }>();
+    expect(resolution.status).toBe('RESOLVED');
+    expect(resolution.intentId).toBeTruthy();
+    await dispatcher.dispatch(resolution.intentId);
+
+    expect(await prisma.handoff.findUniqueOrThrow({ where: { id: handoff.id } })).toMatchObject({
+      status: 'RESOLVED',
+    });
+    expect(
+      collector.sent.find((message) => message.intentId === resolution.intentId)?.content,
+    ).toBe(adminReply);
+    expect(
+      await prisma.notificationDelivery.findFirstOrThrow({
+        where: { eventType: 'ADMIN_HANDOFF_REQUIRED', providerMessageId: handoff.id },
+      }),
+    ).toMatchObject({ status: 'RESOLVED' });
+
+    await sendAgentQuestion(
+      current.senderId,
+      'Bu konu hakkında tekrar desteğe ihtiyacım var.',
+      'handoff',
+    );
+    const secondHandoff = await prisma.handoff.findFirstOrThrow({
+      where: { studentId, status: 'OPEN' },
+      orderBy: { createdAt: 'desc' },
+    });
+    const secondNotificationEvent = await prisma.outboxEvent.findFirstOrThrow({
+      where: {
+        topic: 'admin.notifications',
+        aggregateType: 'Handoff',
+        aggregateId: secondHandoff.id,
+      },
+    });
+    const intentsBefore = await prisma.messageIntent.count({ where: { studentId } });
+    const resolvedWithoutReply = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/conversations/${studentId}/handoffs/${secondHandoff.id}/resolve`,
+      payload: {},
+    });
+    expect(resolvedWithoutReply.statusCode).toBe(201);
+    expect(resolvedWithoutReply.json<{ intentId?: string }>().intentId).toBeUndefined();
+    expect(await prisma.messageIntent.count({ where: { studentId } })).toBe(intentsBefore);
+    expect(await adminNotifications.process(secondNotificationEvent.id)).toBe('processed');
+    expect(
+      await prisma.notificationDelivery.findFirstOrThrow({
+        where: { deliveryKey: `admin-panel:${secondNotificationEvent.id}` },
+      }),
+    ).toMatchObject({ status: 'RESOLVED' });
+  });
+
   it('ROUTER-01 does not mutate practice state for a low-confidence completion', async () => {
     const current = await preparePracticeStage('CHECKIN');
     const result = await sendPracticeResponse(current.senderId, 'Sanırım yaptım galiba');
@@ -982,6 +1402,7 @@ async function fakeGeminiFetch(_url: string | URL | Request, init?: RequestInit)
       MEMBERSHIP?: Array<{ endExclusive: string }>;
       PRACTICE?: {
         plan: { slots: Array<{ active: boolean; durationMinutes: number }> } | null;
+        sessions: Array<{ startAt: string; status: string }>;
         nextPractice: { startAt: string };
       };
     };
@@ -998,6 +1419,13 @@ async function fakeGeminiFetch(_url: string | URL | Request, init?: RequestInit)
     answer = `Paketin ${context.sections.MEMBERSHIP![0]!.endExclusive} tarihine kadar geçerli.`;
   } else if (section === 'PRACTICE' && !context.sections.PRACTICE!.plan) {
     answer = "Henüz tanımlanmış bir pratik programın görünmüyor. Bunu Necip'e ileteceğim.";
+  } else if (section === 'PRACTICE' && question.toLocaleLowerCase('tr-TR').includes('en son')) {
+    const latest = context.sections
+      .PRACTICE!.sessions.filter((session) => session.status === 'COMPLETED')
+      .sort((left, right) => right.startAt.localeCompare(left.startAt))[0];
+    answer = latest
+      ? `En son tamamlanan pratiğin ${formatIstanbul(latest.startAt)}.`
+      : 'Henüz tamamlanmış bir pratik görünmüyor.';
   } else if (section === 'PRACTICE' && question.toLocaleLowerCase('tr-TR').includes('kaç dakika')) {
     const total = context.sections
       .PRACTICE!.plan!.slots.filter((slot: { active: boolean }) => slot.active)
@@ -1047,7 +1475,7 @@ function classifyFakeIntent(input: {
     return { domain: 'PRACTICE', action: 'COMPLETE', confidence: 97, source };
   if (/zorlandim|sakinleştim|sakinlestim|hissettim|odaklan/.test(text))
     return { domain: 'PRACTICE', action: 'REFLECT', confidence: 92, source };
-  if (/pratik|kaç dakika|kac dakika/.test(text))
+  if (/pratik|pratig|kaç dakika|kac dakika/.test(text))
     return { domain: 'PRACTICE', action: 'QUERY', confidence: 96, source };
   if (/teşekkür|tesekkur|nasilsin|nasılsın/.test(text))
     return { domain: 'GENERAL', action: 'SMALL_TALK', confidence: 94, source };

@@ -1337,7 +1337,18 @@ a {
   width: 17px;
 }
 .operations-metrics {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+.operation-handoffs {
+  margin-top: var(--space-8);
+  border-top: 1px solid var(--color-border);
+}
+.operation-handoffs .operation-list a {
+  color: var(--color-brand);
+  font-weight: 700;
+}
+.operation-list .operation-handoff-reason {
+  color: var(--color-ink-muted);
 }
 .operations-grid {
   display: grid;
@@ -2192,6 +2203,83 @@ a {
   gap: var(--space-5);
   align-items: start;
 }
+.student-handoff-queue {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+  padding-block: var(--space-4);
+  border-block: 1px solid var(--color-border);
+}
+.student-handoff-list {
+  display: grid;
+  gap: var(--space-4);
+}
+.student-handoff-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.student-handoff-list article > .student-handoff-context,
+.student-handoff-list article > textarea {
+  grid-column: 1 / -1;
+}
+.student-handoff-context {
+  display: grid;
+  gap: 4px;
+  padding-left: var(--space-3);
+  border-left: 3px solid var(--color-warning);
+}
+.student-handoff-context p {
+  margin: 0;
+}
+.student-handoff-context small {
+  color: var(--color-ink-muted);
+}
+.student-handoff-list textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 92px;
+  box-sizing: border-box;
+  padding: var(--space-3);
+  resize: vertical;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+}
+.student-handoff-list article > button {
+  grid-column: 2;
+}
+.student-handoff-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.student-handoff-meta svg {
+  width: 18px;
+  color: var(--color-warning);
+}
+.student-handoff-meta span {
+  color: var(--color-ink-muted);
+  font-size: 0.75rem;
+}
+.student-handoff-history summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.student-handoff-history div {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
+.student-handoff-history p {
+  margin: 0;
+}
 .student-message-timeline {
   min-height: 420px;
   display: flex;
@@ -2212,14 +2300,20 @@ a {
   border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
+  min-width: 0;
+  max-width: 100%;
 }
 .student-reply-panel form {
   display: grid;
   gap: var(--space-3);
+  min-width: 0;
 }
 .student-reply-panel textarea,
 .student-modal-form textarea {
+  width: 100%;
+  min-width: 0;
   min-height: 120px;
+  box-sizing: border-box;
   padding: var(--space-3);
   resize: vertical;
   border: 1px solid var(--color-border-strong);
@@ -2235,15 +2329,22 @@ a {
   border-top: 1px solid var(--color-border);
 }
 .student-intent-list > div {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: var(--space-2);
   font-size: 0.75rem;
 }
+.student-intent-list > div > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
 .student-intent-reason {
   grid-column: 1 / -1;
+  min-width: 0;
   color: var(--color-danger);
   font-size: 0.6875rem;
+  overflow-wrap: anywhere;
 }
 .student-payment-row {
   grid-template-columns: minmax(170px, 1fr) auto minmax(260px, 1.5fr);

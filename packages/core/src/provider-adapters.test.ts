@@ -2,6 +2,26 @@ import { describe, expect, it, vi } from 'vitest';
 import { WhatsAppCloudAdapter } from './provider-adapters.js';
 
 describe('WhatsAppCloudAdapter', () => {
+  it('rejects more than three quick-reply buttons', async () => {
+    const request = vi.fn();
+    const adapter = new WhatsAppCloudAdapter('token', 'phone', 'v23.0', request);
+
+    await expect(
+      adapter.send({
+        intentId: 'intent',
+        recipient: '90500',
+        content: 'Choose',
+        locale: 'tr-TR',
+        idempotencyKey: 'key',
+        quickReplies: [1, 2, 3, 4].map((index) => ({
+          id: `choice-${index}`,
+          title: `Choice ${index}`,
+        })),
+      }),
+    ).rejects.toThrow('WhatsApp supports at most 3 quick-reply buttons.');
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it('sends approved templates with body parameters and quick-reply payloads', async () => {
     const request = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       void input;
