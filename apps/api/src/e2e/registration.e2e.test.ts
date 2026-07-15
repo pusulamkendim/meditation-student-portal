@@ -40,8 +40,10 @@ import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
 import { AdminSessionGuard } from '../auth/admin-session.guard.js';
 import { SystemMessageOrchestrator } from '../message-catalog/system-message-orchestrator.js';
 import { PracticeService } from '../practice/practice.service.js';
+import { PaymentService } from '../registration/payment.service.js';
 
 const runE2e = process.env.RUN_REGISTRATION_E2E === 'true';
+const e2eAdminId = '00000000-0000-4000-8000-000000000001';
 
 class RegistrationProviderCollector implements ChannelAdapter {
   readonly sent: OutboundChannelMessage[] = [];
@@ -84,6 +86,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
   let agent: LlmAgentProcessor;
   let intentRouter: InboundIntentRouter;
   let practice: PracticeService;
+  let payments: PaymentService;
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasourceUrl: databaseUrl });
@@ -92,6 +95,15 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     await prisma.standardMessageVersion.updateMany({
       where: { status: 'PUBLISHED' },
       data: { effectiveAt: new Date('2026-07-01T00:00:00.000Z') },
+    });
+    await prisma.adminUser.upsert({
+      where: { id: e2eAdminId },
+      create: {
+        id: e2eAdminId,
+        email: 'e2e-admin@example.com',
+        passwordHash: 'not-used-by-e2e',
+      },
+      update: { active: true },
     });
     const module = await Test.createTestingModule({
       controllers: [TelegramWebhookController, ConversationsController, OperationsController],
@@ -108,7 +120,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
           switchToHttp: () => { getRequest: () => Record<string, unknown> };
         }) => {
           context.switchToHttp().getRequest().admin = {
-            id: '00000000-0000-4000-8000-000000000001',
+            id: e2eAdminId,
           };
           return true;
         },
@@ -137,6 +149,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       config,
       new SystemMessageOrchestrator(prisma as PrismaService, clock),
     );
+    payments = new PaymentService(prisma as PrismaService, clock);
     await prisma.llmProvider.update({
       where: { adapterId: 'gemini' },
       data: { status: 'ENABLED' },
@@ -192,6 +205,38 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     const firstUpdateId = ++updateId;
     const result = await send(senderId, 'KAYIT', firstUpdateId);
     return { ...result, firstUpdateId };
+  }
+
+  async function pressButton(senderId: number, data: string) {
+    const currentUpdateId = ++updateId;
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/telegram',
+      headers: { 'x-telegram-bot-api-secret-token': config.TELEGRAM_WEBHOOK_SECRET },
+      payload: {
+        update_id: currentUpdateId,
+        callback_query: {
+          id: `callback-${currentUpdateId}`,
+          data,
+          from: { id: senderId },
+          message: {
+            message_id: currentUpdateId - 1,
+            date: Math.floor(clock.now().getTime() / 1000),
+            chat: { id: senderId, type: 'private' },
+          },
+        },
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    const inbox = await prisma.inboxEvent.findUniqueOrThrow({
+      where: { dedupeKey: `tg:${config.TELEGRAM_ACCOUNT_ID}:update:${currentUpdateId}` },
+    });
+    expect(await processor.process(inbox.id)).toBe('processed');
+    const ownership = await prisma.inboundResponseOwnership.findUniqueOrThrow({
+      where: { inboundMessageId: inbox.id },
+    });
+    await dispatcher.dispatch(ownership.referenceId!);
+    return prisma.inboxEvent.findUniqueOrThrow({ where: { id: inbox.id } });
   }
 
   async function getStudent(studentId: string) {
@@ -601,6 +646,124 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
         where: { inboundMessageId: { in: inboundIds.flatMap((item) => item.inboxEventId ?? []) } },
       }),
     ).toBe(3);
+  });
+
+  it('BUTTON-01 completes deterministic registration choices through callback payloads', async () => {
+    const current = scenario();
+    const started = await start(current.senderId);
+    expect(collector.sent.at(-1)?.quickReplies).toEqual([
+      { id: 'ONAYLIYORUM', title: 'Onaylıyorum' },
+    ]);
+
+    await pressButton(current.senderId, 'ONAYLIYORUM');
+    expect((await getStudent(started.studentId)).registrationStep).toBe(
+      RegistrationStep.CHANNEL_OPT_IN,
+    );
+    expect(collector.sent.at(-1)?.quickReplies).toEqual([{ id: 'EVET', title: 'Evet' }]);
+
+    await pressButton(current.senderId, 'EVET');
+    expect((await getStudent(started.studentId)).registrationStep).toBe(
+      RegistrationStep.AI_PREFERENCE,
+    );
+    expect(collector.sent.at(-1)?.quickReplies).toEqual([
+      { id: 'EVET', title: 'Evet' },
+      { id: 'HAYIR', title: 'Hayır' },
+    ]);
+
+    await pressButton(current.senderId, 'HAYIR');
+    expect((await getStudent(started.studentId)).registrationStep).toBe(RegistrationStep.NAME);
+    await send(current.senderId, 'Buton Test Öğrencisi');
+    expect(collector.sent.at(-1)?.quickReplies).toEqual([
+      { id: 'ÖDEME YAPTIM', title: 'Ödeme yaptım' },
+    ]);
+
+    await pressButton(current.senderId, 'ÖDEME YAPTIM');
+    expect((await getStudent(started.studentId)).registrationStep).toBe(
+      RegistrationStep.PAYMENT_REVIEW,
+    );
+    expect(await prisma.payment.count({ where: { studentId: started.studentId } })).toBe(1);
+  });
+
+  it('ADMIN-01 observes action-required and payment approval side effects', async () => {
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    const payment = await prisma.payment.findFirstOrThrow({ where: { studentId } });
+    const intentsBeforeReview = await prisma.messageIntent.count({ where: { studentId } });
+
+    await payments.actionRequired(payment.id, 'Dekont üzerindeki gönderici adı okunamıyor.');
+    const actionRequiredStatus = (
+      await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })
+    ).status;
+    const intentsAfterReview = await prisma.messageIntent.count({ where: { studentId } });
+    const actionRequiredEvents = await prisma.systemEventOccurrence.count({
+      where: { studentId, eventKey: 'PAYMENT_ACTION_REQUIRED' },
+    });
+
+    const subscription = await payments.approve(payment.id, e2eAdminId);
+    await dispatchPending(studentId);
+    const approvedStudent = await getStudent(studentId);
+    const creditBalance = await prisma.meetingCreditEvent.aggregate({
+      where: { subscriptionPeriodId: subscription.id },
+      _sum: { delta: true },
+    });
+    const observation = {
+      actionRequiredStatus,
+      actionRequiredCreatedIntent: intentsAfterReview > intentsBeforeReview,
+      actionRequiredEventCount: actionRequiredEvents,
+      approvedStudentStatus: approvedStudent.status,
+      subscriptionStatus: subscription.status,
+      meetingCreditBalance: creditBalance._sum.delta,
+      lastOutboundCategory: (
+        await prisma.messageIntent.findFirstOrThrow({
+          where: { studentId },
+          orderBy: { createdAt: 'desc' },
+        })
+      ).category,
+    };
+    console.info(`ADMIN_PAYMENT_OBSERVATION ${JSON.stringify(observation, null, 2)}`);
+
+    expect(approvedStudent.status).toBe(StudentStatus.ACTIVE);
+    expect(creditBalance._sum.delta).toBe(4);
+    expect(collector.sent.at(-1)?.content.toLocaleLowerCase('tr-TR')).toContain('onaylandı');
+  });
+
+  it('ADMIN-02 observes direct admin reply delivery before student activation', async () => {
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    const content = 'Merhaba Ayşe, ödeme bildirimin ulaştı. Kontrol edip sana haber vereceğim.';
+    const response = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/conversations/${studentId}/reply`,
+      payload: { content },
+    });
+    expect(response.statusCode).toBe(201);
+    const intentId = response.json<{ id: string }>().id;
+    await dispatcher.dispatch(intentId);
+
+    const detail = await app.inject({
+      method: 'GET',
+      url: `/v1/admin/conversations/${studentId}`,
+    });
+    expect(detail.statusCode).toBe(200);
+    const body = detail.json<{ items: Array<{ direction: string; content?: string }> }>();
+    const intent = await prisma.messageIntent.findUniqueOrThrow({ where: { id: intentId } });
+    const observation = {
+      delivered: collector.sent.some(
+        (message) => message.intentId === intentId && message.content === content,
+      ),
+      visibleInConversation: body.items.some(
+        (message) => message.direction === 'OUTBOUND' && message.content === content,
+      ),
+      intentStatus: intent.status,
+      suppressionReason: intent.suppressionReason,
+    };
+    console.info(`ADMIN_REPLY_OBSERVATION ${JSON.stringify(observation, null, 2)}`);
+    expect(observation).toEqual({
+      delivered: false,
+      visibleInConversation: false,
+      intentStatus: 'SUPPRESSED',
+      suppressionReason: 'STUDENT_INACTIVE',
+    });
   });
 
   it('LLM-01 answers when the next practice starts from student context', async () => {

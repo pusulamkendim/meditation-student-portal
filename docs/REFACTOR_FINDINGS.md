@@ -154,6 +154,42 @@ dogrulamak yerine sistemin bugunku sonucunu gozlemler. Kanitlar
   `SAFETY/HANDOFF` onceligi korunuyor ve oturum yanlislikla tamamlanmiyor. Bu
   davranis mevcut haliyle korunmali.
 
+## RF-010 - Odeme ek bilgi talebi ogrenciye iletilmiyor
+
+- Onem: Yuksek
+- Kanit: `ADMIN-01`
+- Gozlem: Admin odemeyi `ACTION_REQUIRED` durumuna alip inceleme notu yazdiginda
+  odeme kaydi guncelleniyor; ancak `PAYMENT_ACTION_REQUIRED` sistem olayi veya
+  ogrenciye gidecek bir message intent olusmuyor. Admin daha sonra onay verirse
+  aktivasyon ve `PAYMENT_APPROVED` mesaji normal calisiyor.
+- Etki: Admin panelinde ogrenciden bilgi istendigi gorunurken ogrenci bu talepten
+  haberdar olmuyor ve odeme sureci sessizce bekliyor.
+- Refaktor: Durum degisikligi, `PAYMENT_ACTION_REQUIRED` occurrence ve standart
+  mesaj intent'ini ayni transaction icinde olustur. Inceleme notunu `actionText`
+  degiskenine aktar ve provider retry icin odeme surumune bagli idempotency
+  anahtari kullan.
+- Kabul olcutu: Admin ek bilgi talep ettiginde ogrenci varsayilan kanalindan tek
+  mesaj alir; tekrar deneme yinelenen mesaj uretmez ve talep konusma gecmisinde
+  gorunur.
+
+## RF-011 - Admin yaniti aktif olmayan ogrenciye gonderilemiyor
+
+- Onem: Yuksek
+- Kanit: `ADMIN-02`
+- Gozlem: `PAYMENT_PENDING` durumundaki ogrenci icin admin konusma ekranindan
+  yanit intent'i olusturuluyor ve endpoint basarili donuyor. Dispatcher genel
+  aktif ogrenci politikasini uygulayarak intent'i `STUDENT_INACTIVE` gerekcesiyle
+  `SUPPRESSED` yapiyor. Mesaj kanala gitmiyor ve konusma timeline'inda gonderilmis
+  mesaj olarak gorunmuyor.
+- Etki: Admin odeme veya kayit sorunu yasayan ogrenciye en cok ihtiyac duyulan
+  anda yanit veremiyor; arayuz ise islemi basarili gibi bildiriyor.
+- Refaktor: `ADMIN_REPLY` icin kayit sureci devam eden ve mesajlasma izni bulunan
+  ogrencileri kapsayan acik bir gonderim politikasi tanimla. API kuyruga alma
+  sonucunu teslimat olarak sunmamali; bastirma nedeni admin panelinde gorunmeli.
+- Kabul olcutu: Mesajlasma izni bulunan `LEAD`, `PAYMENT_PENDING` ve `ACTIVE`
+  ogrencilere admin yaniti gonderilebilir; izin/kanal engeli varsa admin bunu
+  acik bir hata durumu olarak gorur.
+
 ## Test Altyapisi Notu
 
 Kesif kosusu sirasinda yayinlanmis varsayilan mesajlarin `effectiveAt` degeri
