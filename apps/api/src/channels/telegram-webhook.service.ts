@@ -5,6 +5,7 @@ import {
   LookupHmac,
   normalizeTelegramUpdate,
   normalizeExactCommand,
+  parsePracticeResponsePayload,
   type ApplicationConfig,
 } from '@meditation/core';
 import { ChannelType, Prisma } from '@meditation/database';
@@ -83,9 +84,13 @@ export class TelegramWebhookService {
           },
           data: { lastInboundAt: event.occurredAt },
         });
+        const topic =
+          event.text && parsePracticeResponsePayload(event.text)
+            ? 'practice.inbound'
+            : 'channel.inbound';
         await transaction.outboxEvent.create({
           data: {
-            topic: 'channel.inbound',
+            topic,
             aggregateType: 'InboxEvent',
             aggregateId: inbox.id,
             eventType: 'MESSAGE_RECEIVED',

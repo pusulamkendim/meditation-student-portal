@@ -180,6 +180,23 @@ export async function processPracticeResponse(
       include: { student: true },
     });
     if (!session) return false;
+    const validBoundPayload =
+      parsedPayload &&
+      session.studentId === identity.studentId &&
+      !!session.replyNonceHmac &&
+      lookup.verify(parsedPayload.nonce, session.replyNonceHmac);
+    if (validBoundPayload && session.status !== PracticeSessionStatus.AWAITING_RESPONSE) {
+      await tx.inboundResponseOwnership.upsert({
+        where: { inboundMessageId: inbox.id },
+        create: { inboundMessageId: inbox.id, owner: 'NO_REPLY' },
+        update: { owner: 'NO_REPLY', referenceId: null },
+      });
+      await tx.inboxEvent.update({
+        where: { id: inbox.id },
+        data: { processedAt: now, studentId: identity.studentId },
+      });
+      return true;
+    }
     if (
       !parsedPayload &&
       session.status === PracticeSessionStatus.COMPLETED &&
@@ -353,7 +370,12 @@ export async function processPracticeResponse(
       select: { id: true },
     });
     if (!existingMessage) {
-      const messageContent = encryption.encrypt(content, `message:${inbox.id}`);
+      const storedContent = parsedPayload
+        ? response === 'COMPLETED'
+          ? 'Yaptım'
+          : 'Bugün yapamadım'
+        : content;
+      const messageContent = encryption.encrypt(storedContent, `message:${inbox.id}`);
       await tx.message.create({
         data: {
           studentId: identity.studentId,

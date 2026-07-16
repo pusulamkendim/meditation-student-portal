@@ -415,6 +415,41 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     };
   }
 
+  async function pressPracticeButton(senderId: number, data: string) {
+    const currentUpdateId = ++updateId;
+    const response = await app.inject({
+      method: 'POST',
+      url: '/webhooks/telegram',
+      headers: { 'x-telegram-bot-api-secret-token': config.TELEGRAM_WEBHOOK_SECRET },
+      payload: {
+        update_id: currentUpdateId,
+        callback_query: {
+          id: `practice-callback-${currentUpdateId}`,
+          data,
+          from: { id: senderId },
+          message: {
+            message_id: currentUpdateId - 1,
+            date: Math.floor(clock.now().getTime() / 1000),
+            chat: { id: senderId, type: 'private' },
+          },
+        },
+      },
+    });
+    expect(response.statusCode).toBe(201);
+    const inbox = await prisma.inboxEvent.findUniqueOrThrow({
+      where: { dedupeKey: `tg:${config.TELEGRAM_ACCOUNT_ID}:update:${currentUpdateId}` },
+    });
+    const route = await prisma.outboxEvent.findFirstOrThrow({
+      where: { aggregateId: inbox.id, eventType: 'MESSAGE_RECEIVED' },
+      orderBy: { createdAt: 'desc' },
+    });
+    return {
+      inboxId: inbox.id,
+      route: route.topic,
+      processed: await processPracticeResponse(prisma, clock, config, inbox.id),
+    };
+  }
+
   async function dispatchPending(studentId: string) {
     const intents = await prisma.messageIntent.findMany({
       where: { studentId, status: 'PENDING' },
@@ -1499,6 +1534,79 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     expect(observations.find((item) => item.text === 'Bugün yapamayacağım')?.sessionStatus).toBe(
       'SKIPPED',
     );
+  });
+
+  it('FLOW-03B handles repeated signed practice buttons without invoking the agent', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    const checkin = await prisma.messageIntent.findFirstOrThrow({
+      where: {
+        studentId: current.studentId,
+        payload: { path: ['eventKey'], equals: 'PRACTICE_CHECKIN' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const quickReplies = (checkin.payload as { quickReplies: Array<{ id: string; title: string }> })
+      .quickReplies;
+    const completedPayload = quickReplies.find((reply) => reply.title === 'Yaptım')!.id;
+
+    const attempts = [];
+    for (let index = 0; index < 3; index += 1)
+      attempts.push(await pressPracticeButton(current.senderId, completedPayload));
+    await dispatchPending(current.studentId);
+
+    expect(attempts.map((attempt) => attempt.route)).toEqual([
+      'practice.inbound',
+      'practice.inbound',
+      'practice.inbound',
+    ]);
+    expect(attempts.every((attempt) => attempt.processed)).toBe(true);
+    expect(
+      (await prisma.practiceSession.findUniqueOrThrow({ where: { id: current.sessionId } })).status,
+    ).toBe('COMPLETED');
+    expect(
+      await prisma.llmUsageLog.count({
+        where: {
+          task: 'AGENT_REPLY',
+          OR: attempts.map((attempt) => ({
+            metadata: { path: ['inboxEventId'], equals: attempt.inboxId },
+          })),
+        },
+      }),
+    ).toBe(0);
+    const ownership = await prisma.inboundResponseOwnership.findMany({
+      where: { inboundMessageId: { in: attempts.map((attempt) => attempt.inboxId) } },
+      orderBy: { createdAt: 'asc' },
+    });
+    expect(ownership.map((item) => item.owner)).toEqual([
+      'SYSTEM_STANDARD_MESSAGE',
+      'NO_REPLY',
+      'NO_REPLY',
+    ]);
+    const storedResponse = await prisma.message.findUniqueOrThrow({
+      where: { inboxEventId: attempts[0]!.inboxId },
+    });
+    expect(
+      encryption.decrypt(
+        {
+          ciphertext: Buffer.from(storedResponse.contentEncrypted),
+          keyId: storedResponse.contentKeyId,
+        },
+        `message:${attempts[0]!.inboxId}`,
+      ),
+    ).toBe('Yaptım');
+    expect(
+      await prisma.message.count({
+        where: { inboxEventId: { in: attempts.map((attempt) => attempt.inboxId) } },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.messageIntent.count({
+        where: {
+          studentId: current.studentId,
+          payload: { path: ['eventKey'], equals: 'PRACTICE_COMPLETED_ACK' },
+        },
+      }),
+    ).toBe(1);
   });
 
   it('FLOW-04 observes practice-independent questions after activation', async () => {

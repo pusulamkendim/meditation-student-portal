@@ -5,6 +5,7 @@ import {
   LookupHmac,
   normalizeWhatsAppPayload,
   normalizeExactCommand,
+  parsePracticeResponsePayload,
   reconcileDeliveryStatus,
   type ApplicationConfig,
 } from '@meditation/core';
@@ -129,9 +130,13 @@ export class WhatsAppWebhookService {
               data: { lastInboundAt: event.occurredAt },
             });
           }
+          const topic =
+            event.text && parsePracticeResponsePayload(event.text)
+              ? 'practice.inbound'
+              : 'channel.inbound';
           await transaction.outboxEvent.create({
             data: {
-              topic: 'channel.inbound',
+              topic,
               aggregateType: 'InboxEvent',
               aggregateId: inbox.id,
               eventType: event.eventType,
