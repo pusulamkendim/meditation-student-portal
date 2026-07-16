@@ -1607,6 +1607,62 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
         },
       }),
     ).toBe(1);
+    const reflectionRequest = await prisma.messageIntent.findFirstOrThrow({
+      where: {
+        studentId: current.studentId,
+        payload: { path: ['eventKey'], equals: 'PRACTICE_REFLECTION_REQUEST' },
+      },
+    });
+    expect(reflectionRequest.status).toBe('SENT');
+    expect((reflectionRequest.payload as { rendered: string }).rendered).toContain(
+      'birkaç cümleyle paylaşabilirsin',
+    );
+  });
+
+  it('FLOW-03C records the signed skipped button without requesting reflection', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    const checkin = await prisma.messageIntent.findFirstOrThrow({
+      where: {
+        studentId: current.studentId,
+        payload: { path: ['eventKey'], equals: 'PRACTICE_CHECKIN' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const quickReplies = (checkin.payload as { quickReplies: Array<{ id: string; title: string }> })
+      .quickReplies;
+    const skippedPayload = quickReplies.find((reply) => reply.title === 'Bugün yapamadım')!.id;
+
+    const attempt = await pressPracticeButton(current.senderId, skippedPayload);
+    await dispatchPending(current.studentId);
+
+    expect(attempt).toMatchObject({ route: 'practice.inbound', processed: true });
+    expect(
+      (await prisma.practiceSession.findUniqueOrThrow({ where: { id: current.sessionId } })).status,
+    ).toBe('SKIPPED');
+    expect(
+      await prisma.llmUsageLog.count({
+        where: {
+          task: 'AGENT_REPLY',
+          metadata: { path: ['inboxEventId'], equals: attempt.inboxId },
+        },
+      }),
+    ).toBe(0);
+    expect(
+      await prisma.messageIntent.count({
+        where: {
+          studentId: current.studentId,
+          payload: { path: ['eventKey'], equals: 'PRACTICE_SKIPPED_ACK' },
+        },
+      }),
+    ).toBe(1);
+    expect(
+      await prisma.messageIntent.count({
+        where: {
+          studentId: current.studentId,
+          payload: { path: ['eventKey'], equals: 'PRACTICE_REFLECTION_REQUEST' },
+        },
+      }),
+    ).toBe(0);
   });
 
   it('FLOW-04 observes practice-independent questions after activation', async () => {
