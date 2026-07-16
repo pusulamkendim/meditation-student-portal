@@ -57,6 +57,8 @@ export class ConversationsController {
       select: {
         id: true,
         status: true,
+        fullNameEncrypted: true,
+        fullNameKeyId: true,
         defaultChannelIdentity: {
           select: { status: true, channelAccount: { select: { type: true } } },
         },
@@ -77,7 +79,15 @@ export class ConversationsController {
     });
     return {
       items: students.map((student) => ({
-        ...student,
+        id: student.id,
+        status: student.status,
+        fullName: this.decryptStudentName(
+          student.id,
+          student.fullNameEncrypted,
+          student.fullNameKeyId,
+        ),
+        messages: student.messages,
+        messageIntents: student.messageIntents,
         channel: student.defaultChannelIdentity
           ? {
               type: student.defaultChannelIdentity.channelAccount.type,
@@ -229,6 +239,11 @@ export class ConversationsController {
     return {
       student: {
         id: student.id,
+        fullName: this.decryptStudentName(
+          student.id,
+          student.fullNameEncrypted,
+          student.fullNameKeyId,
+        ),
         status: student.status,
         channel: student.defaultChannelIdentity
           ? {
@@ -255,6 +270,22 @@ export class ConversationsController {
         resolvedAt: handoff.resolvedAt?.toISOString(),
       })),
     };
+  }
+
+  private decryptStudentName(
+    studentId: string,
+    encrypted: Uint8Array | null,
+    keyId: string | null,
+  ) {
+    if (!encrypted || !keyId) return undefined;
+    try {
+      return this.encryption.decrypt(
+        { ciphertext: Buffer.from(encrypted), keyId },
+        `student:${studentId}:name`,
+      );
+    } catch {
+      return undefined;
+    }
   }
   @Post(':studentId/reply')
   @UseGuards(AdminCsrfGuard)
@@ -388,7 +419,20 @@ export class ConversationsController {
 @Controller('v1/admin/operations')
 @UseGuards(AdminSessionGuard)
 export class OperationsController {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  private readonly encryption: FieldEncryption;
+
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(APPLICATION_CONFIG) config: ApplicationConfig,
+  ) {
+    if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID)
+      throw new Error('Student encryption keys are required.');
+    const keys = JSON.parse(config.DATA_ENCRYPTION_KEYS_JSON) as Record<string, string>;
+    this.encryption = new FieldEncryption(
+      new Map(Object.entries(keys).map(([id, key]) => [id, Buffer.from(key, 'base64')])),
+      config.ACTIVE_DATA_KEY_ID,
+    );
+  }
 
   @Get()
   async overview() {
@@ -412,16 +456,26 @@ export class OperationsController {
         orderBy: { updatedAt: 'desc' },
         select: {
           id: true,
+          studentId: true,
           category: true,
           status: true,
           suppressionReason: true,
+          dueAt: true,
           updatedAt: true,
+          student: { select: { fullNameEncrypted: true, fullNameKeyId: true } },
         },
       }),
       this.prisma.webhookEvent.findMany({
         take: 12,
         orderBy: { createdAt: 'desc' },
-        select: { id: true, channel: true, eventType: true, result: true, createdAt: true },
+        select: {
+          id: true,
+          channel: true,
+          eventType: true,
+          externalMessageId: true,
+          result: true,
+          createdAt: true,
+        },
       }),
       this.prisma.notificationDelivery.findMany({
         take: 12,
@@ -430,6 +484,7 @@ export class OperationsController {
           id: true,
           channel: true,
           eventType: true,
+          providerMessageId: true,
           status: true,
           attempts: true,
           errorCode: true,
@@ -445,16 +500,118 @@ export class OperationsController {
           studentId: true,
           reason: true,
           createdAt: true,
-          student: { select: { status: true } },
+          student: {
+            select: { status: true, fullNameEncrypted: true, fullNameKeyId: true },
+          },
         },
       }),
     ]);
+
+    const webhookExternalIds = webhooks.flatMap((item) =>
+      item.externalMessageId ? [item.externalMessageId] : [],
+    );
+    const deliveryReferences = deliveries.flatMap((item) =>
+      item.providerMessageId ? [item.providerMessageId] : [],
+    );
+    const [webhookMessages, deliveryHandoffs, deliveryMeetings] = await Promise.all([
+      webhookExternalIds.length
+        ? this.prisma.message.findMany({
+            where: { externalMessageId: { in: webhookExternalIds } },
+            select: {
+              externalMessageId: true,
+              student: {
+                select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+              },
+            },
+          })
+        : [],
+      deliveryReferences.length
+        ? this.prisma.handoff.findMany({
+            where: { id: { in: deliveryReferences } },
+            select: {
+              id: true,
+              student: {
+                select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+              },
+            },
+          })
+        : [],
+      deliveryReferences.length
+        ? this.prisma.weeklyMeeting.findMany({
+            where: { id: { in: deliveryReferences } },
+            select: {
+              id: true,
+              meetingSeries: {
+                select: {
+                  student: {
+                    select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+                  },
+                },
+              },
+            },
+          })
+        : [],
+    ]);
+    const webhookStudents = new Map(
+      webhookMessages.flatMap((message) =>
+        message.externalMessageId
+          ? [[message.externalMessageId, this.presentStudent(message.student)] as const]
+          : [],
+      ),
+    );
+    const deliveryStudents = new Map([
+      ...deliveryHandoffs.map(
+        (handoff) => [handoff.id, this.presentStudent(handoff.student)] as const,
+      ),
+      ...deliveryMeetings.map(
+        (meeting) => [meeting.id, this.presentStudent(meeting.meetingSeries.student)] as const,
+      ),
+    ]);
     return {
       counts: { pending, failed, suppressed, openHandoffs: openHandoffCount },
-      recentIntents,
-      webhooks,
-      deliveries,
-      handoffs,
+      recentIntents: recentIntents.map(({ student, ...intent }) => ({
+        ...intent,
+        student: this.presentStudent({ id: intent.studentId, ...student }),
+      })),
+      webhooks: webhooks.map((webhook) => ({
+        ...webhook,
+        student: webhook.externalMessageId
+          ? webhookStudents.get(webhook.externalMessageId)
+          : undefined,
+      })),
+      deliveries: deliveries.map((delivery) => ({
+        ...delivery,
+        student: delivery.providerMessageId
+          ? deliveryStudents.get(delivery.providerMessageId)
+          : undefined,
+      })),
+      handoffs: handoffs.map(({ student, ...handoff }) => ({
+        ...handoff,
+        student: this.presentStudent({ id: handoff.studentId, ...student }),
+      })),
     };
+  }
+
+  private presentStudent(student: {
+    id: string;
+    fullNameEncrypted: Uint8Array | null;
+    fullNameKeyId: string | null;
+    status?: string;
+  }) {
+    let fullName: string | undefined;
+    if (student.fullNameEncrypted && student.fullNameKeyId) {
+      try {
+        fullName = this.encryption.decrypt(
+          {
+            ciphertext: Buffer.from(student.fullNameEncrypted),
+            keyId: student.fullNameKeyId,
+          },
+          `student:${student.id}:name`,
+        );
+      } catch {
+        fullName = undefined;
+      }
+    }
+    return { id: student.id, fullName, status: student.status };
   }
 }

@@ -115,7 +115,7 @@ export class KnowledgeService {
             byteSize: file.buffer.byteLength,
             contentHash: hash,
             quarantineKey,
-            status: KnowledgeDocumentVersionStatus.QUARANTINED,
+            status: KnowledgeDocumentVersionStatus.UPLOADED,
             stageAssignments: { create: parsedStages.map((stage) => ({ stage })) },
           },
         });
@@ -203,7 +203,7 @@ export class KnowledgeService {
     await this.prisma.$transaction(async (tx) => {
       await tx.knowledgeDocumentVersion.update({
         where: { id: versionId },
-        data: { status: 'QUARANTINED', quarantineKey, errorCode: null },
+        data: { status: 'UPLOADED', quarantineKey, errorCode: null },
       });
       await tx.outboxEvent.create({
         data: {

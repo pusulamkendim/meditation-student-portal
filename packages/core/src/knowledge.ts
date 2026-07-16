@@ -98,9 +98,9 @@ export type RagAnswerOutput = z.infer<typeof ragAnswerOutputSchema>;
 
 export const ragDefaults = {
   topK: 20,
-  finalChunks: 6,
+  finalChunks: 3,
   minScore: 0.55,
-  maxContextChars: 12_000,
+  maxContextChars: 6_000,
   vectorWeight: 0.78,
   keywordWeight: 0.22,
   maxChunksPerDocument: 3,

@@ -10,7 +10,7 @@ import {
 } from '@meditation/ui';
 import { ArrowLeft, Send } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 const statusLabels: Record<string, string> = {
   PENDING: 'Bekliyor',
@@ -19,9 +19,22 @@ const statusLabels: Record<string, string> = {
   DELIVERY_UNKNOWN: 'Teslim durumu belirsiz',
   SUPPRESSED: 'Gönderilmedi',
 };
+const intentLabels: Record<string, string> = {
+  PRACTICE_CHECKIN: 'Pratik geri bildirimi',
+  PRACTICE_REMINDER: 'Pratik hatırlatması',
+  MEETING_REMINDER: 'Görüşme hatırlatması',
+  ADMIN_REPLY: 'Admin yanıtı',
+  SYSTEM_STANDARD_MESSAGE: 'Sistem mesajı',
+};
+const suppressionLabels: Record<string, string> = {
+  WHATSAPP_TEMPLATE_REQUIRED: 'WhatsApp 24 saat penceresi kapalı; onaylı template gerekli.',
+  STUDENT_INACTIVE: 'Öğrenci aktif olmadığı için gönderilmedi.',
+  PROACTIVE_MESSAGING_PAUSED: 'Öğrencinin proaktif mesajları duraklatılmış.',
+};
 type Data = {
   student: {
     id: string;
+    fullName?: string;
     status: string;
     channel?: { type: string; status: string; lastInboundAt?: string };
   };
@@ -47,6 +60,7 @@ export default function ConversationDetail() {
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<string>();
   const [busy, setBusy] = useState(false);
+  const timelineRef = useRef<HTMLElement>(null);
   const load = useCallback(async () => {
     try {
       const r = await fetch(`${api}/v1/admin/conversations/${studentId}`, {
@@ -62,6 +76,10 @@ export default function ConversationDetail() {
   useEffect(() => {
     void load();
   }, [load]);
+  useEffect(() => {
+    const timeline = timelineRef.current;
+    if (timeline && data?.items.length) timeline.scrollTop = timeline.scrollHeight;
+  }, [data?.items.length]);
   async function reply(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
@@ -107,6 +125,26 @@ export default function ConversationDetail() {
     data.student.channel.lastInboundAt &&
     Date.now() - new Date(data.student.channel.lastInboundAt).getTime() < 86400000,
   );
+  const groupedIntents = (() => {
+    const groups = new Map<
+      string,
+      { category: string; status: string; reason?: string; count: number; createdAt: string }
+    >();
+    for (const intent of data.intents) {
+      const key = `${intent.category}:${intent.status}:${intent.suppressionReason ?? ''}`;
+      const current = groups.get(key);
+      if (current) current.count += 1;
+      else
+        groups.set(key, {
+          category: intent.category,
+          status: intent.status,
+          reason: intent.suppressionReason,
+          count: 1,
+          createdAt: intent.createdAt,
+        });
+    }
+    return [...groups.values()];
+  })();
   return (
     <main className="content">
       <a className="back-link" href="/conversations">
@@ -114,7 +152,7 @@ export default function ConversationDetail() {
         Konuşmalar
       </a>
       <PageHeader
-        title={`Öğrenci ${studentId.slice(0, 8)}`}
+        title={data.student.fullName ?? `İsimsiz öğrenci · ${studentId.slice(0, 8)}`}
         description="Mesaj geçmişi ve kanal operasyonları"
         actions={
           <>
@@ -132,7 +170,7 @@ export default function ConversationDetail() {
         }
       />
       <div className="conversation-workspace">
-        <section className="message-timeline">
+        <section className="message-timeline" ref={timelineRef}>
           {data.items.length === 0 ? (
             <EmptyState title="Henüz mesaj yok" />
           ) : (
@@ -180,22 +218,26 @@ export default function ConversationDetail() {
               Yanıtı kuyruğa al
             </Button>
           </form>
-          {data.intents.length ? (
-            <section className="conversation-operations">
-              <strong>Gönderim sorunları</strong>
-              <small>Mesaj akışından ayrı operasyon kayıtları</small>
-              {data.intents.map((intent) => (
-                <div key={intent.id}>
+          {groupedIntents.length ? (
+            <details className="conversation-operations">
+              <summary>Teknik gönderim kayıtları ({data.intents.length})</summary>
+              <small>Benzer kayıtlar tek satırda gruplanmıştır.</small>
+              {groupedIntents.map((intent) => (
+                <div key={`${intent.category}:${intent.status}:${intent.reason ?? ''}`}>
                   <span>
-                    {intent.category} · {new Date(intent.createdAt).toLocaleString('tr-TR')}
+                    {intentLabels[intent.category] ?? intent.category}
+                    {intent.count > 1 ? ` · ${intent.count} kez` : ''}
                   </span>
                   <Badge tone={intent.status === 'FAILED' ? 'danger' : 'warning'}>
                     {statusLabels[intent.status] ?? intent.status}
                   </Badge>
-                  {intent.suppressionReason ? <small>{intent.suppressionReason}</small> : null}
+                  <small>{new Date(intent.createdAt).toLocaleString('tr-TR')}</small>
+                  {intent.reason ? (
+                    <small>{suppressionLabels[intent.reason] ?? intent.reason}</small>
+                  ) : null}
                 </div>
               ))}
-            </section>
+            </details>
           ) : null}
         </aside>
       </div>

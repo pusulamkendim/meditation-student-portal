@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import {
   assertNoPublishedVariantConflict,
   canonicalizeLocale,
+  defaultRegistrationMessages,
   getSystemEvent,
   renderMessageTemplate,
   systemEventKeySchema,
@@ -39,7 +40,13 @@ export class MessageCatalogService implements OnModuleInit {
   }
 
   listEvents() {
-    return systemEventKeys.map((key) => systemEventRegistry.get(key)!);
+    const defaults = new Map(
+      defaultRegistrationMessages.map((message) => [message.eventKey, message.content] as const),
+    );
+    return systemEventKeys.map((key) => ({
+      ...systemEventRegistry.get(key)!,
+      defaultContent: defaults.get(key),
+    }));
   }
 
   getEvent(key: string) {
@@ -83,6 +90,67 @@ export class MessageCatalogService implements OnModuleInit {
     return this.prisma.standardMessage.create({
       data: { eventKey, name, audience: event.audience, protected: event.protected },
     });
+  }
+
+  async quickCreate(input: {
+    eventKey: SystemEventKey;
+    name: string;
+    channel: NotificationChannel;
+    locale: string;
+    content: string;
+    expertApproved?: boolean;
+  }) {
+    const event = getSystemEvent(input.eventKey);
+    const placeholders = validateMessageTemplate(input.eventKey, input.content);
+    return this.prisma.$transaction(async (transaction) => {
+      const message = await transaction.standardMessage.create({
+        data: {
+          eventKey: input.eventKey,
+          name: input.name,
+          audience: event.audience,
+          protected: event.protected,
+        },
+      });
+      const variant = await transaction.standardMessageVariant.create({
+        data: {
+          standardMessageId: message.id,
+          channel: input.channel,
+          locale: canonicalizeLocale(input.locale),
+          priority: 0,
+        },
+      });
+      const version = await transaction.standardMessageVersion.create({
+        data: {
+          variantId: variant.id,
+          version: 1,
+          content: input.content,
+          placeholders,
+          expertApproved: input.expertApproved ?? false,
+        },
+      });
+      return { message, variant, version };
+    });
+  }
+
+  async deleteMessage(messageId: string) {
+    const message = await this.prisma.standardMessage.findUniqueOrThrow({
+      where: { id: messageId },
+      include: { variants: { include: { versions: true } } },
+    });
+    if (message.name === 'Sistem varsayilani') {
+      throw new Error('Kod varsayılanı silinemez. Özel bir tanım oluşturarak önceliğini artırın.');
+    }
+    if (
+      message.variants.some((variant) =>
+        variant.versions.some(
+          (version) => version.status === StandardMessageVersionStatus.PUBLISHED,
+        ),
+      )
+    ) {
+      throw new Error('Yayınlanmış sürümü olan tanım silinemez. Önce yayınları arşivleyin.');
+    }
+    await this.prisma.standardMessage.delete({ where: { id: messageId } });
+    return { id: messageId, deleted: true };
   }
 
   async createVariant(input: {

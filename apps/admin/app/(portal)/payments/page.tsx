@@ -8,6 +8,7 @@ const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 type Payment = {
   id: string;
   studentId: string;
+  studentName?: string;
   referenceCode: string;
   status: string;
   amountMinor: string;
@@ -69,7 +70,9 @@ export default function PaymentsPage() {
             (filter === 'OPEN'
               ? !['APPROVED', 'REJECTED'].includes(item.status)
               : item.status === filter)) &&
-          `${item.referenceCode} ${item.studentId}`.toLowerCase().includes(query.toLowerCase()),
+          `${item.referenceCode} ${item.studentId} ${item.studentName ?? ''}`
+            .toLocaleLowerCase('tr-TR')
+            .includes(query.toLocaleLowerCase('tr-TR')),
       ),
     [items, filter, query],
   );
@@ -179,7 +182,7 @@ export default function PaymentsPage() {
                 }}
               >
                 <strong>{item.referenceCode}</strong>
-                <span>{item.studentId.slice(0, 8)}</span>
+                <span>{item.studentName ?? `İsimsiz öğrenci · ${item.studentId.slice(0, 8)}`}</span>
                 <span>{new Date(item.reportedAt).toLocaleDateString('tr-TR')}</span>
                 <span>
                   {new Intl.NumberFormat('tr-TR', {
@@ -212,7 +215,12 @@ export default function PaymentsPage() {
               <dl>
                 <div>
                   <dt>Öğrenci</dt>
-                  <dd>{selected.studentId}</dd>
+                  <dd>
+                    <a className="student-link" href={`/students/${selected.studentId}`}>
+                      {selected.studentName ??
+                        `İsimsiz öğrenci · ${selected.studentId.slice(0, 8)}`}
+                    </a>
+                  </dd>
                 </div>
                 <div>
                   <dt>Tutar</dt>

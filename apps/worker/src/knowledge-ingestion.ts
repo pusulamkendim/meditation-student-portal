@@ -96,9 +96,24 @@ export class KnowledgeIngestionProcessor {
         this.config.R2_PRIVATE_BUCKET,
         privateKey,
       );
-      await this.prisma.knowledgeDocumentVersion.update({
-        where: { id: versionId },
-        data: { storageKey: privateKey, status: 'READY' },
+      await this.prisma.$transaction(async (tx) => {
+        await tx.knowledgeDocumentVersion.updateMany({
+          where: {
+            documentId: version.documentId,
+            id: { not: versionId },
+            status: 'PUBLISHED',
+          },
+          data: { status: 'ARCHIVED', archivedAt: this.clock.now() },
+        });
+        await tx.knowledgeDocumentVersion.update({
+          where: { id: versionId },
+          data: {
+            storageKey: privateKey,
+            status: 'PUBLISHED',
+            publishedAt: this.clock.now(),
+            archivedAt: null,
+          },
+        });
       });
       return 'processed';
     } catch (error) {

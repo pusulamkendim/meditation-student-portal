@@ -10,6 +10,9 @@ import { LlmTask, Prisma, PrismaClient } from '@meditation/database';
 import { randomUUID } from 'node:crypto';
 import { reserveBudget, releaseBudget, settleBudget } from './llm-budget.js';
 
+const AGENT_MAX_KNOWLEDGE_CHUNKS = 3;
+const AGENT_MAX_KNOWLEDGE_CHARS = 6_000;
+
 export interface RetrievalChunk {
   id: string;
   content: string;
@@ -148,7 +151,11 @@ export class KnowledgeRetrievalService {
         const count = docs.get(row.logical_name) ?? 0;
         if (count >= retrieval.maxChunksPerDocument) continue;
         const chars = selected.reduce((sum, item) => sum + item.content.length, 0);
-        if (chars + row.content.length > retrieval.maxContextChars) break;
+        if (
+          chars + row.content.length >
+          Math.min(retrieval.maxContextChars, AGENT_MAX_KNOWLEDGE_CHARS)
+        )
+          break;
         selected.push({
           id: row.id,
           content: row.content,
@@ -157,7 +164,7 @@ export class KnowledgeRetrievalService {
           score: row.score,
         });
         docs.set(row.logical_name, count + 1);
-        if (selected.length >= retrieval.finalChunks) break;
+        if (selected.length >= Math.min(retrieval.finalChunks, AGENT_MAX_KNOWLEDGE_CHUNKS)) break;
       }
       if (selected.some((chunk) => containsPromptInjection(chunk.content)))
         return {

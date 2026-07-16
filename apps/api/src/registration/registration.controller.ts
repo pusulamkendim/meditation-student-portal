@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { FieldEncryption, type ApplicationConfig } from '@meditation/core';
 import { ChannelType } from '@meditation/database';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -9,6 +10,7 @@ import { RegistrationService } from './registration.service.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { InternalChannelGuard } from './internal-channel.guard.js';
 import { StudentAdminService } from './student-admin.service.js';
+import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 const advance = z.object({
   command: z.enum([
     'START',
@@ -25,12 +27,23 @@ const advance = z.object({
 });
 @Controller('v1')
 export class RegistrationController {
+  private readonly encryption: FieldEncryption;
+
   constructor(
     @Inject(RegistrationService) private readonly registration: RegistrationService,
     @Inject(PaymentService) private readonly payments: PaymentService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(StudentAdminService) private readonly studentAdmin: StudentAdminService,
-  ) {}
+    @Inject(APPLICATION_CONFIG) config: ApplicationConfig,
+  ) {
+    if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID)
+      throw new Error('Student encryption keys are required.');
+    const keys = JSON.parse(config.DATA_ENCRYPTION_KEYS_JSON) as Record<string, string>;
+    this.encryption = new FieldEncryption(
+      new Map(Object.entries(keys).map(([id, key]) => [id, Buffer.from(key, 'base64')])),
+      config.ACTIVE_DATA_KEY_ID,
+    );
+  }
   @Get('admin/payments') @UseGuards(AdminSessionGuard) async listPayments() {
     const payments = await this.prisma.payment.findMany({
       orderBy: { reportedAt: 'desc' },
@@ -44,14 +57,34 @@ export class RegistrationController {
         referenceCode: true,
         reportedAt: true,
         reviewNote: true,
+        student: {
+          select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+        },
       },
     });
     return {
-      items: payments.map((payment) => ({
-        ...payment,
-        amountMinor: payment.amountMinor.toString(),
-        reportedAt: payment.reportedAt.toISOString(),
-      })),
+      items: payments.map(({ student, ...payment }) => {
+        let studentName: string | undefined;
+        if (student.fullNameEncrypted && student.fullNameKeyId) {
+          try {
+            studentName = this.encryption.decrypt(
+              {
+                ciphertext: Buffer.from(student.fullNameEncrypted),
+                keyId: student.fullNameKeyId,
+              },
+              `student:${student.id}:name`,
+            );
+          } catch {
+            studentName = undefined;
+          }
+        }
+        return {
+          ...payment,
+          studentName,
+          amountMinor: payment.amountMinor.toString(),
+          reportedAt: payment.reportedAt.toISOString(),
+        };
+      }),
     };
   }
   @Get('admin/students') @UseGuards(AdminSessionGuard) async listStudents(

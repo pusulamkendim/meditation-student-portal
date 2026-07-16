@@ -1710,15 +1710,31 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     expect(operations.statusCode).toBe(200);
     const overview = operations.json<{
       counts: { openHandoffs: number };
-      handoffs: Array<{ id: string; studentId: string }>;
-      deliveries: Array<{ eventType: string; status: string }>;
+      handoffs: Array<{
+        id: string;
+        studentId: string;
+        student: { fullName?: string };
+      }>;
+      deliveries: Array<{
+        eventType: string;
+        status: string;
+        student?: { fullName?: string };
+      }>;
     }>();
     expect(overview.counts.openHandoffs).toBeGreaterThan(0);
     expect(overview.handoffs).toContainEqual(
-      expect.objectContaining({ id: handoff.id, studentId }),
+      expect.objectContaining({
+        id: handoff.id,
+        studentId,
+        student: expect.objectContaining({ fullName: 'Ayşe Yılmaz' }),
+      }),
     );
     expect(overview.deliveries).toContainEqual(
-      expect.objectContaining({ eventType: 'ADMIN_HANDOFF_REQUIRED', status: 'SENT' }),
+      expect.objectContaining({
+        eventType: 'ADMIN_HANDOFF_REQUIRED',
+        status: 'SENT',
+        student: expect.objectContaining({ fullName: 'Ayşe Yılmaz' }),
+      }),
     );
 
     const detail = await app.inject({
@@ -1726,9 +1742,14 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       url: `/v1/admin/conversations/${studentId}`,
     });
     expect(detail.statusCode).toBe(200);
-    expect(
-      detail.json<{ handoffs: Array<{ id: string; status: string }> }>().handoffs,
-    ).toContainEqual(expect.objectContaining({ id: handoff.id, status: 'OPEN' }));
+    const conversation = detail.json<{
+      student: { fullName?: string };
+      handoffs: Array<{ id: string; status: string }>;
+    }>();
+    expect(conversation.student.fullName).toBe('Ayşe Yılmaz');
+    expect(conversation.handoffs).toContainEqual(
+      expect.objectContaining({ id: handoff.id, status: 'OPEN' }),
+    );
 
     const adminReply = 'Merhaba Ayşe, kayıtlı adını kontrol ettim. Sistemde Ayşe Yılmaz görünüyor.';
     const resolved = await app.inject({

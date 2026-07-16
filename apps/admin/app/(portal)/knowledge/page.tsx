@@ -5,12 +5,13 @@ import {
   Badge,
   Button,
   EmptyState,
+  Modal,
   PageHeader,
   Skeleton,
   TextField,
   Toast,
 } from '@meditation/ui';
-import { BookOpen, FileUp, RefreshCw, Search, Upload, CheckCircle2, Archive } from 'lucide-react';
+import { Archive, BookOpen, Eye, FileText, FileUp, RefreshCw, Search, Upload } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -40,7 +41,6 @@ type SearchResult = {
   logical_name: string;
   rank: number;
 };
-type Handoff = { id: string; studentId: string; reason: string; status: string; createdAt: string };
 type VersionDetails = {
   id: string;
   filename: string;
@@ -49,6 +49,48 @@ type VersionDetails = {
   chunks: Array<{ id: string; chunkIndex: number; titlePath: string; content: string }>;
 };
 type Notice = { tone: 'success' | 'danger' | 'info'; text: string };
+type KnowledgeLevel = 'GENERAL' | 'INTERMEDIATE' | 'ADVANCED';
+
+const LEVELS: Array<{ value: KnowledgeLevel; label: string; description: string }> = [
+  {
+    value: 'GENERAL',
+    label: 'Introduction',
+    description: 'Başlangıç, temel kavramlar ve ilk pratikler',
+  },
+  {
+    value: 'INTERMEDIATE',
+    label: 'Intermediate',
+    description: 'Düzenli pratiği derinleştiren orta seviye içerikler',
+  },
+  {
+    value: 'ADVANCED',
+    label: 'Advanced',
+    description: 'İleri teknikler ve deneyimli öğrenciler için kaynaklar',
+  },
+];
+
+function documentLevel(document: Doc): KnowledgeLevel {
+  const assignments = document.versions[0]?.stageAssignments.map(({ stage }) => stage) ?? [];
+  if (assignments.includes('ADVANCED')) return 'ADVANCED';
+  if (assignments.includes('INTERMEDIATE')) return 'INTERMEDIATE';
+  return 'GENERAL';
+}
+
+function statusLabel(status?: string) {
+  const labels: Record<string, string> = {
+    UPLOADED: 'İşleme alındı',
+    QUARANTINED: 'İşleme alındı',
+    SCANNING: 'Kontrol ediliyor',
+    PARSING: 'Metin okunuyor',
+    CHUNKING: 'Bölümleniyor',
+    EMBEDDING: 'İndeksleniyor',
+    READY: 'Hazır',
+    PUBLISHED: 'Yayında',
+    ARCHIVED: 'Arşivde',
+    FAILED: 'İşlenemedi',
+  };
+  return status ? (labels[status] ?? status) : 'Durum yok';
+}
 
 async function read<T>(path: string): Promise<T> {
   const response = await fetch(`${api}${path}`, { credentials: 'include' });
@@ -62,12 +104,11 @@ export default function KnowledgePage() {
   const [bases, setBases] = useState<Base[]>();
   const [selectedBase, setSelectedBase] = useState<Base>();
   const [documents, setDocuments] = useState<Doc[]>([]);
-  const [stages, setStages] = useState<string[]>(['GENERAL']);
+  const [stage, setStage] = useState<KnowledgeLevel>('GENERAL');
   const [files, setFiles] = useState<FileList | null>(null);
   const [versionDetails, setVersionDetails] = useState<VersionDetails>();
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>();
-  const [handoffs, setHandoffs] = useState<Handoff[]>([]);
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<Notice>();
   const [busy, setBusy] = useState(false);
@@ -78,7 +119,6 @@ export default function KnowledgePage() {
       const result = await read<Base[]>('/v1/admin/knowledge/bases');
       setBases(result);
       setSelectedBase((current) => current ?? result[0]);
-      setHandoffs(await read<Handoff[]>('/v1/admin/knowledge/handoffs?status=OPEN'));
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Bilgi bankaları yüklenemedi.');
     }
@@ -110,11 +150,14 @@ export default function KnowledgePage() {
       const response = await fetch(`${api}${path}`, {
         method,
         credentials: 'include',
-        headers: {
-          'content-type': 'application/json',
-          'x-csrf-token': sessionStorage.getItem('admin_csrf_token') ?? '',
-        },
-        body: JSON.stringify(body),
+        headers:
+          body === undefined
+            ? { 'x-csrf-token': sessionStorage.getItem('admin_csrf_token') ?? '' }
+            : {
+                'content-type': 'application/json',
+                'x-csrf-token': sessionStorage.getItem('admin_csrf_token') ?? '',
+              },
+        body: body === undefined ? undefined : JSON.stringify(body),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok)
@@ -135,7 +178,7 @@ export default function KnowledgePage() {
     if (!selectedBase || !files?.length) return;
     const form = new FormData();
     for (const file of Array.from(files)) form.append('files', file);
-    form.append('stages', JSON.stringify(stages));
+    form.append('stages', JSON.stringify([stage]));
     setBusy(true);
     try {
       const response = await fetch(
@@ -147,15 +190,19 @@ export default function KnowledgePage() {
           body: form,
         },
       );
-      const payload = await response.json().catch(() => ({}));
+      const payload = await response.json().catch(() => []);
       if (!response.ok)
         throw new Error((payload as { message?: string }).message ?? `HTTP ${response.status}`);
       setNotice({
         tone: 'success',
-        text: 'Dosyalar karantinaya alındı; tarama kuyruğa gönderildi.',
+        text: 'Dosyalar yüklendi. İçerikler otomatik olarak hazırlanıyor.',
       });
       setFiles(null);
       await loadDocuments();
+      const uploaded = Array.isArray(payload)
+        ? (payload[0] as { id?: string } | undefined)
+        : undefined;
+      if (uploaded?.id) await loadVersion(uploaded.id);
     } catch (reason) {
       setNotice({
         tone: 'danger',
@@ -197,16 +244,11 @@ export default function KnowledgePage() {
       });
     }
   }
-  async function resolveHandoff(id: string) {
-    await mutate(`/v1/admin/knowledge/handoffs/${id}/resolve`, undefined);
-    setHandoffs((current) => current.filter((item) => item.id !== id));
-  }
-
   return (
     <main className="content">
       <PageHeader
         title="Bilgi Bankası"
-        description="Aşamalara ayrılmış kaynakları güvenli biçimde yükleyin, tarayın ve yayınlayın"
+        description="Öğrencilerin sorularında kullanılacak kaynakları seviyelerine göre yönetin"
         actions={
           <Button variant="secondary" onClick={() => void loadDocuments()}>
             <RefreshCw /> Yenile
@@ -267,6 +309,25 @@ export default function KnowledgePage() {
                       <h2>{selectedBase.name}</h2>
                       <p>PDF, DOCX, Markdown veya metin dosyaları. Her dosya en fazla 25 MiB.</p>
                     </div>
+                    <div
+                      className="knowledge-level-picker"
+                      role="radiogroup"
+                      aria-label="İçerik seviyesi"
+                    >
+                      {LEVELS.map((level) => (
+                        <button
+                          type="button"
+                          role="radio"
+                          aria-checked={stage === level.value}
+                          data-selected={stage === level.value}
+                          key={level.value}
+                          onClick={() => setStage(level.value)}
+                        >
+                          <strong>{level.label}</strong>
+                          <span>{level.description}</span>
+                        </button>
+                      ))}
+                    </div>
                     <div className="knowledge-upload-controls">
                       <label className="file-picker">
                         <FileUp /> Dosya seç
@@ -277,108 +338,96 @@ export default function KnowledgePage() {
                           onChange={(event) => setFiles(event.target.files)}
                         />
                       </label>
-                      <select
-                        multiple
-                        value={stages}
-                        onChange={(event) =>
-                          setStages(
-                            Array.from(event.target.selectedOptions).map((option) => option.value),
-                          )
-                        }
+                      <div className="knowledge-file-summary">
+                        <strong>
+                          {files?.length ? `${files.length} dosya seçildi` : 'Dosya bekleniyor'}
+                        </strong>
+                        <span>PDF, DOCX, Markdown, TXT veya CSV · en fazla 25 MiB</span>
+                      </div>
+                      <Button
+                        disabled={busy || !files?.length}
+                        loading={busy}
+                        onClick={() => void upload()}
                       >
-                        <option value="GENERAL">Genel</option>
-                        <option value="WEEK_1">1. hafta</option>
-                        <option value="WEEK_2">2. hafta</option>
-                        <option value="WEEK_3">3. hafta</option>
-                        <option value="WEEK_4">4. hafta</option>
-                        <option value="INTERMEDIATE">Intermediate</option>
-                        <option value="ADVANCED">Advanced</option>
-                      </select>
-                      <Button disabled={busy || !files?.length} onClick={() => void upload()}>
-                        <Upload /> Yükle
+                        <Upload /> Yükle ve kullanıma al
                       </Button>
                     </div>
-                    {files?.length ? <small>{files.length} dosya seçildi</small> : null}
                   </div>
                   <div className="section-heading">
                     <h2>Belgeler</h2>
                     <span className="muted">{documents.length} kaynak</span>
                   </div>
-                  <div className="knowledge-documents">
-                    {documents.map((doc) => {
-                      const version = doc.versions[0];
+                  <div className="knowledge-sections">
+                    {LEVELS.map((level) => {
+                      const levelDocuments = documents.filter(
+                        (doc) => documentLevel(doc) === level.value,
+                      );
                       return (
-                        <article
-                          className="knowledge-document"
-                          key={doc.id}
-                          onClick={() => void loadVersion(version?.id)}
-                        >
-                          <div>
-                            <strong>{doc.logicalName}</strong>
-                            <span>
-                              {version?.filename} · {version?._count.chunks ?? 0} parça
-                            </span>
+                        <section className="knowledge-section" key={level.value}>
+                          <div className="knowledge-section-heading">
+                            <div>
+                              <h3>{level.label}</h3>
+                              <p>{level.description}</p>
+                            </div>
+                            <Badge tone="neutral">{levelDocuments.length}</Badge>
                           </div>
-                          <div className="knowledge-document-actions">
-                            <Badge
-                              tone={
-                                version?.status === 'PUBLISHED'
-                                  ? 'success'
-                                  : version?.status === 'FAILED'
-                                    ? 'danger'
-                                    : 'neutral'
-                              }
-                            >
-                              {version?.status ?? '—'}
-                            </Badge>
-                            {version?.status === 'READY' ? (
-                              <Button
-                                variant="ghost"
-                                aria-label="Yayınla"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void status(version.id, 'PUBLISHED');
-                                }}
-                              >
-                                <CheckCircle2 />
-                              </Button>
-                            ) : null}
-                            {version?.status === 'PUBLISHED' ? (
-                              <Button
-                                variant="ghost"
-                                aria-label="Arşivle"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void status(version.id, 'ARCHIVED');
-                                }}
-                              >
-                                <Archive />
-                              </Button>
+                          <div className="knowledge-documents">
+                            {levelDocuments.map((doc) => {
+                              const version = doc.versions[0];
+                              return (
+                                <article className="knowledge-document" key={doc.id}>
+                                  <FileText aria-hidden="true" />
+                                  <button
+                                    type="button"
+                                    onClick={() => void loadVersion(version?.id)}
+                                  >
+                                    <strong>{doc.logicalName}</strong>
+                                    <span>
+                                      {version?.filename} · {version?._count.chunks ?? 0} bölüm
+                                    </span>
+                                  </button>
+                                  <div className="knowledge-document-actions">
+                                    <Badge
+                                      tone={
+                                        version?.status === 'PUBLISHED'
+                                          ? 'success'
+                                          : version?.status === 'FAILED'
+                                            ? 'danger'
+                                            : 'neutral'
+                                      }
+                                    >
+                                      {statusLabel(version?.status)}
+                                    </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      aria-label={`${doc.logicalName} içeriğini görüntüle`}
+                                      onClick={() => void loadVersion(version?.id)}
+                                    >
+                                      <Eye />
+                                    </Button>
+                                    {version?.status === 'PUBLISHED' ? (
+                                      <Button
+                                        variant="ghost"
+                                        aria-label="Arşivle"
+                                        onClick={() => void status(version.id, 'ARCHIVED')}
+                                      >
+                                        <Archive />
+                                      </Button>
+                                    ) : null}
+                                  </div>
+                                </article>
+                              );
+                            })}
+                            {!levelDocuments.length ? (
+                              <p className="knowledge-section-empty">
+                                Bu seviyede henüz kaynak yok.
+                              </p>
                             ) : null}
                           </div>
-                        </article>
+                        </section>
                       );
                     })}
                   </div>
-                  {versionDetails ? (
-                    <div className="knowledge-preview panel">
-                      <div className="section-heading">
-                        <h2>{versionDetails.filename}</h2>
-                        <Badge tone="info">{versionDetails.status}</Badge>
-                      </div>
-                      <pre>{versionDetails.extractedText ?? 'Metin çıkarılmadı.'}</pre>
-                      <div className="knowledge-chunks">
-                        {versionDetails.chunks.map((chunk) => (
-                          <article key={chunk.id}>
-                            <strong>
-                              #{chunk.chunkIndex + 1} {chunk.titlePath}
-                            </strong>
-                            <p>{chunk.content}</p>
-                          </article>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
                   <div className="knowledge-search panel">
                     <div className="search-row">
                       <TextField
@@ -410,30 +459,48 @@ export default function KnowledgePage() {
               )}
             </section>
           </div>
-          <div className="knowledge-handoffs panel">
-            <div className="section-heading">
-              <h2>Açık handoff</h2>
-              <Badge tone={handoffs.length ? 'warning' : 'success'}>{handoffs.length}</Badge>
-            </div>
-            {handoffs.length ? (
-              handoffs.map((handoff) => (
-                <article className="handoff-row" key={handoff.id}>
-                  <div>
-                    <strong>{handoff.studentId.slice(0, 8)}</strong>
-                    <span>{new Date(handoff.createdAt).toLocaleString('tr-TR')}</span>
-                    <p>{handoff.reason}</p>
-                  </div>
-                  <Button variant="secondary" onClick={() => void resolveHandoff(handoff.id)}>
-                    Çözüldü
-                  </Button>
-                </article>
-              ))
-            ) : (
-              <p className="muted">Bekleyen handoff yok.</p>
-            )}
-          </div>
         </>
       )}
+      {versionDetails ? (
+        <Modal
+          title={versionDetails.filename}
+          description={`Belge durumu: ${statusLabel(versionDetails.status)}`}
+          onClose={() => setVersionDetails(undefined)}
+          actions={
+            <>
+              <Button variant="secondary" onClick={() => void loadVersion(versionDetails.id)}>
+                <RefreshCw /> Yenile
+              </Button>
+              <Button onClick={() => setVersionDetails(undefined)}>Kapat</Button>
+            </>
+          }
+        >
+          <div className="knowledge-preview">
+            <div className="knowledge-preview-summary">
+              <Badge tone={versionDetails.status === 'PUBLISHED' ? 'success' : 'info'}>
+                {statusLabel(versionDetails.status)}
+              </Badge>
+              <span>{versionDetails.chunks.length} bölüm</span>
+            </div>
+            <pre>
+              {versionDetails.extractedText ??
+                'Belge işleniyor. İçeriği görmek için kısa süre sonra yenileyin.'}
+            </pre>
+            {versionDetails.chunks.length ? (
+              <div className="knowledge-chunks">
+                {versionDetails.chunks.map((chunk) => (
+                  <article key={chunk.id}>
+                    <strong>
+                      #{chunk.chunkIndex + 1} {chunk.titlePath}
+                    </strong>
+                    <p>{chunk.content}</p>
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </Modal>
+      ) : null}
     </main>
   );
 }

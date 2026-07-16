@@ -7,7 +7,7 @@ import {
   type GetStudentContextInput,
   type StudentContextSection,
 } from '@meditation/core';
-import { PrismaClient } from '@meditation/database';
+import { Prisma, PrismaClient } from '@meditation/database';
 
 type CursorPayload = {
   studentId: string;
@@ -150,7 +150,7 @@ export class StudentContextReader {
       const payments = await this.prisma.payment.findMany({
         where: { studentId: student.id },
         orderBy: { reportedAt: 'desc' },
-        take: input.pageSize,
+        take: input.range === 'CURRENT_PACKAGE' ? 3 : input.pageSize,
         skip: input.range === 'ALL_PAGED' ? offset : 0,
       });
       const rows = payments.map((payment) => ({
@@ -171,12 +171,33 @@ export class StudentContextReader {
     }
 
     if (section === 'MEETINGS') {
-      const meetings = await this.prisma.weeklyMeeting.findMany({
-        where: { meetingSeries: { studentId: student.id } },
-        orderBy: { startsAt: 'asc' },
-        take: input.pageSize,
-        skip: input.range === 'ALL_PAGED' ? offset : 0,
-      });
+      const meetings =
+        input.range === 'CURRENT_PACKAGE'
+          ? await Promise.all([
+              this.prisma.weeklyMeeting.findMany({
+                where: {
+                  meetingSeries: { studentId: student.id },
+                  startsAt: { lt: asOf },
+                },
+                orderBy: { startsAt: 'desc' },
+                take: 2,
+              }),
+              this.prisma.weeklyMeeting.findMany({
+                where: {
+                  meetingSeries: { studentId: student.id },
+                  startsAt: { gte: asOf },
+                  status: 'SCHEDULED',
+                },
+                orderBy: { startsAt: 'asc' },
+                take: 2,
+              }),
+            ]).then(([recent, upcoming]) => [...recent.reverse(), ...upcoming])
+          : await this.prisma.weeklyMeeting.findMany({
+              where: { meetingSeries: { studentId: student.id } },
+              orderBy: { startsAt: 'asc' },
+              take: input.pageSize,
+              skip: input.range === 'ALL_PAGED' ? offset : 0,
+            });
       const rows = meetings.map((meeting) => ({
         occurrence: meeting.occurrenceNumber,
         startsAt: iso(meeting.startsAt),
@@ -210,20 +231,70 @@ export class StudentContextReader {
       include: { slots: true },
       orderBy: { revision: 'desc' },
     });
-    const sessions = await this.prisma.practiceSession.findMany({
-      where: {
-        studentId: student.id,
-        ...(input.range === 'CURRENT_PACKAGE' && packagePeriod
-          ? { serviceDate: { gte: packagePeriod.startDate, lt: packagePeriod.endExclusive } }
-          : input.range === 'LAST_30_DAYS'
-            ? { startAt: { gte: new Date(asOf.getTime() - 30 * 86400000), lte: asOf } }
-            : {}),
-      },
-      include: { practiceSlot: true },
-      orderBy: { startAt: 'asc' },
-      take: input.pageSize,
-      skip: input.range === 'ALL_PAGED' ? offset : 0,
-    });
+    const packageRange =
+      input.range === 'CURRENT_PACKAGE' && packagePeriod
+        ? { serviceDate: { gte: packagePeriod.startDate, lt: packagePeriod.endExclusive } }
+        : input.range === 'LAST_30_DAYS'
+          ? { startAt: { gte: new Date(asOf.getTime() - 30 * 86400000), lte: asOf } }
+          : {};
+    const visibleStatuses = ['SCHEDULED', 'COMPLETED', 'SKIPPED', 'MISSED'] as const;
+    type SessionWithSlot = Prisma.PracticeSessionGetPayload<{ include: { practiceSlot: true } }>;
+    let sessions: SessionWithSlot[];
+    let totals = { planned: 0, completed: 0, skipped: 0, missed: 0 };
+
+    if (input.range === 'CURRENT_PACKAGE') {
+      const [recentDescending, upcoming, statusCounts] = await Promise.all([
+        this.prisma.practiceSession.findMany({
+          where: {
+            studentId: student.id,
+            ...packageRange,
+            status: { in: ['COMPLETED', 'SKIPPED', 'MISSED'] },
+            startAt: { lte: asOf },
+          },
+          include: { practiceSlot: true },
+          orderBy: { startAt: 'desc' },
+          take: 5,
+        }),
+        this.prisma.practiceSession.findMany({
+          where: {
+            studentId: student.id,
+            ...packageRange,
+            status: 'SCHEDULED',
+            startAt: { gte: asOf },
+          },
+          include: { practiceSlot: true },
+          orderBy: { startAt: 'asc' },
+          take: 3,
+        }),
+        this.prisma.practiceSession.groupBy({
+          by: ['status'],
+          where: { studentId: student.id, ...packageRange, status: { in: [...visibleStatuses] } },
+          _count: { _all: true },
+        }),
+      ]);
+      sessions = [...recentDescending.reverse(), ...upcoming];
+      for (const row of statusCounts) {
+        totals.planned += row._count._all;
+        if (row.status === 'COMPLETED') totals.completed = row._count._all;
+        if (row.status === 'SKIPPED') totals.skipped = row._count._all;
+        if (row.status === 'MISSED') totals.missed = row._count._all;
+      }
+    } else {
+      sessions = await this.prisma.practiceSession.findMany({
+        where: { studentId: student.id, ...packageRange, status: { in: [...visibleStatuses] } },
+        include: { practiceSlot: true },
+        orderBy: { startAt: 'asc' },
+        take: input.pageSize,
+        skip: input.range === 'ALL_PAGED' ? offset : 0,
+      });
+      totals = sessions.reduce((acc, session) => {
+        acc.planned += 1;
+        if (session.status === 'COMPLETED') acc.completed += 1;
+        if (session.status === 'SKIPPED') acc.skipped += 1;
+        if (session.status === 'MISSED') acc.missed += 1;
+        return acc;
+      }, totals);
+    }
     const sessionRows = sessions.map((session) => ({
       serviceDate: session.serviceDate.toISOString().slice(0, 10),
       startAt: iso(session.startAt),
@@ -232,16 +303,6 @@ export class StudentContextReader {
       status: session.status,
     }));
     const sessionValues = sessionRows.map((row) => ({ ...row, recordHash: recordHash(row) }));
-    const totals = sessionRows.reduce(
-      (acc, session) => {
-        acc.planned += 1;
-        if (session.status === 'COMPLETED') acc.completed += 1;
-        if (session.status === 'SKIPPED') acc.skipped += 1;
-        if (session.status === 'MISSED') acc.missed += 1;
-        return acc;
-      },
-      { planned: 0, completed: 0, skipped: 0, missed: 0 },
-    );
     const nextPractice = sessions.find(
       (session) => session.startAt >= asOf && session.status === 'SCHEDULED',
     );

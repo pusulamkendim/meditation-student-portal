@@ -9,6 +9,9 @@ import {
 import { ConsentScope, LlmTask, PrismaClient } from '@meditation/database';
 import { releaseBudget, reserveBudget, settleBudget } from './llm-budget.js';
 
+const MAX_WEEKLY_REFLECTIONS = 20;
+const MAX_WEEKLY_REFLECTION_CHARS = 8_000;
+
 export class WeeklySummaryAiProcessor {
   private readonly encryption: FieldEncryption;
   constructor(
@@ -84,7 +87,7 @@ export class WeeklySummaryAiProcessor {
       },
       include: { practiceSession: true },
       orderBy: { createdAt: 'asc' },
-      take: 50,
+      take: MAX_WEEKLY_REFLECTIONS,
     });
     const reflectionText = reflections
       .map((reflection) =>
@@ -96,7 +99,7 @@ export class WeeklySummaryAiProcessor {
       .join('\n---\n');
     const input = JSON.stringify({
       deterministic: meeting.summary,
-      reflections: reflectionText.slice(0, 18_000),
+      reflections: reflectionText.slice(0, MAX_WEEKLY_REFLECTION_CHARS),
     });
     const price = task.primaryModel.priceVersions[0];
     const estimate = price

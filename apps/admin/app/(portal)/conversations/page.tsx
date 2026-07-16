@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 type Conversation = {
   id: string;
+  fullName?: string;
   status: string;
   messages: Array<{ occurredAt: string; direction: string; status: string }>;
   messageIntents: Array<{ createdAt: string; category: string; status: string }>;
@@ -59,7 +60,7 @@ export default function ConversationsPage() {
             {items.map((item) => (
               <a key={item.id} href={`/conversations/${item.id}`}>
                 <div>
-                  <strong>Öğrenci {item.id.slice(0, 8)}</strong>
+                  <strong>{item.fullName ?? `İsimsiz öğrenci · ${item.id.slice(0, 8)}`}</strong>
                   <span>
                     {item.messages[0]?.direction ?? item.messageIntents[0]?.category} ·{' '}
                     {item.messages[0]?.status ?? item.messageIntents[0]?.status}

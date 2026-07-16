@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -28,6 +29,14 @@ const testSendSchema = previewSchema.extend({ recipient: z.string().min(3).max(3
 const messageSchema = z.object({
   eventKey: systemEventKeySchema,
   name: z.string().min(1).max(120),
+});
+const quickMessageSchema = z.object({
+  eventKey: systemEventKeySchema,
+  name: z.string().min(1).max(120),
+  channel: z.nativeEnum(NotificationChannel),
+  locale: z.string().min(2).max(35).default('tr-TR'),
+  content: z.string().min(1).max(4096),
+  expertApproved: z.boolean().optional(),
 });
 const variantSchema = z.object({
   channel: z.nativeEnum(NotificationChannel),
@@ -81,11 +90,23 @@ export class MessageCatalogController {
     return this.catalog.createMessage(value.eventKey, value.name);
   }
 
+  @Post('standard-messages/quick')
+  @UseGuards(AdminCsrfGuard)
+  quickCreate(@Body() body: unknown) {
+    return this.catalog.quickCreate(quickMessageSchema.parse(body));
+  }
+
   @Post('standard-messages/:id/variants')
   @UseGuards(AdminCsrfGuard)
   createVariant(@Param('id') id: string, @Body() body: unknown) {
     const value = variantSchema.parse(body);
     return this.catalog.createVariant({ messageId: id, ...value });
+  }
+
+  @Delete('standard-messages/:id')
+  @UseGuards(AdminCsrfGuard)
+  deleteMessage(@Param('id') id: string) {
+    return this.catalog.deleteMessage(id);
   }
 
   @Post('standard-message-variants/:id/versions')

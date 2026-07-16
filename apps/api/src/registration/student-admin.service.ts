@@ -206,11 +206,14 @@ export class StudentAdminService {
     });
     if (!student) throw new NotFoundException('Student not found.');
 
-    const practiceGroups = await this.prisma.practiceSession.groupBy({
-      by: ['status'],
-      where: { studentId },
-      _count: { _all: true },
-    });
+    const [practiceGroups, openHandoffCount] = await Promise.all([
+      this.prisma.practiceSession.groupBy({
+        by: ['status'],
+        where: { studentId },
+        _count: { _all: true },
+      }),
+      this.prisma.handoff.count({ where: { studentId, status: 'OPEN' } }),
+    ]);
     const allMeetings = student.meetingSeries.flatMap((series) => series.meetings);
     const completedMeetingCount = allMeetings.filter(
       (meeting) => meeting.status === 'COMPLETED',
@@ -345,6 +348,7 @@ export class StudentAdminService {
       ),
       nextMeetingAt: nextMeeting?.startsAt.toISOString(),
       completedMeetingCount,
+      openHandoffCount,
     };
   }
 

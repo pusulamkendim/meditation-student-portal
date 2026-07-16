@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Inject, Param, Patch, Post, Req, UseGuards } from '@nestjs/common';
+import { FieldEncryption, type ApplicationConfig } from '@meditation/core';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
@@ -6,6 +7,7 @@ import { AdminSessionGuard } from '../auth/admin-session.guard.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { InternalChannelGuard } from '../registration/internal-channel.guard.js';
 import { PracticeService } from './practice.service.js';
+import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 
 const slots = z
   .array(
@@ -18,10 +20,21 @@ const slots = z
   .min(1);
 @Controller('v1')
 export class PracticeController {
+  private readonly encryption: FieldEncryption;
+
   constructor(
     @Inject(PracticeService) private readonly practice: PracticeService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
-  ) {}
+    @Inject(APPLICATION_CONFIG) config: ApplicationConfig,
+  ) {
+    if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID)
+      throw new Error('Student encryption keys are required.');
+    const keys = JSON.parse(config.DATA_ENCRYPTION_KEYS_JSON) as Record<string, string>;
+    this.encryption = new FieldEncryption(
+      new Map(Object.entries(keys).map(([id, key]) => [id, Buffer.from(key, 'base64')])),
+      config.ACTIVE_DATA_KEY_ID,
+    );
+  }
   @Get('admin/practice-sessions') @UseGuards(AdminSessionGuard) async sessions() {
     const items = await this.prisma.practiceSession.findMany({
       where: {
@@ -30,7 +43,9 @@ export class PracticeController {
       take: 200,
       orderBy: { startAt: 'desc' },
       include: {
-        student: { select: { timezone: true } },
+        student: {
+          select: { id: true, timezone: true, fullNameEncrypted: true, fullNameKeyId: true },
+        },
         practiceSlot: true,
         practicePlan: true,
         reflection: { include: { tags: true } },
@@ -40,6 +55,11 @@ export class PracticeController {
       items: items.map((item) => ({
         id: item.id,
         studentId: item.studentId,
+        studentName: this.decryptStudentName(
+          item.student.id,
+          item.student.fullNameEncrypted,
+          item.student.fullNameKeyId,
+        ),
         status: item.status,
         version: item.version,
         startAt: item.startAt.toISOString(),
@@ -61,6 +81,22 @@ export class PracticeController {
           })) ?? [],
       })),
     };
+  }
+
+  private decryptStudentName(
+    studentId: string,
+    encrypted: Uint8Array | null,
+    keyId: string | null,
+  ) {
+    if (!encrypted || !keyId) return undefined;
+    try {
+      return this.encryption.decrypt(
+        { ciphertext: Buffer.from(encrypted), keyId },
+        `student:${studentId}:name`,
+      );
+    } catch {
+      return undefined;
+    }
   }
   @Get('admin/students/:id/practice-plan') @UseGuards(AdminSessionGuard) async plan(
     @Param('id') id: string,
