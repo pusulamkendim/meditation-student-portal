@@ -310,6 +310,27 @@ describe.runIf(runE2e)('E2E-KNOWLEDGE knowledge management', () => {
     expect(versions.map(({ status }) => status)).toEqual(['ARCHIVED', 'PUBLISHED']);
   });
 
+  it('restores an archived version to published status', async () => {
+    const archived = await prisma.knowledgeDocumentVersion.findFirstOrThrow({
+      where: { status: 'ARCHIVED' },
+      orderBy: { createdAt: 'asc' },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/knowledge/versions/${archived.id}/status`,
+      payload: { status: 'PUBLISHED' },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual(
+      expect.objectContaining({ id: archived.id, status: 'PUBLISHED' }),
+    );
+    expect(
+      await prisma.knowledgeDocumentVersion.count({
+        where: { documentId: archived.documentId, status: 'PUBLISHED' },
+      }),
+    ).toBe(1);
+  });
+
   it('rejects unsupported stages before creating a document', async () => {
     const before = await prisma.knowledgeDocument.count({ where: { knowledgeBaseId: baseId } });
     const response = await upload({

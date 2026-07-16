@@ -167,8 +167,8 @@ export class KnowledgeService {
       where: { id: versionId },
     });
     if (!version) throw new NotFoundException('Belge sürümü bulunamadı.');
-    if (status === 'PUBLISHED' && !['READY', 'PUBLISHED'].includes(version.status))
-      throw new BadRequestException('Yalnızca READY sürümler yayınlanabilir.');
+    if (status === 'PUBLISHED' && !['READY', 'PUBLISHED', 'ARCHIVED'].includes(version.status))
+      throw new BadRequestException('Yalnızca hazır veya arşivlenmiş sürümler yayınlanabilir.');
     return this.prisma.$transaction(async (tx) => {
       if (status === 'PUBLISHED')
         await tx.knowledgeDocumentVersion.updateMany({

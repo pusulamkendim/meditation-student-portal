@@ -11,7 +11,17 @@ import {
   TextField,
   Toast,
 } from '@meditation/ui';
-import { Archive, BookOpen, Eye, FileText, FileUp, RefreshCw, Search, Upload } from 'lucide-react';
+import {
+  Archive,
+  BookOpen,
+  Eye,
+  FileText,
+  FileUp,
+  RefreshCw,
+  RotateCcw,
+  Search,
+  Upload,
+} from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -412,6 +422,15 @@ export default function KnowledgePage() {
                                         onClick={() => void status(version.id, 'ARCHIVED')}
                                       >
                                         <Archive />
+                                      </Button>
+                                    ) : null}
+                                    {version?.status === 'ARCHIVED' ? (
+                                      <Button
+                                        variant="ghost"
+                                        aria-label="Yeniden yayınla"
+                                        onClick={() => void status(version.id, 'PUBLISHED')}
+                                      >
+                                        <RotateCcw />
                                       </Button>
                                     ) : null}
                                   </div>
