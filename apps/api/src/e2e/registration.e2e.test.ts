@@ -44,6 +44,7 @@ import { MeetingService } from '../meetings/meeting.service.js';
 import { PracticeController } from '../practice/practice.controller.js';
 import { PracticeService } from '../practice/practice.service.js';
 import { PaymentService } from '../registration/payment.service.js';
+import { StudentAdminService } from '../registration/student-admin.service.js';
 
 const runE2e = process.env.RUN_REGISTRATION_E2E === 'true';
 const e2eAdminId = '00000000-0000-4000-8000-000000000001';
@@ -91,6 +92,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
   let practice: PracticeService;
   let payments: PaymentService;
   let meetings: MeetingService;
+  let studentAdmin: StudentAdminService;
 
   beforeAll(async () => {
     prisma = new PrismaClient({ datasourceUrl: databaseUrl });
@@ -120,6 +122,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
         TelegramWebhookService,
         PrismaService,
         PracticeService,
+        StudentAdminService,
         SystemMessageOrchestrator,
         { provide: APPLICATION_CONFIG, useValue: config },
         { provide: CLOCK_TOKEN, useValue: clock },
@@ -155,6 +158,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       agent,
     );
     practice = module.get(PracticeService);
+    studentAdmin = module.get(StudentAdminService);
     payments = new PaymentService(prisma as PrismaService, clock);
     meetings = new MeetingService(
       prisma as PrismaService,
@@ -879,6 +883,34 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     expect(afterSessions.map((session) => session.id).sort()).toEqual(
       expected.map((session) => session.id).sort(),
     );
+  });
+
+  it('PRACTICE-ADMIN-01B excludes superseded sessions without hiding visible practice history', async () => {
+    const current = await createTwoSlotPracticePlan();
+    const visibleSession = await prisma.practiceSession.findFirstOrThrow({
+      where: { practicePlanId: current.planId, status: 'SCHEDULED' },
+      orderBy: { startAt: 'asc' },
+    });
+    await prisma.practiceSession.update({
+      where: { id: visibleSession.id },
+      data: { status: 'COMPLETED' },
+    });
+    await prisma.practiceSession.createMany({
+      data: Array.from({ length: 121 }, (_, index) => ({
+        studentId: current.studentId,
+        practicePlanId: current.planId,
+        serviceDate: new Date(Date.UTC(2025, 0, 1 + index)),
+        startAt: new Date(Date.UTC(2025, 0, 1 + index, 8)),
+        durationMinutes: 15,
+        status: 'SUPPRESSED',
+        cancellationReason: 'PLAN_SUPERSEDED',
+      })),
+    });
+
+    const detail = await studentAdmin.detail(current.studentId, e2eAdminId);
+    const sessions = detail.practice.sessions;
+    expect(sessions.some((session) => session.id === visibleSession.id)).toBe(true);
+    expect(sessions.some((session) => session.status === 'SUPPRESSED')).toBe(false);
   });
 
   it('PRACTICE-ADMIN-02 keeps terminal and cancelled sessions unchanged during pause cycles', async () => {

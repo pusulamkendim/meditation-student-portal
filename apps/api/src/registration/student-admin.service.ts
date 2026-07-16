@@ -191,8 +191,9 @@ export class StudentAdminService {
           include: { slots: { orderBy: { slotKey: 'asc' } } },
         },
         practiceSessions: {
+          where: { status: { not: PracticeSessionStatus.SUPPRESSED } },
           orderBy: { startAt: 'desc' },
-          take: 120,
+          take: 500,
           include: { practiceSlot: true, reflection: { include: { tags: true } } },
         },
         meetingSeries: {
