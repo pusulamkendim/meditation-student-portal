@@ -46,6 +46,7 @@ export class StudentContextReader {
     const sections = [...new Set(input.sections)];
     const result: Record<string, unknown> = {};
     const hashes: string[] = [];
+    const sectionRecordHashes: Partial<Record<StudentContextSection, string[]>> = {};
     let pageCount = 1;
     let nextCursor: string | null = null;
 
@@ -53,6 +54,7 @@ export class StudentContextReader {
       const page = await this.readSection(student, section, input, cursor?.offset ?? 0, asOf);
       result[section] = page.value;
       hashes.push(...page.hashes);
+      sectionRecordHashes[section] = page.hashes;
       if (page.nextOffset !== undefined) {
         pageCount = Math.max(pageCount, 2);
         nextCursor = this.encodeCursor({
@@ -85,6 +87,7 @@ export class StudentContextReader {
       range: input.range,
       sections: result,
       recordHashes: hashes,
+      sectionRecordHashes,
       nextCursor,
     };
   }

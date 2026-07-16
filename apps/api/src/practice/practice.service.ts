@@ -764,7 +764,7 @@ export class PracticeService {
           reflection.trim(),
           `practice:${session.id}:reflection`,
         );
-        const savedReflection = await tx.practiceReflection.upsert({
+        await tx.practiceReflection.upsert({
           where: { practiceSessionId: session.id },
           create: {
             practiceSessionId: session.id,
@@ -774,15 +774,6 @@ export class PracticeService {
           update: {
             contentEncrypted: new Uint8Array(encrypted.ciphertext),
             contentKeyId: encrypted.keyId,
-          },
-        });
-        await tx.outboxEvent.create({
-          data: {
-            topic: 'llm.reflection-tagging',
-            aggregateType: 'PracticeReflection',
-            aggregateId: savedReflection.id,
-            eventType: 'ReflectionCaptured',
-            payload: { reflectionId: savedReflection.id, studentId },
           },
         });
       }

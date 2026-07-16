@@ -110,6 +110,12 @@ export async function processPracticeResponse(
   config: ApplicationConfig,
   inboxEventId: string,
   classifiedResponse?: 'COMPLETED' | 'SKIPPED' | 'REFLECT',
+  agentReflection?: {
+    answer: string;
+    tags: Array<{ tag: string; confidence: number }>;
+    operationId: string;
+    modelRef: string;
+  },
 ): Promise<boolean> {
   if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID || !config.LOOKUP_HMAC_KEY)
     throw new Error('Practice response encryption configuration is required.');
@@ -195,6 +201,18 @@ export async function processPracticeResponse(
           contentKeyId: encryptedReflection.keyId,
         },
       });
+      if (agentReflection)
+        await tx.reflectionTag.createMany({
+          data: agentReflection.tags.map((tag) => ({
+            reflectionId: reflection.id,
+            tag: tag.tag,
+            confidence: tag.confidence,
+            taxonomyVersion: 'agent-reply-v1',
+            operationId: agentReflection.operationId,
+            modelRef: agentReflection.modelRef,
+          })),
+          skipDuplicates: true,
+        });
       const existingMessage = await tx.message.findUnique({
         where: { inboxEventId: inbox.id },
         select: { id: true },
@@ -218,17 +236,37 @@ export async function processPracticeResponse(
           },
         });
       }
+      const intent = await tx.messageIntent.create({
+        data: {
+          studentId: identity.studentId,
+          channelIdentityId: identity.id,
+          category: 'AGENT_REPLY',
+          status: MessageIntentStatus.PENDING,
+          idempotencyKey: `agent:${inbox.id}`,
+          dueAt: now,
+          expiresAt: new Date(now.getTime() + 86_400_000),
+          aggregateVersion: session.student.version,
+          payload: {
+            rendered:
+              agentReflection?.answer ??
+              'Bunu paylaştığın için teşekkür ederim. Necip ile görüşmenizde bunları değerlendireceğiz.',
+            agent: true,
+            reflection: true,
+            reflectionId: reflection.id,
+          },
+        },
+      });
       await tx.outboxEvent.create({
         data: {
-          topic: 'llm.reflection-tagging',
-          aggregateType: 'PracticeReflection',
-          aggregateId: reflection.id,
-          eventType: 'ReflectionCaptured',
-          payload: { reflectionId: reflection.id, studentId: identity.studentId },
+          topic: 'message.intents',
+          aggregateType: 'MessageIntent',
+          aggregateId: intent.id,
+          eventType: 'MessageIntentCreated',
+          payload: { intentId: intent.id },
         },
       });
       await tx.inboundResponseOwnership.create({
-        data: { inboundMessageId: inbox.id, owner: 'NO_REPLY' },
+        data: { inboundMessageId: inbox.id, owner: 'AGENT_CONTEXTUAL', referenceId: intent.id },
       });
       await tx.inboxEvent.update({
         where: { id: inbox.id },

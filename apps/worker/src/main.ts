@@ -16,10 +16,8 @@ import { processMeetingReminder, processMeetingSummaries } from './meeting-lifec
 import { MeetingCalendarWorker } from './meeting-calendar.js';
 import { LlmAgentProcessor } from './llm-agent.js';
 import { KnowledgeIngestionProcessor } from './knowledge-ingestion.js';
-import { ReflectionTaggingProcessor } from './reflection-tagging.js';
 import { WeeklySummaryAiProcessor } from './weekly-summary-ai.js';
 import { RegistrationInboundProcessor } from './registration-inbound.js';
-import { InboundIntentClassifier } from './inbound-intent.js';
 import { InboundIntentRouter } from './inbound-intent-router.js';
 import { AdminPanelNotificationProcessor } from './admin-panel-notification.js';
 
@@ -32,17 +30,9 @@ async function bootstrap(): Promise<void> {
   const calendarWorker = new MeetingCalendarWorker(prisma, config, systemClock);
   const llmAgent = new LlmAgentProcessor(prisma, config, systemClock);
   const knowledgeIngestion = new KnowledgeIngestionProcessor(prisma, config, systemClock);
-  const reflectionTagging = new ReflectionTaggingProcessor(prisma, config, systemClock);
   const weeklySummaryAi = new WeeklySummaryAiProcessor(prisma, config, systemClock);
   const registrationInbound = new RegistrationInboundProcessor(prisma, config, systemClock);
-  const inboundIntentClassifier = new InboundIntentClassifier(prisma, config, systemClock);
-  const inboundIntentRouter = new InboundIntentRouter(
-    prisma,
-    config,
-    systemClock,
-    inboundIntentClassifier,
-    llmAgent,
-  );
+  const inboundIntentRouter = new InboundIntentRouter(llmAgent);
   const adminPanelNotifications = new AdminPanelNotificationProcessor(prisma);
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
   await syncSystemEventRegistry(prisma);
@@ -77,7 +67,6 @@ async function bootstrap(): Promise<void> {
               'meeting.calendar-update',
               'llm.agent-reply',
               'knowledge.document-parse',
-              'llm.reflection-tagging',
               'llm.weekly-summary',
               'admin.notifications',
             ],
@@ -89,7 +78,6 @@ async function bootstrap(): Promise<void> {
       for (const event of events) {
         const gatedFlag: Record<string, string> = {
           'knowledge.document-parse': 'knowledge.ingestion.enabled',
-          'llm.reflection-tagging': 'llm.reflection-tagging.enabled',
           'llm.weekly-summary': 'llm.weekly-summary.enabled',
         };
         const requiredFlag = gatedFlag[event.topic];
@@ -104,7 +92,6 @@ async function bootstrap(): Promise<void> {
           meetingId?: string;
           retryOperationId?: string;
           versionId?: string;
-          reflectionId?: string;
           outboxEventId?: string;
         };
         let queueName: string;
@@ -129,10 +116,6 @@ async function bootstrap(): Promise<void> {
           case 'knowledge.document-parse':
             queueName = 'knowledge.document-parse';
             data = { versionId: payload.versionId };
-            break;
-          case 'llm.reflection-tagging':
-            queueName = 'llm.reflection-tagging';
-            data = { reflectionId: payload.reflectionId };
             break;
           case 'llm.weekly-summary':
             queueName = 'llm.weekly-summary';
@@ -230,11 +213,6 @@ async function bootstrap(): Promise<void> {
   await boss.work<{ versionId: string }>('knowledge.document-parse', async (jobs) => {
     for (const job of jobs)
       if (job.data.versionId) await knowledgeIngestion.process(job.data.versionId);
-  });
-  await boss.createQueue('llm.reflection-tagging');
-  await boss.work<{ reflectionId: string }>('llm.reflection-tagging', async (jobs) => {
-    for (const job of jobs)
-      if (job.data.reflectionId) await reflectionTagging.process(job.data.reflectionId);
   });
   await boss.createQueue('llm.weekly-summary');
   await boss.work<{ meetingId: string }>('llm.weekly-summary', async (jobs) => {

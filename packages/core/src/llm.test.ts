@@ -36,6 +36,8 @@ describe('llm contracts', () => {
 
   it('rejects evidence not returned by context', () => {
     const output = agentReplyOutputSchema.parse({
+      action: 'ANSWER',
+      confidence: 99,
       answer: 'Programın 08:00.',
       usedSections: ['PRACTICE'],
       asOf: '2026-07-12T10:00:00.000Z',

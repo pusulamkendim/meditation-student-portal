@@ -33,6 +33,17 @@ export const getStudentContextInputSchema = z.object({
 export type GetStudentContextInput = z.infer<typeof getStudentContextInputSchema>;
 
 export const agentReplyOutputSchema = z.object({
+  action: z.enum([
+    'ANSWER',
+    'SMALL_TALK',
+    'PRACTICE_COMPLETE',
+    'PRACTICE_SKIP',
+    'PRACTICE_REFLECTION',
+    'CHANGE_REQUEST',
+    'SAFETY',
+    'HANDOFF',
+  ]),
+  confidence: z.number().int().min(0).max(100),
   answer: z.string().min(1).max(2000),
   usedSections: z.array(studentContextSectionSchema),
   asOf: z.string().datetime(),
@@ -41,6 +52,25 @@ export const agentReplyOutputSchema = z.object({
   reasonCode: z.string().max(120).optional(),
   sourceChunkIds: z.array(z.string().uuid()).max(6).default([]),
   supported: z.boolean().default(true),
+  reflectionTags: z
+    .array(
+      z.object({
+        tag: z.enum([
+          'CALM',
+          'RESTLESSNESS',
+          'SLEEPINESS',
+          'FOCUS_DIFFICULTY',
+          'EMOTIONAL_INTENSITY',
+          'BODY_SENSATION',
+          'POSITIVE_SHIFT',
+          'PRACTICE_BARRIER',
+          'SAFETY_CONCERN',
+        ]),
+        confidence: z.number().min(0).max(1),
+      }),
+    )
+    .max(3)
+    .default([]),
 });
 export type AgentReplyOutput = z.infer<typeof agentReplyOutputSchema>;
 

@@ -17,6 +17,8 @@ describe('GeminiPaidAdapter', () => {
                     parts: [
                       {
                         text: JSON.stringify({
+                          action: 'ANSWER',
+                          confidence: 99,
                           answer: '08:00',
                           usedSections: ['PRACTICE'],
                           asOf: '2026-07-12T10:00:00.000Z',

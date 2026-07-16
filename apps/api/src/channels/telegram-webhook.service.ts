@@ -10,7 +10,6 @@ import {
 import { ChannelType, Prisma } from '@meditation/database';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 import { PrismaService } from '../database/prisma.service.js';
-import { shouldRouteToPractice } from './inbound-routing.js';
 
 @Injectable()
 export class TelegramWebhookService {
@@ -84,82 +83,9 @@ export class TelegramWebhookService {
           },
           data: { lastInboundAt: event.occurredAt },
         });
-        const awaitingPractice = event.text
-          ? await transaction.practiceSession.findFirst({
-              where: {
-                OR: [
-                  { status: 'AWAITING_RESPONSE' },
-                  {
-                    status: 'COMPLETED',
-                    updatedAt: { gte: new Date(event.occurredAt.getTime() - 60 * 60_000) },
-                    reflection: { is: null },
-                  },
-                ],
-                student: {
-                  channelIdentities: {
-                    some: {
-                      externalUserHmac: this.lookup.digest(event.sender),
-                      channelAccount: {
-                        type: ChannelType.TELEGRAM,
-                        externalId: this.config.TELEGRAM_ACCOUNT_ID,
-                      },
-                    },
-                  },
-                },
-              },
-              select: { id: true },
-            })
-          : null;
-        const replySource = event.repliedToExternalMessageId
-          ? await transaction.message.findFirst({
-              where: {
-                channelIdentity: {
-                  externalUserHmac: this.lookup.digest(event.sender),
-                  channelAccount: {
-                    type: ChannelType.TELEGRAM,
-                    externalId: this.config.TELEGRAM_ACCOUNT_ID,
-                  },
-                },
-                externalMessageId: event.repliedToExternalMessageId,
-                direction: 'OUTBOUND',
-              },
-              include: { messageIntent: true },
-            })
-          : null;
-        const replyEvent = (
-          replySource?.messageIntent?.payload as Record<string, unknown> | undefined
-        )?.eventKey;
-        const recentSource = event.repliedToExternalMessageId
-          ? null
-          : await transaction.message.findFirst({
-              where: {
-                channelIdentity: {
-                  externalUserHmac: this.lookup.digest(event.sender),
-                  channelAccount: {
-                    type: ChannelType.TELEGRAM,
-                    externalId: this.config.TELEGRAM_ACCOUNT_ID,
-                  },
-                },
-                direction: 'OUTBOUND',
-                messageIntentId: { not: null },
-                occurredAt: { gte: new Date(event.occurredAt.getTime() - 24 * 60 * 60_000) },
-              },
-              orderBy: { occurredAt: 'desc' },
-              include: { messageIntent: true },
-            });
-        const recentEvent = (
-          recentSource?.messageIntent?.payload as Record<string, unknown> | undefined
-        )?.eventKey;
         await transaction.outboxEvent.create({
           data: {
-            topic: shouldRouteToPractice({
-              text: event.text,
-              replyEvent: typeof replyEvent === 'string' ? replyEvent : undefined,
-              recentEvent: typeof recentEvent === 'string' ? recentEvent : undefined,
-              hasAwaitingPractice: Boolean(awaitingPractice),
-            })
-              ? 'practice.inbound'
-              : 'channel.inbound',
+            topic: 'channel.inbound',
             aggregateType: 'InboxEvent',
             aggregateId: inbox.id,
             eventType: 'MESSAGE_RECEIVED',
