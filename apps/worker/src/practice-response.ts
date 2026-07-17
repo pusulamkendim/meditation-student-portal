@@ -31,6 +31,7 @@ async function createResponseIntent(
     aggregateVersion: number;
     idempotencyKey: string;
     variables: Record<string, string>;
+    context?: { practiceSessionId?: string };
   },
 ) {
   const versions = await tx.standardMessageVersion.findMany({
@@ -80,6 +81,7 @@ async function createResponseIntent(
         standardMessageVersionId: variant.id,
         rendered: renderMessageTemplate(input.eventKey, variant.content, input.variables),
         locale: variant.variant.locale,
+        ...input.context,
       },
     },
   });
@@ -412,9 +414,10 @@ export async function processPracticeResponse(
       channelIdentityId: identity.id,
       locale: session.student.preferredLocale,
       stage: session.student.curriculumStage,
-      aggregateVersion: session.student.version,
+      aggregateVersion: session.version + 1,
       idempotencyKey: `practice:${session.id}:${response.toLowerCase()}-ack`,
       variables: { nextPracticeAtText },
+      context: { practiceSessionId: session.id },
     });
     if (response === 'COMPLETED')
       await createResponseIntent(tx, now, {
@@ -423,9 +426,10 @@ export async function processPracticeResponse(
         channelIdentityId: identity.id,
         locale: session.student.preferredLocale,
         stage: session.student.curriculumStage,
-        aggregateVersion: session.student.version,
+        aggregateVersion: session.version + 1,
         idempotencyKey: `practice:${session.id}:reflection-request`,
         variables: {},
+        context: { practiceSessionId: session.id },
       });
     await tx.inboundResponseOwnership.create({
       data: {

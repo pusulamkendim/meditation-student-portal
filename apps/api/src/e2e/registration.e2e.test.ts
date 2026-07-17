@@ -1356,6 +1356,71 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
         },
       }),
     ).toBe(1);
+    expect(
+      await prisma.conversationContextResolution.findUniqueOrThrow({
+        where: { inboxEventId: result.inboxId },
+      }),
+    ).toMatchObject({
+      eventKey: 'PRACTICE_REFLECTION_REQUEST',
+      entityType: 'PracticeSession',
+      entityId: current.sessionId,
+    });
+  });
+
+  it('LLM-07 stores an active reflection when the agent provider is unavailable', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    await sendPracticeResponse(current.senderId, 'Yaptım');
+    await dispatchPending(current.studentId);
+
+    const result = await sendPracticeResponse(
+      current.senderId,
+      'E2E_PROVIDER_DOWN Başta odağım dağıldı ama kısa sürede tekrar nefesime döndüm.',
+    );
+    await dispatchPending(current.studentId);
+
+    expect(result.routingResult).toBe('processed');
+    const reflection = await prisma.practiceReflection.findUniqueOrThrow({
+      where: { practiceSessionId: current.sessionId },
+    });
+    expect(
+      encryption.decrypt(
+        {
+          ciphertext: Buffer.from(reflection.contentEncrypted),
+          keyId: reflection.contentKeyId,
+        },
+        `practice:${current.sessionId}:reflection`,
+      ),
+    ).toContain('Başta odağım dağıldı');
+    expect(
+      await prisma.inboundResponseOwnership.findUniqueOrThrow({
+        where: { inboundMessageId: result.inboxId },
+      }),
+    ).toMatchObject({ owner: 'AGENT_CONTEXTUAL' });
+    expect(
+      await prisma.inboundIntentDecision.findUniqueOrThrow({
+        where: { inboxEventId: result.inboxId },
+      }),
+    ).toMatchObject({
+      domain: 'PRACTICE',
+      action: 'REFLECT',
+      confidence: 0,
+      status: 'APPLIED',
+    });
+    const reply = await prisma.messageIntent.findUniqueOrThrow({
+      where: { idempotencyKey: `agent:${result.inboxId}` },
+    });
+    expect((reply.payload as { rendered: string }).rendered).toBe(
+      'Bunu paylaştığın için teşekkür ederim. Necip ile görüşmenizde bunları değerlendireceğiz.',
+    );
+    expect(
+      await prisma.llmUsageLog.count({
+        where: {
+          task: 'AGENT_REPLY',
+          status: 'FAILED',
+          metadata: { path: ['inboxEventId'], equals: result.inboxId },
+        },
+      }),
+    ).toBeGreaterThan(0);
   });
 
   it('FLOW-01 records the current admin-plan and student-response behavior', async () => {
@@ -2274,6 +2339,8 @@ async function fakeGeminiFetch(url: string | URL | Request, init?: RequestInit) 
     ? (JSON.parse(knowledgeJson) as Array<{ id: string; title: string; content: string }>)
     : [];
   const normalized = question.normalize('NFKC').toLocaleLowerCase('tr-TR').replaceAll('ı', 'i');
+  if (normalized.includes('e2e_provider_down'))
+    return new Response(JSON.stringify({ error: 'temporarily unavailable' }), { status: 503 });
   const usedSections: string[] = [];
   if (/görüş|meet|link/.test(normalized)) usedSections.push('MEETINGS');
   if (/ödeme|odeme/.test(normalized)) usedSections.push('PAYMENT');

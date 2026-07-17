@@ -68,13 +68,20 @@ export class MessageDispatcher {
               },
             })
           : undefined;
+      const eventKey = typeof payload.eventKey === 'string' ? payload.eventKey : undefined;
+      const practiceMessageMatchesState = practiceSession
+        ? (intent.category === 'PRACTICE_REMINDER' && practiceSession.status === 'REMINDED') ||
+          (intent.category === 'PRACTICE_CHECKIN' &&
+            practiceSession.status === 'AWAITING_RESPONSE') ||
+          (eventKey === 'PRACTICE_COMPLETED_ACK' && practiceSession.status === 'COMPLETED') ||
+          (eventKey === 'PRACTICE_SKIPPED_ACK' && practiceSession.status === 'SKIPPED') ||
+          (eventKey === 'PRACTICE_REFLECTION_REQUEST' && practiceSession.status === 'COMPLETED')
+        : true;
       const practiceStateValid = practiceSession
         ? practiceSession.practicePlan.status === 'ACTIVE' &&
           practiceSession.practicePlan.subscriptionPeriod.status === 'ACTIVE' &&
           practiceSession.version === intent.aggregateVersion &&
-          ((intent.category === 'PRACTICE_REMINDER' && practiceSession.status === 'REMINDED') ||
-            (intent.category === 'PRACTICE_CHECKIN' &&
-              practiceSession.status === 'AWAITING_RESPONSE'))
+          practiceMessageMatchesState
         : true;
       const meetingStateValid = meeting
         ? meeting.status === 'SCHEDULED' &&

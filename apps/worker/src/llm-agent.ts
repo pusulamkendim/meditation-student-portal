@@ -405,7 +405,11 @@ export class LlmAgentProcessor {
             status: 'FAILED',
             fallbackUsed: candidate.fallbackUsed,
             errorCode: error instanceof Error ? error.name : 'UNKNOWN',
-            metadata: { inboxEventId, maskedCategories: masked.maskedCategories },
+            metadata: {
+              inboxEventId,
+              maskedCategories: masked.maskedCategories,
+              providerErrorCode: error instanceof LlmProviderError ? error.code : undefined,
+            },
           },
         });
         if (
@@ -419,6 +423,26 @@ export class LlmAgentProcessor {
     }
     await releaseBudget(this.prisma, operationId);
     void lastError;
+    if (activeContext?.eventKey === 'PRACTICE_REFLECTION_REQUEST') {
+      const answer =
+        'Bunu paylaştığın için teşekkür ederim. Necip ile görüşmenizde bunları değerlendireceğiz.';
+      if (
+        await processPracticeResponse(this.prisma, this.clock, this.config, inbox.id, 'REFLECT', {
+          answer,
+          tags: [],
+          operationId: `reflection-fallback:${inbox.id}`,
+          modelRef: 'provider-unavailable',
+        })
+      ) {
+        await this.recordReflectionFallbackDecision(
+          inbox.id,
+          identity.studentId,
+          activeContext,
+          recentMessages.length,
+        );
+        return 'processed';
+      }
+    }
     await this.recordFailedDecision(inbox.id, identity.studentId, recentMessages.length);
     return this.createHandoff(
       inbox.id,
@@ -426,6 +450,43 @@ export class LlmAgentProcessor {
       identity.id,
       'Yanıtını oluşturamadım; sorunu görüşmemizde ele almak üzere not aldım.',
     );
+  }
+
+  private async recordReflectionFallbackDecision(
+    inboxEventId: string,
+    studentId: string,
+    activeContext: NonNullable<Awaited<ReturnType<ConversationContextResolver['resolve']>>>,
+    historyCount: number,
+  ) {
+    await this.prisma.inboundIntentDecision.upsert({
+      where: { inboxEventId },
+      create: {
+        inboxEventId,
+        studentId,
+        operationId: `agent-decision:${inboxEventId}`,
+        domain: 'PRACTICE',
+        action: 'REFLECT',
+        confidence: 0,
+        contextSource: activeContext.method === 'EXPLICIT_REPLY' ? 'REPLY' : 'EVENT',
+        contextSnapshot: {
+          eventKey: activeContext.eventKey,
+          entityType: activeContext.entityType ?? null,
+          entityId: activeContext.entityId ?? null,
+          historyCount,
+          fallbackReason: 'AGENT_PROVIDER_UNAVAILABLE',
+        },
+        status: 'APPLIED',
+        appliedAt: this.clock.now(),
+      },
+      update: {
+        domain: 'PRACTICE',
+        action: 'REFLECT',
+        confidence: 0,
+        contextSource: activeContext.method === 'EXPLICIT_REPLY' ? 'REPLY' : 'EVENT',
+        status: 'APPLIED',
+        appliedAt: this.clock.now(),
+      },
+    });
   }
 
   private async recordDecision(input: {

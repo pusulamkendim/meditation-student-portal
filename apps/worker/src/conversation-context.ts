@@ -46,7 +46,7 @@ export class ConversationContextResolver {
             messageIntentId: { not: null },
             occurredAt: { gte: new Date(now.getTime() - 24 * 60 * 60_000), lte: now },
           },
-          orderBy: { occurredAt: 'desc' },
+          orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
           include: { messageIntent: true },
         });
     const source = explicit ?? recent;
