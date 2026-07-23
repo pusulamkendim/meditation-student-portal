@@ -196,7 +196,8 @@ export default function MeetingsPage() {
 
   async function createSeries(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const data = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const data = new FormData(form);
     const subscriptionId = String(data.get('subscriptionId') ?? '');
     const firstStartsAt = String(data.get('firstStartsAt') ?? '');
     if (!subscriptionId || !firstStartsAt) return;
@@ -205,7 +206,7 @@ export default function MeetingsPage() {
         method: 'POST',
         body: JSON.stringify({ firstStartsAt: new Date(firstStartsAt).toISOString() }),
       });
-      event.currentTarget.reset();
+      form.reset();
       setNotice('Dört görüşmelik seri oluşturuldu. Takvim senkronu kuyruğa alındı.');
       await load();
     } catch (reason) {
@@ -271,14 +272,15 @@ export default function MeetingsPage() {
 
   async function saveNote(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     if (!selected) return;
-    const content = String(new FormData(event.currentTarget).get('content') ?? '');
+    const content = String(new FormData(form).get('content') ?? '');
     try {
       await request(`meetings/${selected.id}/coach-note`, {
         method: 'PUT',
         body: JSON.stringify({ content }),
       });
-      event.currentTarget.reset();
+      form.reset();
       setNotice('Koç notu yeni sürüm olarak kaydedildi.');
       await load();
     } catch (reason) {
