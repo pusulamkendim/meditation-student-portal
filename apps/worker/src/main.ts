@@ -32,7 +32,7 @@ async function bootstrap(): Promise<void> {
   const knowledgeIngestion = new KnowledgeIngestionProcessor(prisma, config, systemClock);
   const weeklySummaryAi = new WeeklySummaryAiProcessor(prisma, config, systemClock);
   const registrationInbound = new RegistrationInboundProcessor(prisma, config, systemClock);
-  const inboundIntentRouter = new InboundIntentRouter(llmAgent);
+  const inboundIntentRouter = new InboundIntentRouter(llmAgent, prisma, systemClock, config);
   const adminPanelNotifications = new AdminPanelNotificationProcessor(prisma);
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
   await syncSystemEventRegistry(prisma);

@@ -149,7 +149,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     processor = new RegistrationInboundProcessor(prisma, config, clock);
     dispatcher = new MessageDispatcher(prisma, clock, config, { TELEGRAM: collector });
     agent = new LlmAgentProcessor(prisma, config, clock);
-    intentRouter = new InboundIntentRouter(agent);
+    intentRouter = new InboundIntentRouter(agent, prisma, clock, config);
     practice = module.get(PracticeService);
     studentAdmin = module.get(StudentAdminService);
     payments = new PaymentService(prisma as PrismaService, clock);
@@ -162,6 +162,10 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     await prisma.llmProvider.update({
       where: { adapterId: 'gemini' },
       data: { status: 'ENABLED' },
+    });
+    await prisma.featureFlagConfig.update({
+      where: { key: 'llm.agent-reply.enabled' },
+      data: { enabled: true, rolloutPercentage: 100 },
     });
     vi.stubGlobal('fetch', fakeGeminiFetch);
   });
@@ -369,7 +373,11 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     };
   }
 
-  async function sendPracticeResponse(senderId: number, text: string, replyToMessageId?: number) {
+  async function receivePracticeResponse(
+    senderId: number,
+    text: string,
+    replyToMessageId?: number,
+  ) {
     const currentUpdateId = ++updateId;
     const response = await app.inject({
       method: 'POST',
@@ -395,6 +403,11 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       where: { aggregateId: inbox.id, eventType: 'MESSAGE_RECEIVED' },
       orderBy: { createdAt: 'desc' },
     });
+    return { inbox, route };
+  }
+
+  async function sendPracticeResponse(senderId: number, text: string, replyToMessageId?: number) {
+    const { inbox, route } = await receivePracticeResponse(senderId, text, replyToMessageId);
     let routingResult: Awaited<ReturnType<InboundIntentRouter['process']>> | false = false;
     if (route.topic === 'practice.inbound') {
       routingResult = (await processPracticeResponse(prisma, clock, config, inbox.id))
@@ -1318,7 +1331,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     });
   });
 
-  it('LLM-06 stores reflection tone and replies without a reflection-tagging call', async () => {
+  it('REFLECTION-01 stores the first reply against the prompted practice without LLM', async () => {
     const current = await preparePracticeStage('CHECKIN');
     await sendPracticeResponse(current.senderId, 'Yaptım');
     await dispatchPending(current.studentId);
@@ -1332,21 +1345,29 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       where: { practiceSessionId: current.sessionId },
       include: { tags: true },
     });
-    const reply = await prisma.messageIntent.findUniqueOrThrow({
-      where: { idempotencyKey: `agent:${result.inboxId}` },
+    const ownership = await prisma.inboundResponseOwnership.findUniqueOrThrow({
+      where: { inboundMessageId: result.inboxId },
     });
-    expect(reflection.tags).toEqual(
-      expect.arrayContaining([expect.objectContaining({ tag: 'FOCUS_DIFFICULTY' })]),
-    );
-    expect(reply.payload).toMatchObject({ reflection: true });
-    expect((reply.payload as { rendered: string }).rendered).toContain(
-      'Bunu paylaştığın için teşekkür ederim.',
-    );
+    const reply = await prisma.messageIntent.findUniqueOrThrow({
+      where: { id: ownership.referenceId! },
+    });
     expect(
-      await prisma.llmUsageLog.count({
-        where: { studentId: current.studentId, task: 'REFLECTION_TAGGING' },
-      }),
-    ).toBe(0);
+      encryption.decrypt(
+        {
+          ciphertext: Buffer.from(reflection.contentEncrypted),
+          keyId: reflection.contentKeyId,
+        },
+        `practice:${current.sessionId}:reflection`,
+      ),
+    ).toBe('Başta odaklanmakta zorlandım ama sonra sakinleştim.');
+    expect(reflection.tags).toHaveLength(0);
+    expect(ownership.owner).toBe('SYSTEM_STANDARD_MESSAGE');
+    expect(reply.payload).toMatchObject({
+      eventKey: 'PRACTICE_REFLECTION_RECEIVED',
+      practiceSessionId: current.sessionId,
+      rendered:
+        'Bunu paylaştığın için teşekkür ederim. Necip ile görüşmenizde bunları değerlendireceğiz.',
+    });
     expect(
       await prisma.llmUsageLog.count({
         where: {
@@ -1355,19 +1376,211 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
           metadata: { path: ['inboxEventId'], equals: result.inboxId },
         },
       }),
-    ).toBe(1);
+    ).toBe(0);
     expect(
-      await prisma.conversationContextResolution.findUniqueOrThrow({
+      await prisma.inboundIntentDecision.count({
         where: { inboxEventId: result.inboxId },
       }),
-    ).toMatchObject({
-      eventKey: 'PRACTICE_REFLECTION_REQUEST',
-      entityType: 'PracticeSession',
-      entityId: current.sessionId,
-    });
+    ).toBe(0);
   });
 
-  it('LLM-07 stores an active reflection when the agent provider is unavailable', async () => {
+  it('REFLECTION-02 leaves reflection empty after the next practice message', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    await sendPracticeResponse(current.senderId, 'Yaptım');
+    await dispatchPending(current.studentId);
+    expect(
+      await prisma.message.count({
+        where: {
+          studentId: current.studentId,
+          direction: 'OUTBOUND',
+          messageIntent: {
+            payload: {
+              path: ['eventKey'],
+              equals: 'PRACTICE_REFLECTION_REQUEST',
+            },
+          },
+        },
+      }),
+    ).toBe(1);
+
+    clock.advanceTo('2026-07-16T09:10:00.000Z');
+    await processPracticeLifecycle(prisma, clock, config);
+    await dispatchPending(current.studentId);
+    expect(
+      await prisma.message.count({
+        where: {
+          studentId: current.studentId,
+          direction: 'OUTBOUND',
+          messageIntent: { category: 'PRACTICE_REMINDER' },
+          occurredAt: { gt: new Date('2026-07-16T09:00:00.000Z') },
+        },
+      }),
+    ).toBeGreaterThan(0);
+    expect(
+      await prisma.practiceReflection.count({
+        where: { practiceSessionId: current.sessionId },
+      }),
+    ).toBe(0);
+
+    await prisma.featureFlagConfig.update({
+      where: { key: 'llm.agent-reply.enabled' },
+      data: { enabled: false, rolloutPercentage: 0 },
+    });
+    try {
+      const lateReply = await sendPracticeResponse(
+        current.senderId,
+        'Başta zorlandım ama sonra rahatladım.',
+      );
+      expect(lateReply.routingResult).toBe('ignored');
+      expect(
+        await prisma.practiceReflection.count({
+          where: { practiceSessionId: current.sessionId },
+        }),
+      ).toBe(0);
+      expect(
+        await prisma.messageIntent.count({
+          where: {
+            studentId: current.studentId,
+            payload: {
+              path: ['eventKey'],
+              equals: 'PRACTICE_REFLECTION_RECEIVED',
+            },
+          },
+        }),
+      ).toBe(0);
+    } finally {
+      await prisma.featureFlagConfig.update({
+        where: { key: 'llm.agent-reply.enabled' },
+        data: { enabled: true, rolloutPercentage: 100 },
+      });
+    }
+  });
+
+  it('REFLECTION-03 attaches a reply to the latest prompted practice', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    await sendPracticeResponse(current.senderId, 'Yaptım');
+    await dispatchPending(current.studentId);
+
+    clock.advanceTo('2026-07-16T09:10:00.000Z');
+    await processPracticeLifecycle(prisma, clock, config);
+    await dispatchPending(current.studentId);
+    clock.advanceTo('2026-07-16T09:45:00.000Z');
+    await processPracticeLifecycle(prisma, clock, config);
+    await dispatchPending(current.studentId);
+    const secondSession = await prisma.practiceSession.findFirstOrThrow({
+      where: {
+        studentId: current.studentId,
+        id: { not: current.sessionId },
+        status: 'AWAITING_RESPONSE',
+      },
+      orderBy: { startAt: 'asc' },
+    });
+
+    await sendPracticeResponse(current.senderId, 'Yaptım');
+    await dispatchPending(current.studentId);
+    await sendPracticeResponse(
+      current.senderId,
+      'İkinci pratikte nefesime dönmek daha kolay oldu.',
+    );
+    await dispatchPending(current.studentId);
+
+    expect(
+      await prisma.practiceReflection.count({
+        where: { practiceSessionId: current.sessionId },
+      }),
+    ).toBe(0);
+    const reflection = await prisma.practiceReflection.findUniqueOrThrow({
+      where: { practiceSessionId: secondSession.id },
+    });
+    expect(
+      encryption.decrypt(
+        {
+          ciphertext: Buffer.from(reflection.contentEncrypted),
+          keyId: reflection.contentKeyId,
+        },
+        `practice:${secondSession.id}:reflection`,
+      ),
+    ).toBe('İkinci pratikte nefesime dönmek daha kolay oldu.');
+  });
+
+  it('REFLECTION-04 accepts an on-time reply even when worker processing is delayed', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    await sendPracticeResponse(current.senderId, 'Yaptım');
+    await dispatchPending(current.studentId);
+
+    clock.advanceTo('2026-07-15T09:50:00.000Z');
+    const pendingReply = await receivePracticeResponse(
+      current.senderId,
+      'Nefesime döndükçe bedenimdeki gerginlik azaldı.',
+    );
+    expect(pendingReply.route.topic).toBe('channel.inbound');
+
+    clock.advanceTo('2026-07-16T09:10:00.000Z');
+    await processPracticeLifecycle(prisma, clock, config);
+    await dispatchPending(current.studentId);
+    expect(await processor.process(pendingReply.inbox.id)).toBe('unhandled');
+    expect(await intentRouter.process(pendingReply.inbox.id)).toBe('processed');
+    await dispatchPending(current.studentId);
+
+    const reflection = await prisma.practiceReflection.findUniqueOrThrow({
+      where: { practiceSessionId: current.sessionId },
+    });
+    expect(
+      encryption.decrypt(
+        {
+          ciphertext: Buffer.from(reflection.contentEncrypted),
+          keyId: reflection.contentKeyId,
+        },
+        `practice:${current.sessionId}:reflection`,
+      ),
+    ).toBe('Nefesime döndükçe bedenimdeki gerginlik azaldı.');
+  });
+
+  it('STATIC-01 ignores open student questions while agent replies are disabled', async () => {
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    await activateStudent(studentId);
+    await prisma.featureFlagConfig.update({
+      where: { key: 'llm.agent-reply.enabled' },
+      data: { enabled: false, rolloutPercentage: 0 },
+    });
+
+    try {
+      const result = await sendPracticeResponse(current.senderId, 'Görüşmem ne zaman?');
+      expect(result).toMatchObject({
+        route: 'channel.inbound',
+        processed: false,
+        routingResult: 'ignored',
+      });
+      expect(
+        await prisma.inboxEvent.findUniqueOrThrow({
+          where: { id: result.inboxId },
+          select: { processedAt: true },
+        }),
+      ).toMatchObject({ processedAt: expect.any(Date) });
+      expect(
+        await prisma.inboundResponseOwnership.count({
+          where: { inboundMessageId: result.inboxId },
+        }),
+      ).toBe(0);
+      expect(
+        await prisma.llmUsageLog.count({
+          where: {
+            studentId,
+            task: 'AGENT_REPLY',
+            metadata: { path: ['inboxEventId'], equals: result.inboxId },
+          },
+        }),
+      ).toBe(0);
+    } finally {
+      await prisma.featureFlagConfig.update({
+        where: { key: 'llm.agent-reply.enabled' },
+        data: { enabled: true, rolloutPercentage: 100 },
+      });
+    }
+  });
+
+  it('REFLECTION-05 does not call the provider when reflection text contains a failure marker', async () => {
     const current = await preparePracticeStage('CHECKIN');
     await sendPracticeResponse(current.senderId, 'Yaptım');
     await dispatchPending(current.studentId);
@@ -1395,32 +1608,20 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       await prisma.inboundResponseOwnership.findUniqueOrThrow({
         where: { inboundMessageId: result.inboxId },
       }),
-    ).toMatchObject({ owner: 'AGENT_CONTEXTUAL' });
+    ).toMatchObject({ owner: 'SYSTEM_STANDARD_MESSAGE' });
     expect(
-      await prisma.inboundIntentDecision.findUniqueOrThrow({
+      await prisma.inboundIntentDecision.count({
         where: { inboxEventId: result.inboxId },
       }),
-    ).toMatchObject({
-      domain: 'PRACTICE',
-      action: 'REFLECT',
-      confidence: 0,
-      status: 'APPLIED',
-    });
-    const reply = await prisma.messageIntent.findUniqueOrThrow({
-      where: { idempotencyKey: `agent:${result.inboxId}` },
-    });
-    expect((reply.payload as { rendered: string }).rendered).toBe(
-      'Bunu paylaştığın için teşekkür ederim. Necip ile görüşmenizde bunları değerlendireceğiz.',
-    );
+    ).toBe(0);
     expect(
       await prisma.llmUsageLog.count({
         where: {
           task: 'AGENT_REPLY',
-          status: 'FAILED',
           metadata: { path: ['inboxEventId'], equals: result.inboxId },
         },
       }),
-    ).toBeGreaterThan(0);
+    ).toBe(0);
   });
 
   it('FLOW-01 records the current admin-plan and student-response behavior', async () => {
@@ -2203,7 +2404,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     expect(await intentRouter.process(result.inboxId)).toBe('ignored');
     expect(
       await prisma.inboundIntentDecision.count({ where: { inboxEventId: result.inboxId } }),
-    ).toBe(1);
+    ).toBe(0);
     expect(
       await prisma.inboundResponseOwnership.count({
         where: { inboundMessageId: result.inboxId },
@@ -2216,7 +2417,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
           metadata: { path: ['inboxEventId'], equals: result.inboxId },
         },
       }),
-    ).toBe(1);
+    ).toBe(0);
   });
 
   it('ROUTER-04 sends at most five prior messages with the current message', async () => {
@@ -2257,15 +2458,12 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       'Yaptım',
       Number(checkinMessage.externalMessageId),
     );
-    const decision = await prisma.inboundIntentDecision.findUniqueOrThrow({
-      where: { inboxEventId: result.inboxId },
-    });
 
-    expect(decision).toMatchObject({
-      domain: 'PRACTICE',
-      action: 'COMPLETE',
-      contextSource: 'REPLY',
-    });
+    expect(
+      await prisma.inboundIntentDecision.count({
+        where: { inboxEventId: result.inboxId },
+      }),
+    ).toBe(0);
     expect(
       (await prisma.practiceSession.findUniqueOrThrow({ where: { id: current.sessionId } })).status,
     ).toBe('COMPLETED');

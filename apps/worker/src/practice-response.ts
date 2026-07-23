@@ -106,6 +106,52 @@ export function parseTypedPracticeResponse(content: string): 'COMPLETED' | 'SKIP
   return normalized === 'yaptim' ? 'COMPLETED' : normalized === 'yapamadim' ? 'SKIPPED' : undefined;
 }
 
+async function findOpenReflectionSessionId(
+  tx: Prisma.TransactionClient,
+  studentId: string,
+  responseOccurredAt: Date,
+): Promise<string | undefined> {
+  const prompt = await tx.message.findFirst({
+    where: {
+      studentId,
+      direction: 'OUTBOUND',
+      messageIntent: {
+        category: 'SYSTEM_STANDARD_MESSAGE',
+        payload: {
+          path: ['eventKey'],
+          equals: 'PRACTICE_REFLECTION_REQUEST',
+        },
+      },
+    },
+    include: { messageIntent: true },
+    orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
+  });
+  if (!prompt) return;
+  const payload = prompt.messageIntent!.payload as Record<string, unknown>;
+  if (typeof payload.practiceSessionId !== 'string') return;
+  const practiceSessionId = payload.practiceSessionId as string;
+  const session = await tx.practiceSession.findFirst({
+    where: {
+      id: practiceSessionId,
+      studentId,
+      status: PracticeSessionStatus.COMPLETED,
+      reflection: { is: null },
+    },
+    select: { id: true },
+  });
+  if (!session) return;
+  const nextPracticeMessage = await tx.message.findFirst({
+    where: {
+      studentId,
+      direction: 'OUTBOUND',
+      occurredAt: { gt: prompt.occurredAt, lte: responseOccurredAt },
+      messageIntent: { category: { in: ['PRACTICE_REMINDER', 'PRACTICE_CHECKIN'] } },
+    },
+    select: { id: true },
+  });
+  return nextPracticeMessage ? undefined : session.id;
+}
+
 export async function processPracticeResponse(
   prisma: PrismaClient,
   clock: Clock,
@@ -153,6 +199,11 @@ export async function processPracticeResponse(
   });
   if (!identity) return false;
   const now = clock.now();
+  const normalizedOccurredAt =
+    typeof normalized.occurredAt === 'string' ? new Date(normalized.occurredAt) : inbox.createdAt;
+  const responseOccurredAt = Number.isNaN(normalizedOccurredAt.getTime())
+    ? inbox.createdAt
+    : normalizedOccurredAt;
   return prisma.$transaction(async (tx) => {
     const resolvedContext = parsedPayload
       ? null
@@ -162,22 +213,33 @@ export async function processPracticeResponse(
         });
     const contextualSessionId =
       resolvedContext?.entityType === 'PracticeSession' ? resolvedContext.entityId : null;
+    const explicitPracticeResponse =
+      Boolean(parsedPayload || typedResponse) ||
+      classifiedResponse === 'COMPLETED' ||
+      classifiedResponse === 'SKIPPED';
+    const openReflectionSessionId =
+      !parsedPayload &&
+      !typedResponse &&
+      typeof normalized.exactCommand !== 'string' &&
+      (!classifiedResponse || classifiedResponse === 'REFLECT')
+        ? await findOpenReflectionSessionId(tx, identity.studentId, responseOccurredAt)
+        : undefined;
+    const reflectionSessionId =
+      openReflectionSessionId ??
+      (classifiedResponse === 'REFLECT' ? (contextualSessionId ?? undefined) : undefined);
+    if (!explicitPracticeResponse && !reflectionSessionId) return false;
     const session = await tx.practiceSession.findFirst({
       where: parsedPayload
         ? { id: parsedPayload.sessionId }
-        : contextualSessionId
-          ? { id: contextualSessionId }
-          : {
-              studentId: identity.studentId,
-              OR: [
-                { status: PracticeSessionStatus.AWAITING_RESPONSE, startAt: { lte: now } },
-                {
-                  status: PracticeSessionStatus.COMPLETED,
-                  updatedAt: { gte: new Date(now.getTime() - 60 * 60_000) },
-                  reflection: { is: null },
-                },
-              ],
-            },
+        : reflectionSessionId
+          ? { id: reflectionSessionId }
+          : contextualSessionId
+            ? { id: contextualSessionId }
+            : {
+                studentId: identity.studentId,
+                status: PracticeSessionStatus.AWAITING_RESPONSE,
+                startAt: { lte: now },
+              },
       orderBy: parsedPayload ? undefined : { startAt: 'desc' },
       include: { student: true },
     });
@@ -201,6 +263,7 @@ export async function processPracticeResponse(
     }
     if (
       !parsedPayload &&
+      reflectionSessionId === session.id &&
       session.status === PracticeSessionStatus.COMPLETED &&
       (!classifiedResponse || classifiedResponse === 'REFLECT')
     ) {
@@ -255,37 +318,23 @@ export async function processPracticeResponse(
           },
         });
       }
-      const intent = await tx.messageIntent.create({
-        data: {
-          studentId: identity.studentId,
-          channelIdentityId: identity.id,
-          category: 'AGENT_REPLY',
-          status: MessageIntentStatus.PENDING,
-          idempotencyKey: `agent:${inbox.id}`,
-          dueAt: now,
-          expiresAt: new Date(now.getTime() + 86_400_000),
-          aggregateVersion: session.student.version,
-          payload: {
-            rendered:
-              agentReflection?.answer ??
-              'Bunu paylaştığın için teşekkür ederim. Necip ile görüşmenizde bunları değerlendireceğiz.',
-            agent: true,
-            reflection: true,
-            reflectionId: reflection.id,
-          },
-        },
-      });
-      await tx.outboxEvent.create({
-        data: {
-          topic: 'message.intents',
-          aggregateType: 'MessageIntent',
-          aggregateId: intent.id,
-          eventType: 'MessageIntentCreated',
-          payload: { intentId: intent.id },
-        },
+      const intentId = await createResponseIntent(tx, now, {
+        eventKey: 'PRACTICE_REFLECTION_RECEIVED',
+        studentId: identity.studentId,
+        channelIdentityId: identity.id,
+        locale: session.student.preferredLocale,
+        stage: session.student.curriculumStage,
+        aggregateVersion: session.version,
+        idempotencyKey: `practice:${session.id}:reflection-received`,
+        variables: {},
+        context: { practiceSessionId: session.id },
       });
       await tx.inboundResponseOwnership.create({
-        data: { inboundMessageId: inbox.id, owner: 'AGENT_CONTEXTUAL', referenceId: intent.id },
+        data: {
+          inboundMessageId: inbox.id,
+          owner: intentId ? 'SYSTEM_STANDARD_MESSAGE' : 'NO_REPLY',
+          referenceId: intentId,
+        },
       });
       await tx.inboxEvent.update({
         where: { id: inbox.id },

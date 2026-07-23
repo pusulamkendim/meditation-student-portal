@@ -75,7 +75,8 @@ export class MessageDispatcher {
             practiceSession.status === 'AWAITING_RESPONSE') ||
           (eventKey === 'PRACTICE_COMPLETED_ACK' && practiceSession.status === 'COMPLETED') ||
           (eventKey === 'PRACTICE_SKIPPED_ACK' && practiceSession.status === 'SKIPPED') ||
-          (eventKey === 'PRACTICE_REFLECTION_REQUEST' && practiceSession.status === 'COMPLETED')
+          (eventKey === 'PRACTICE_REFLECTION_REQUEST' && practiceSession.status === 'COMPLETED') ||
+          (eventKey === 'PRACTICE_REFLECTION_RECEIVED' && practiceSession.status === 'COMPLETED')
         : true;
       const practiceStateValid = practiceSession
         ? practiceSession.practicePlan.status === 'ACTIVE' &&
