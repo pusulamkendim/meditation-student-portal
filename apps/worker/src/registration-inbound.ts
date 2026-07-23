@@ -394,12 +394,18 @@ export class RegistrationInboundProcessor {
           },
         });
         if (named.count !== 1) throw new Error('Registration name step conflict.');
-        return { eventKey: 'PAYMENT_INSTRUCTIONS', variables: this.paymentVariables(student.id) };
+        return {
+          eventKey: 'PAYMENT_INSTRUCTIONS',
+          variables: await this.paymentVariables(tx, student.id, fullName),
+        };
       }
       case RegistrationStep.PAYMENT_INSTRUCTIONS: {
         const isMedia = normalized.messageType && normalized.messageType !== 'text';
         if (!paymentPattern.test(answer) && !isMedia)
-          return { eventKey: 'PAYMENT_INSTRUCTIONS', variables: this.paymentVariables(student.id) };
+          return {
+            eventKey: 'PAYMENT_INSTRUCTIONS',
+            variables: await this.paymentVariables(tx, student.id),
+          };
         const reference = this.paymentReference(student.id);
         const payment = await tx.payment.create({
           data: {
@@ -464,7 +470,10 @@ export class RegistrationInboundProcessor {
       case RegistrationStep.NAME:
         return { eventKey: 'NAME_REQUEST', variables: {} };
       case RegistrationStep.PAYMENT_INSTRUCTIONS:
-        return { eventKey: 'PAYMENT_INSTRUCTIONS', variables: this.paymentVariables(student.id) };
+        return {
+          eventKey: 'PAYMENT_INSTRUCTIONS',
+          variables: await this.paymentVariables(tx, student.id),
+        };
       case RegistrationStep.PAYMENT_REVIEW: {
         const payment = await tx.payment.findFirst({
           where: { studentId: student.id, status: PaymentStatus.REPORTED },
@@ -554,12 +563,34 @@ export class RegistrationInboundProcessor {
     return `MED-${studentId.replaceAll('-', '').slice(0, 8).toUpperCase()}`;
   }
 
-  private paymentVariables(studentId: string) {
+  private async paymentVariables(
+    tx: Prisma.TransactionClient,
+    studentId: string,
+    knownFullName?: string,
+  ) {
+    let fullName = knownFullName;
+    if (!fullName) {
+      const student = await tx.student.findUnique({
+        where: { id: studentId },
+        select: { fullNameEncrypted: true, fullNameKeyId: true },
+      });
+      if (student?.fullNameEncrypted && student.fullNameKeyId) {
+        fullName = this.encryption.decrypt(
+          {
+            ciphertext: Buffer.from(student.fullNameEncrypted),
+            keyId: student.fullNameKeyId,
+          },
+          `student:${studentId}:name`,
+        );
+      }
+    }
+    const firstName = fullName?.trim().split(/\s+/u)[0];
     return {
       amountText: '4.000 TL',
       iban: this.config.PAYMENT_IBAN ?? 'TR00 0000 0000 0000 0000 0000 00',
       accountHolder: this.config.PAYMENT_ACCOUNT_HOLDER ?? 'Meditasyon Programı',
       reference: this.paymentReference(studentId),
+      studentDisplayName: firstName ? ` ${firstName}` : '',
     };
   }
 

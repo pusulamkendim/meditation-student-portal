@@ -28,7 +28,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PAYMENT_INSTRUCTIONS',
     content:
-      'Teşekkür ederim. Aylık program ücreti {{amountText}} ve paket 4 haftalık online görüşme ile pratik takibini içeriyor. Ödemeyi {{iban}} IBAN numarasına, alıcı {{accountHolder}} olacak şekilde yapabilirsin. Tamamladığında ÖDEME YAPTIM yazman veya dekont göndermen yeterli.',
+      'Tanıştığımıza memnun oldum{{studentDisplayName}}. Aylık program ücreti {{amountText}} ve paket 4 haftalık online görüşme ile pratik takibini içeriyor. Ödemeyi {{iban}} IBAN numarasına, alıcı {{accountHolder}} olacak şekilde yapabilirsin. Tamamladığında ÖDEME YAPTIM yazman veya dekont göndermen yeterli.',
   },
   {
     eventKey: 'PAYMENT_REPORTED',

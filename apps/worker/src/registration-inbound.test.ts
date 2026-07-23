@@ -142,6 +142,16 @@ describe.runIf(runDatabaseTests)('registration inbound flow', () => {
     await send('EVET');
     await send('HAYIR');
     await send('Ayşe Yılmaz');
+    const paymentInstructions = await prisma.messageIntent.findFirstOrThrow({
+      where: {
+        studentId,
+        payload: { path: ['eventKey'], equals: 'PAYMENT_INSTRUCTIONS' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    expect((paymentInstructions.payload as { rendered: string }).rendered).toContain(
+      'Tanıştığımıza memnun oldum Ayşe.',
+    );
     await send('ÖDEME YAPTIM');
 
     const student = await prisma.student.findUniqueOrThrow({ where: { id: studentId } });

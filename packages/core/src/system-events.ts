@@ -137,6 +137,7 @@ const variableSchemas = {
       iban: 'string',
       accountHolder: 'string',
       reference: 'string',
+      studentDisplayName: 'string',
     },
     ['amountText', 'iban', 'accountHolder'],
   ),
