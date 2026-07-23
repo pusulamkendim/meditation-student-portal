@@ -32,7 +32,7 @@ const acceptancePattern =
 const declinePattern = /^(hayır|hayir|istemiyorum|kabul etmiyorum)$/u;
 const paymentPattern = /^(ödeme yaptım|odeme yaptim|ödemeyi yaptım|odemeyi yaptim|dekont)$/u;
 const conversationalNonNamePattern =
-  /\b(tamam|evet|hayır|hayir|süper|super|sevindim|teşekkür|tesekkur|sağ ol|sag ol)\b/iu;
+  /\b(tamam|evet|hayır|hayir|süper|super|sevindim|teşekkür|tesekkur|sağ ol|sag ol|diyebilirsiniz|diyebilirsin)\b/iu;
 
 function normalizeAnswer(value: string): string {
   return value.normalize('NFKC').trim().replace(/\s+/g, ' ');
@@ -62,15 +62,26 @@ export function registrationQuickReplies(
   }
 }
 
+export function extractFullName(value: string): string | undefined {
+  const candidates = [...value.normalize('NFKC').split(/\r?\n/u).reverse(), value];
+  for (const candidate of candidates) {
+    const normalized = normalizeAnswer(
+      candidate.replace(/^[\p{M}\p{P}\p{S}\s]+|[\p{M}\p{P}\p{S}\s]+$/gu, ''),
+    );
+    if (
+      normalized.length >= 3 &&
+      normalized.length <= 200 &&
+      normalized.split(' ').length >= 2 &&
+      !conversationalNonNamePattern.test(normalized) &&
+      /^[\p{L}][\p{L}' -]*[\p{L}]$/u.test(normalized)
+    )
+      return normalized;
+  }
+  return undefined;
+}
+
 export function isValidFullName(value: string): boolean {
-  const normalized = normalizeAnswer(value);
-  return (
-    normalized.length >= 3 &&
-    normalized.length <= 200 &&
-    normalized.split(' ').length >= 2 &&
-    !conversationalNonNamePattern.test(normalized) &&
-    /^[\p{L}][\p{L}' -]*[\p{L}]$/u.test(normalized)
-  );
+  return extractFullName(value) !== undefined;
 }
 
 export function shouldHandleRegistrationMessage(
@@ -366,8 +377,8 @@ export class RegistrationInboundProcessor {
         return { eventKey: 'NAME_REQUEST', variables: {} };
       }
       case RegistrationStep.NAME: {
-        if (!text || !isValidFullName(text)) return { eventKey: 'NAME_REQUEST', variables: {} };
-        const fullName = normalizeAnswer(text);
+        const fullName = text ? extractFullName(text) : undefined;
+        if (!fullName) return { eventKey: 'NAME_REQUEST', variables: {} };
         const encrypted = this.encryption.encrypt(fullName, `student:${student.id}:name`);
         const named = await tx.student.updateMany({
           where: {

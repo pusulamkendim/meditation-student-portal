@@ -16,6 +16,7 @@ import {
 } from '@meditation/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  extractFullName,
   isValidFullName,
   RegistrationInboundProcessor,
   shouldHandleRegistrationMessage,
@@ -31,6 +32,11 @@ describe('registration input validation', () => {
     expect(isValidFullName('Ayşe')).toBe(false);
     expect(isValidFullName('12 34')).toBe(false);
     expect(isValidFullName('süper çok sevindim')).toBe(false);
+  });
+
+  it('extracts a full name from a natural multi-line answer', () => {
+    expect(extractFullName('Duygu diyebilirsiniz ☺️\nDuygu Bulut')).toBe('Duygu Bulut');
+    expect(extractFullName('Duygu Bulut ☺️')).toBe('Duygu Bulut');
   });
 
   it('releases completed student messages to the agent router', () => {

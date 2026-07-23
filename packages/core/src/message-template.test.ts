@@ -41,6 +41,12 @@ describe('M2 message catalog domain', () => {
     expect(() => localeFallbackChain('not_a_locale')).toThrow('Invalid BCP 47 locale');
   });
 
+  it('allows payment instructions without exposing the internal reference', () => {
+    expect(() =>
+      validateMessageTemplate('PAYMENT_INSTRUCTIONS', '{{amountText}} {{iban}} {{accountHolder}}'),
+    ).not.toThrow();
+  });
+
   it('has an explicit closed variable schema for every event', () => {
     for (const key of systemEventKeys) {
       const schema = getSystemEvent(key).variableSchema;

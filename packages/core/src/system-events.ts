@@ -121,10 +121,9 @@ const personalizedTextVariables = (...required: string[]) =>
 
 const variableSchemas = {
   REGISTRATION_STARTED: noVariables(),
-  PRIVACY_NOTICE_SENT: objectSchema(
-    { privacyNoticeUrl: 'string', noticeVersion: 'string' },
-    ['privacyNoticeUrl'],
-  ),
+  PRIVACY_NOTICE_SENT: objectSchema({ privacyNoticeUrl: 'string', noticeVersion: 'string' }, [
+    'privacyNoticeUrl',
+  ]),
   CHANNEL_OPT_IN_REQUEST: textVariables('channelName'),
   REFLECTION_STORAGE_CONSENT_REQUEST: textVariables('privacyNoticeUrl'),
   REFLECTION_AI_CONSENT_REQUEST: textVariables('privacyNoticeUrl'),
@@ -132,7 +131,15 @@ const variableSchemas = {
   NAME_REQUEST: noVariables(),
   REGISTRATION_ALREADY_EXISTS: optionalTextVariables('studentDisplayName'),
   CONSENT_WITHDRAWN: textVariables('consentScope'),
-  PAYMENT_INSTRUCTIONS: textVariables('amountText', 'iban', 'accountHolder', 'reference'),
+  PAYMENT_INSTRUCTIONS: objectSchema(
+    {
+      amountText: 'string',
+      iban: 'string',
+      accountHolder: 'string',
+      reference: 'string',
+    },
+    ['amountText', 'iban', 'accountHolder'],
+  ),
   PAYMENT_REPORTED: textVariables('reference', 'reportedAtText'),
   PAYMENT_ACTION_REQUIRED: textVariables('reference', 'actionText'),
   PAYMENT_APPROVED: textVariables(
