@@ -69,6 +69,14 @@ export class MessageDispatcher {
             })
           : undefined;
       const eventKey = typeof payload.eventKey === 'string' ? payload.eventKey : undefined;
+      const scheduledMeetingPlanningEvent =
+        intent.student.status === StudentStatus.INACTIVE &&
+        ((meetingSeries?.subscriptionPeriod.status === 'SCHEDULED' &&
+          eventKey === 'MEETING_SERIES_SCHEDULED') ||
+          (meeting?.meetingSeries.subscriptionPeriod.status === 'SCHEDULED' &&
+            (eventKey === 'MEETING_SCHEDULED' ||
+              eventKey === 'MEETING_RESCHEDULED' ||
+              eventKey === 'MEETING_CANCELLED')));
       const practiceMessageMatchesState = practiceSession
         ? (intent.category === 'PRACTICE_REMINDER' && practiceSession.status === 'REMINDED') ||
           (intent.category === 'PRACTICE_CHECKIN' &&
@@ -87,7 +95,8 @@ export class MessageDispatcher {
       const meetingStateValid = meeting
         ? meeting.status === 'SCHEDULED' &&
           meeting.version === intent.aggregateVersion &&
-          meeting.meetingSeries.subscriptionPeriod.status === 'ACTIVE'
+          (meeting.meetingSeries.subscriptionPeriod.status === 'ACTIVE' ||
+            scheduledMeetingPlanningEvent)
         : true;
       const meetingSeriesStateValid = meetingSeries
         ? meetingSeries.version === intent.aggregateVersion &&
@@ -104,7 +113,8 @@ export class MessageDispatcher {
           studentActive:
             intent.student.status === StudentStatus.ACTIVE ||
             (intent.category === 'REGISTRATION_RESPONSE' && payload.reactive === true) ||
-            (intent.category === 'PAYMENT_APPROVED' && intent.student.status === 'INACTIVE'),
+            (intent.category === 'PAYMENT_APPROVED' && intent.student.status === 'INACTIVE') ||
+            scheduledMeetingPlanningEvent,
           messagingEnabled:
             intent.student.messagingPreference?.proactiveEnabled !== false &&
             !intent.student.messagingPreference?.pausedAt,

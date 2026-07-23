@@ -1119,6 +1119,49 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     });
   });
 
+  it('MEETING-ADMIN-01B delivers the schedule for a future subscription before activation', async () => {
+    clock.set('2026-07-15T09:00:00.000Z');
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    const payment = await prisma.payment.findFirstOrThrow({ where: { studentId } });
+    const subscription = await payments.approve(
+      payment.id,
+      e2eAdminId,
+      new Date('2026-07-16T00:00:00.000Z'),
+    );
+    const student = await prisma.student.findUniqueOrThrow({ where: { id: studentId } });
+    expect(student.status).toBe('INACTIVE');
+    expect(subscription.status).toBe('SCHEDULED');
+
+    const series = await meetings.createSeries(
+      subscription.id,
+      new Date('2026-07-17T15:00:00.000Z'),
+      e2eAdminId,
+    );
+    await meetings.setMeetOverride(
+      series.id,
+      'https://meet.google.com/e2e-future-room',
+      e2eAdminId,
+    );
+    expect(await createMeetingSeriesIntent(prisma, clock, config, series.id)).toBe(true);
+    const intent = await prisma.messageIntent.findFirstOrThrow({
+      where: {
+        studentId,
+        payload: { path: ['eventKey'], equals: 'MEETING_SERIES_SCHEDULED' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    await dispatcher.dispatch(intent.id);
+
+    expect(
+      await prisma.messageIntent.findUniqueOrThrow({ where: { id: intent.id } }),
+    ).toMatchObject({
+      status: 'SENT',
+      suppressionReason: null,
+    });
+    expect(collector.sent.some((message) => message.intentId === intent.id)).toBe(true);
+  });
+
   it('MEETING-ADMIN-02 checks reschedule, cancel and restore state against student messages', async () => {
     const current = await createMeetingStage();
     const meeting = await prisma.weeklyMeeting.findFirstOrThrow({

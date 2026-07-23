@@ -38,7 +38,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PAYMENT_APPROVED',
     content:
-      'Ödemen onaylandı, teşekkür ederim. {{amountText}} tutarındaki paketin {{subscriptionStartsAtText}} tarihinde başladı ve {{subscriptionEndsAtText}} tarihine kadar geçerli.',
+      'Ödemen onaylandı, teşekkür ederim. {{amountText}} tutarındaki paketinin başlangıç tarihi {{subscriptionStartsAtText}}; {{subscriptionEndsAtText}} tarihine kadar geçerli.',
   },
   {
     eventKey: 'STUDENT_ACTIVATED',
