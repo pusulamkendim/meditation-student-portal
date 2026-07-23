@@ -20,10 +20,13 @@ import {
   PrismaClient,
 } from '@meditation/database';
 
-const DRAFT_PRIVACY_TEXT =
-  'Ad, iletişim, ödeme, program ve pratik verilerin yalnızca hizmetin sunulması, hatırlatmalar ve görüşme planlaması amacıyla güvenli biçimde işlenir. Bu metin yayından önce hukuk uzmanı tarafından güncellenecektir.';
-const DRAFT_AI_CONSENT_TEXT =
-  'Onay verirsen sorularını yanıtlamak, pratik sonrasında paylaştığın refleksiyonları saklamak ve geri bildirimlerini özetlemek için içeriklerin işlenebilir. Yapay zeka sağlayıcısına aktarım yapılırken veri minimizasyonu uygulanır. İznini daha sonra geri çekebilirsin.';
+const PRIVACY_NOTICE_TEXT =
+  'Ad, soyad, iletişim, ödeme, program ve pratik bilgilerin yalnızca programın yürütülmesi, hatırlatmaların gönderilmesi ve görüşmelerin planlanması amacıyla işlenir ve güvenli biçimde saklanır.';
+const PRIVACY_NOTICE_VERSION = 'kvkk-v1';
+const MESSAGING_CONSENT_VERSION = 'messaging-v1';
+const AI_CONSENT_VERSION = 'ai-consent-v1';
+const AI_CONSENT_TEXT =
+  'Onay verirsen paylaşımların yalnızca bu amaçlarla, veri minimizasyonu uygulanarak işlenir. İznini dilediğin zaman geri çekebilirsin.';
 const acceptancePattern =
   /^(evet|onay|onayladım|onayladim|onaylıyorum|onayliyorum|kabul|kabul ediyorum|tamam|olur|uygun)$/u;
 const declinePattern = /^(hayır|hayir|istemiyorum|kabul etmiyorum)$/u;
@@ -195,7 +198,10 @@ export class RegistrationInboundProcessor {
         });
         await tx.messagingPreference.create({ data: { studentId: student.id } });
         eventKey = 'PRIVACY_NOTICE_SENT';
-        variables = { privacyNoticeUrl: DRAFT_PRIVACY_TEXT, noticeVersion: 'draft-v1' };
+        variables = {
+          privacyNoticeUrl: PRIVACY_NOTICE_TEXT,
+          noticeVersion: PRIVACY_NOTICE_VERSION,
+        };
       } else if (normalized.exactCommand === 'KAYIT') {
         ({ eventKey, variables } = await this.promptForCurrentStep(tx, identity.student));
       } else {
@@ -312,7 +318,7 @@ export class RegistrationInboundProcessor {
         await tx.privacyNoticeReceipt.create({
           data: {
             studentId: student.id,
-            noticeVersion: 'draft-v1',
+            noticeVersion: PRIVACY_NOTICE_VERSION,
             channel: inbox.channel,
             externalMessageId,
             deliveredAt: now,
@@ -330,7 +336,7 @@ export class RegistrationInboundProcessor {
             studentId: student.id,
             scope: ConsentScope.MESSAGING,
             status: ConsentStatus.GRANTED,
-            textVersion: 'draft-v1',
+            textVersion: MESSAGING_CONSENT_VERSION,
             channel: inbox.channel,
             externalMessageId,
             occurredAt: now,
@@ -339,7 +345,7 @@ export class RegistrationInboundProcessor {
         await this.updateStep(tx, student.id, student.version, RegistrationStep.AI_PREFERENCE);
         return {
           eventKey: 'AGENT_REPLY_AI_CONSENT_REQUEST',
-          variables: { privacyNoticeUrl: DRAFT_AI_CONSENT_TEXT },
+          variables: { privacyNoticeUrl: AI_CONSENT_TEXT },
         };
       case RegistrationStep.AI_PREFERENCE: {
         const accepted = acceptancePattern.test(answer);
@@ -350,7 +356,7 @@ export class RegistrationInboundProcessor {
             studentId: student.id,
             scope,
             status: accepted ? ConsentStatus.GRANTED : ConsentStatus.WITHDRAWN,
-            textVersion: 'draft-v1',
+            textVersion: AI_CONSENT_VERSION,
             channel: inbox.channel,
             externalMessageId,
             occurredAt: now,
@@ -432,14 +438,17 @@ export class RegistrationInboundProcessor {
       case RegistrationStep.PRIVACY_NOTICE:
         return {
           eventKey: 'PRIVACY_NOTICE_SENT',
-          variables: { privacyNoticeUrl: DRAFT_PRIVACY_TEXT, noticeVersion: 'draft-v1' },
+          variables: {
+            privacyNoticeUrl: PRIVACY_NOTICE_TEXT,
+            noticeVersion: PRIVACY_NOTICE_VERSION,
+          },
         };
       case RegistrationStep.CHANNEL_OPT_IN:
         return { eventKey: 'CHANNEL_OPT_IN_REQUEST', variables: { channelName: 'bu kanal' } };
       case RegistrationStep.AI_PREFERENCE:
         return {
           eventKey: 'AGENT_REPLY_AI_CONSENT_REQUEST',
-          variables: { privacyNoticeUrl: DRAFT_AI_CONSENT_TEXT },
+          variables: { privacyNoticeUrl: AI_CONSENT_TEXT },
         };
       case RegistrationStep.NAME:
         return { eventKey: 'NAME_REQUEST', variables: {} };

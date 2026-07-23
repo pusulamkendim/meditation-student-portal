@@ -121,7 +121,10 @@ const personalizedTextVariables = (...required: string[]) =>
 
 const variableSchemas = {
   REGISTRATION_STARTED: noVariables(),
-  PRIVACY_NOTICE_SENT: textVariables('privacyNoticeUrl', 'noticeVersion'),
+  PRIVACY_NOTICE_SENT: objectSchema(
+    { privacyNoticeUrl: 'string', noticeVersion: 'string' },
+    ['privacyNoticeUrl'],
+  ),
   CHANNEL_OPT_IN_REQUEST: textVariables('channelName'),
   REFLECTION_STORAGE_CONSENT_REQUEST: textVariables('privacyNoticeUrl'),
   REFLECTION_AI_CONSENT_REQUEST: textVariables('privacyNoticeUrl'),

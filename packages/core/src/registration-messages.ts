@@ -9,7 +9,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PRIVACY_NOTICE_SENT',
     content:
-      'Merhaba, hoş geldin. Sana programını hazırlayabilmem ve süreç boyunca yanında olabilmem için bazı bilgilerini güvenle saklamam gerekiyor. Taslak KVKK özeti: {{privacyNoticeUrl}} (sürüm {{noticeVersion}}). Devam etmek için ONAYLIYORUM yazabilirsin.',
+      'Merhaba, hoş geldin. Sana programını hazırlayabilmem ve süreç boyunca yanında olabilmem için bazı bilgilerini güvenle saklamam gerekiyor.\n\nKVKK bilgilendirmesi: {{privacyNoticeUrl}}\n\nDevam etmek için ONAYLIYORUM yazabilir veya aşağıdaki butonu kullanabilirsin.',
   },
   {
     eventKey: 'CHANNEL_OPT_IN_REQUEST',
@@ -19,7 +19,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'AGENT_REPLY_AI_CONSENT_REQUEST',
     content:
-      'Bir de küçük bir tercih soracağım. Sorularına daha hızlı yanıt verebilmek, pratik sonrasında paylaştığın refleksiyonları saklamak ve deneyimlerini anlamlandırmana yardımcı olmak için yapay zeka desteği kullanabilirim. Bu özellik isteğe bağlıdır; hayır desen de programın aynen devam eder. Taslak AI ve refleksiyon izin özeti: {{privacyNoticeUrl}}. Kabul ediyorsan EVET, istemiyorsan HAYIR yazabilirsin.',
+      'Bir tercih daha: Sorularına destek olmak ve pratik sonrası paylaşımlarını değerlendirmek için yapay zekadan yararlanabilirim. Bu özellik isteğe bağlıdır; onay vermesen de programın aynı şekilde devam eder. {{privacyNoticeUrl}} Kabul ediyorsan EVET, istemiyorsan HAYIR yazabilir veya aşağıdaki seçeneği kullanabilirsin.',
   },
   {
     eventKey: 'NAME_REQUEST',
