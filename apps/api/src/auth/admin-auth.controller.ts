@@ -8,6 +8,7 @@ import {
   Post,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -15,7 +16,11 @@ import { Inject } from '@nestjs/common';
 import type { ApplicationConfig } from '@meditation/core';
 import { z } from 'zod';
 
-import { ADMIN_CSRF_HEADER, ADMIN_SESSION_COOKIE } from './auth.constants.js';
+import {
+  ADMIN_CSRF_HEADER,
+  ADMIN_SESSION_COOKIE,
+  ADMIN_SESSION_REFRESH_HEADER,
+} from './auth.constants.js';
 import { AdminAuthService } from './admin-auth.service.js';
 import { AdminSessionGuard } from './admin-session.guard.js';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
@@ -66,13 +71,7 @@ export class AdminAuthController {
       userAgent: request.headers['user-agent'],
       requestId: request.id,
     });
-    reply.setCookie(ADMIN_SESSION_COOKIE, result.sessionToken, {
-      httpOnly: true,
-      secure: this.config.NODE_ENV === 'staging' || this.config.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/v1/admin',
-      expires: result.absoluteExpiresAt,
-    });
+    this.setSessionCookie(reply, result.sessionToken, result.absoluteExpiresAt);
     reply.header('cache-control', 'no-store');
     return {
       csrfToken: result.csrfToken,
@@ -86,6 +85,34 @@ export class AdminAuthController {
   @UseGuards(AdminSessionGuard)
   me(@Req() request: FastifyRequest): { admin: FastifyRequest['admin'] } {
     return { admin: request.admin };
+  }
+
+  @Post('refresh')
+  @HttpCode(200)
+  async refresh(
+    @Req() request: FastifyRequest,
+    @Res({ passthrough: true }) reply: FastifyReply,
+    @Headers(ADMIN_SESSION_REFRESH_HEADER) refreshHeader: string | undefined,
+  ): Promise<{
+    csrfToken: string;
+    expiresAt: string;
+    absoluteExpiresAt: string;
+    sessionId: string;
+  }> {
+    const sessionToken = request.cookies[ADMIN_SESSION_COOKIE];
+    if (!sessionToken) throw new UnauthorizedException('Authentication required.');
+    if (refreshHeader !== 'portal') {
+      throw new BadRequestException('Session refresh request is invalid.');
+    }
+    const result = await this.auth.renew(sessionToken);
+    this.setSessionCookie(reply, result.sessionToken, result.absoluteExpiresAt);
+    reply.header('cache-control', 'no-store');
+    return {
+      csrfToken: result.csrfToken,
+      expiresAt: result.expiresAt.toISOString(),
+      absoluteExpiresAt: result.absoluteExpiresAt.toISOString(),
+      sessionId: result.sessionId,
+    };
   }
 
   @Post('logout')
@@ -117,5 +144,15 @@ export class AdminAuthController {
     await this.auth.validateCsrf(sessionToken, csrfToken);
     const verifiedAt = await this.auth.stepUp(sessionToken, parsed.data.totpCode);
     return { verifiedAt: verifiedAt.toISOString() };
+  }
+
+  private setSessionCookie(reply: FastifyReply, token: string, expires: Date) {
+    reply.setCookie(ADMIN_SESSION_COOKIE, token, {
+      httpOnly: true,
+      secure: this.config.NODE_ENV === 'staging' || this.config.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/v1/admin',
+      expires,
+    });
   }
 }

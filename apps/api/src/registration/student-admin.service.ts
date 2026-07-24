@@ -178,6 +178,7 @@ export class StudentAdminService {
     const student = await this.prisma.student.findUnique({
       where: { id: studentId },
       include: {
+        _count: { select: { notes: true } },
         subscriptions: { orderBy: { startDate: 'desc' }, include: { creditEvents: true } },
         defaultChannelIdentity: { include: { channelAccount: true } },
         channelIdentities: { include: { channelAccount: true }, orderBy: { createdAt: 'asc' } },
@@ -349,6 +350,7 @@ export class StudentAdminService {
       nextMeetingAt: nextMeeting?.startsAt.toISOString(),
       completedMeetingCount,
       openHandoffCount,
+      noteCount: student._count.notes,
     };
   }
 

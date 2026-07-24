@@ -59,4 +59,42 @@ describe('AdminAuthController', () => {
       absoluteExpiresAt: absoluteExpiresAt.toISOString(),
     });
   });
+
+  it('refreshes the cookie and returns a replacement CSRF token', async () => {
+    const absoluteExpiresAt = new Date('2026-07-31T10:00:00.000Z');
+    const auth = {
+      renew: vi.fn().mockResolvedValue({
+        sessionId: 'session-id',
+        sessionToken: 'session-token',
+        csrfToken: 'stable-csrf-token',
+        expiresAt: new Date('2026-07-24T10:30:00.000Z'),
+        absoluteExpiresAt,
+        admin: { id: 'admin-1', email: 'admin@example.com', role: AdminRole.ADMIN },
+      }),
+    };
+    const controller = new AdminAuthController(
+      auth as never,
+      { NODE_ENV: 'development' } as ApplicationConfig,
+    );
+    const reply = { setCookie: vi.fn(), header: vi.fn() };
+
+    const result = await controller.refresh(
+      { cookies: { admin_session: 'session-token' } } as never,
+      reply as never,
+      'portal',
+    );
+
+    expect(auth.renew).toHaveBeenCalledWith('session-token');
+    expect(reply.setCookie).toHaveBeenCalledWith(
+      ADMIN_SESSION_COOKIE,
+      'session-token',
+      expect.objectContaining({ expires: absoluteExpiresAt }),
+    );
+    expect(result).toEqual({
+      csrfToken: 'stable-csrf-token',
+      expiresAt: '2026-07-24T10:30:00.000Z',
+      absoluteExpiresAt: absoluteExpiresAt.toISOString(),
+      sessionId: 'session-id',
+    });
+  });
 });

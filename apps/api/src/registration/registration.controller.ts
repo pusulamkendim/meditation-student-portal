@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Inject, Param, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { FieldEncryption, type ApplicationConfig } from '@meditation/core';
 import { ChannelType } from '@meditation/database';
 import type { FastifyRequest } from 'fastify';
@@ -10,6 +21,7 @@ import { RegistrationService } from './registration.service.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { InternalChannelGuard } from './internal-channel.guard.js';
 import { StudentAdminService } from './student-admin.service.js';
+import { StudentNoteService } from './student-note.service.js';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 const advance = z.object({
   command: z.enum([
@@ -34,6 +46,7 @@ export class RegistrationController {
     @Inject(PaymentService) private readonly payments: PaymentService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(StudentAdminService) private readonly studentAdmin: StudentAdminService,
+    @Inject(StudentNoteService) private readonly studentNotes: StudentNoteService,
     @Inject(APPLICATION_CONFIG) config: ApplicationConfig,
   ) {
     if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID)
@@ -97,6 +110,54 @@ export class RegistrationController {
     @Req() request: FastifyRequest,
   ) {
     return this.studentAdmin.detail(id, request.admin?.id);
+  }
+  @Get('admin/students/:studentId/notes')
+  @UseGuards(AdminSessionGuard)
+  listStudentNotes(@Param('studentId') studentId: string, @Req() request: FastifyRequest) {
+    return this.studentNotes.list(studentId, request.admin!.id);
+  }
+  @Post('admin/students/:studentId/notes')
+  @UseGuards(AdminSessionGuard, AdminCsrfGuard)
+  createStudentNote(
+    @Param('studentId') studentId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const value = z.object({ content: z.string().trim().min(1).max(5000) }).parse(body);
+    return this.studentNotes.create(studentId, request.admin!.id, value.content);
+  }
+  @Patch('admin/students/:studentId/notes/:noteId')
+  @UseGuards(AdminSessionGuard, AdminCsrfGuard)
+  updateStudentNote(
+    @Param('studentId') studentId: string,
+    @Param('noteId') noteId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const value = z
+      .object({
+        content: z.string().trim().min(1).max(5000),
+        version: z.number().int().positive(),
+      })
+      .parse(body);
+    return this.studentNotes.update(
+      studentId,
+      noteId,
+      request.admin!.id,
+      value.content,
+      value.version,
+    );
+  }
+  @Delete('admin/students/:studentId/notes/:noteId')
+  @UseGuards(AdminSessionGuard, AdminCsrfGuard)
+  deleteStudentNote(
+    @Param('studentId') studentId: string,
+    @Param('noteId') noteId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const value = z.object({ version: z.number().int().positive() }).parse(body);
+    return this.studentNotes.delete(studentId, noteId, request.admin!.id, value.version);
   }
   @Post('registration/:studentId/advance') @UseGuards(InternalChannelGuard) advance(
     @Param('studentId') id: string,

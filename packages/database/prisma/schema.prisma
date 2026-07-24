@@ -336,6 +336,7 @@ model Student {
   agentContextReads      AgentContextRead[]
   knowledgeQueryLogs     RagQueryLog[]
   handoffs               Handoff[]
+  notes                  StudentNote[]
   inboundIntentDecisions InboundIntentDecision[]
 
   @@index([status])
@@ -1084,8 +1085,29 @@ model AdminUser {
   meetingScheduleEvents MeetingScheduleEvent[]
   coachNoteVersions CoachNoteVersion[]
   googleOAuthStates GoogleOAuthState[]
+  createdStudentNotes StudentNote[] @relation("StudentNoteCreatedBy")
+  updatedStudentNotes StudentNote[] @relation("StudentNoteUpdatedBy")
 
   @@map("admin_users")
+}
+
+model StudentNote {
+  id               String   @id @default(uuid()) @db.Uuid
+  studentId        String   @map("student_id") @db.Uuid
+  contentEncrypted Bytes    @map("content_encrypted")
+  contentKeyId     String   @map("content_key_id")
+  createdByAdminId String   @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId String   @map("updated_by_admin_id") @db.Uuid
+  version          Int      @default(1)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  student        Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdByAdmin AdminUser @relation("StudentNoteCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  updatedByAdmin AdminUser @relation("StudentNoteUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, createdAt])
+  @@map("student_notes")
 }
 
 model AdminSession {

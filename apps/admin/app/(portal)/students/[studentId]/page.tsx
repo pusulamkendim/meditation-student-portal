@@ -22,12 +22,16 @@ import {
   CreditCard,
   MessageCircle,
   LifeBuoy,
+  NotebookPen,
   Pause,
+  Pencil,
   Play,
+  Plus,
   RefreshCw,
   Send,
   Settings2,
   ShieldCheck,
+  Trash2,
   UserRound,
   XCircle,
 } from 'lucide-react';
@@ -146,6 +150,7 @@ type Detail = {
   nextMeetingAt?: string;
   completedMeetingCount: number;
   openHandoffCount: number;
+  noteCount: number;
 };
 
 type Channel = {
@@ -183,6 +188,16 @@ type Conversation = {
     createdAt: string;
     resolvedAt?: string;
   }>;
+};
+
+type StudentNote = {
+  id: string;
+  content: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  createdBy: string;
+  updatedBy: string;
 };
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', {
@@ -347,6 +362,12 @@ export default function StudentDetailPage() {
   const [paymentDialog, setPaymentDialog] = useState<'note'>();
   const [selectedPaymentId, setSelectedPaymentId] = useState<string>();
   const [paymentNote, setPaymentNote] = useState('');
+  const [notes, setNotes] = useState<StudentNote[]>();
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState<string>();
+  const [noteDialog, setNoteDialog] = useState<'create' | 'edit' | 'delete'>();
+  const [selectedNote, setSelectedNote] = useState<StudentNote>();
+  const [noteContent, setNoteContent] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -386,6 +407,25 @@ export default function StudentDetailPage() {
     if (['conversations', 'handoffs'].includes(activeTab) && !conversation && !conversationLoading)
       void loadConversation();
   }, [activeTab, conversation, conversationLoading, loadConversation]);
+
+  const loadNotes = useCallback(async () => {
+    try {
+      setNotesLoading(true);
+      setNotesError(undefined);
+      const value = await requestJson<{ items: StudentNote[] }>(
+        `/v1/admin/students/${studentId}/notes`,
+      );
+      setNotes(value.items);
+    } catch (reason) {
+      setNotesError(reason instanceof Error ? reason.message : 'Notlar yüklenemedi');
+    } finally {
+      setNotesLoading(false);
+    }
+  }, [studentId]);
+
+  useEffect(() => {
+    if (activeTab === 'notes' && !notes && !notesLoading) void loadNotes();
+  }, [activeTab, loadNotes, notes, notesLoading]);
 
   const runMutation = useCallback(
     async (path: string, init: RequestInit, successMessage: string) => {
@@ -630,6 +670,66 @@ export default function StudentDetailPage() {
     setPaymentNote('');
   }
 
+  function openNoteDialog(mode: 'create' | 'edit' | 'delete', note?: StudentNote) {
+    setSelectedNote(note);
+    setNoteContent(mode === 'edit' ? (note?.content ?? '') : '');
+    setNoteDialog(mode);
+  }
+
+  function closeNoteDialog() {
+    setNoteDialog(undefined);
+    setSelectedNote(undefined);
+    setNoteContent('');
+  }
+
+  async function saveStudentNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const content = noteContent.trim();
+    if (!content || (noteDialog === 'edit' && !selectedNote)) return;
+    try {
+      setBusy(true);
+      await requestJson(
+        noteDialog === 'edit'
+          ? `/v1/admin/students/${studentId}/notes/${selectedNote!.id}`
+          : `/v1/admin/students/${studentId}/notes`,
+        {
+          method: noteDialog === 'edit' ? 'PATCH' : 'POST',
+          headers: csrfHeaders(),
+          body: JSON.stringify({
+            content,
+            ...(selectedNote ? { version: selectedNote.version } : {}),
+          }),
+        },
+      );
+      setNotice(noteDialog === 'edit' ? 'Not güncellendi.' : 'Not eklendi.');
+      closeNoteDialog();
+      await Promise.all([loadNotes(), load()]);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Not kaydedilemedi.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteStudentNote() {
+    if (!selectedNote) return;
+    try {
+      setBusy(true);
+      await requestJson(`/v1/admin/students/${studentId}/notes/${selectedNote.id}`, {
+        method: 'DELETE',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ version: selectedNote.version }),
+      });
+      setNotice('Not silindi.');
+      closeNoteDialog();
+      await Promise.all([loadNotes(), load()]);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Not silinemedi.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const tabs = useMemo(
     () => [
       { key: 'overview', label: 'Genel bakış', icon: Activity },
@@ -642,6 +742,7 @@ export default function StudentDetailPage() {
         icon: LifeBuoy,
         count: data?.openHandoffCount,
       },
+      { key: 'notes', label: 'Notlar', icon: NotebookPen, count: data?.noteCount },
       { key: 'payments', label: 'Ödemeler', icon: CreditCard, count: data?.payments.length },
       { key: 'profile', label: 'Profil ve izinler', icon: Settings2 },
     ],
@@ -774,6 +875,17 @@ export default function StudentDetailPage() {
           onReload={loadConversation}
           onResolveHandoff={resolveHandoff}
           busy={busy}
+        />
+      ) : null}
+      {activeTab === 'notes' ? (
+        <NotesTab
+          notes={notes}
+          loading={notesLoading}
+          error={notesError}
+          onReload={loadNotes}
+          onCreate={() => openNoteDialog('create')}
+          onEdit={(note) => openNoteDialog('edit', note)}
+          onDelete={(note) => openNoteDialog('delete', note)}
         />
       ) : null}
       {activeTab === 'payments' ? (
@@ -987,6 +1099,60 @@ export default function StudentDetailPage() {
               />
             </label>
           </form>
+        </Modal>
+      ) : null}
+
+      {noteDialog === 'create' || noteDialog === 'edit' ? (
+        <Modal
+          title={noteDialog === 'edit' ? 'Notu düzenle' : 'Yeni öğrenci notu'}
+          description="Bu not yalnızca yönetim portalında görünür."
+          onClose={closeNoteDialog}
+          actions={
+            <>
+              <Button variant="ghost" onClick={closeNoteDialog}>
+                Vazgeç
+              </Button>
+              <Button form="student-note-form" type="submit" loading={busy}>
+                Kaydet
+              </Button>
+            </>
+          }
+        >
+          <form id="student-note-form" className="student-modal-form" onSubmit={saveStudentNote}>
+            <label>
+              <span>Not</span>
+              <textarea
+                required
+                autoFocus
+                maxLength={5000}
+                rows={7}
+                value={noteContent}
+                onChange={(event) => setNoteContent(event.target.value)}
+                placeholder="Öğrencinin güncel durumu, takip edilmesi gereken konu veya görüşme notu..."
+              />
+              <small className="student-note-counter">{noteContent.length} / 5000</small>
+            </label>
+          </form>
+        </Modal>
+      ) : null}
+
+      {noteDialog === 'delete' && selectedNote ? (
+        <Modal
+          title="Notu sil"
+          description="Bu işlem geri alınamaz."
+          onClose={closeNoteDialog}
+          actions={
+            <>
+              <Button variant="ghost" onClick={closeNoteDialog}>
+                Vazgeç
+              </Button>
+              <Button variant="danger" loading={busy} onClick={() => void deleteStudentNote()}>
+                Sil
+              </Button>
+            </>
+          }
+        >
+          <p className="student-note-delete-preview">{selectedNote.content}</p>
         </Modal>
       ) : null}
     </main>
@@ -1848,6 +2014,117 @@ function HandoffQueue({
         </details>
       ) : null}
     </section>
+  );
+}
+
+function NotesTab({
+  notes,
+  loading,
+  error,
+  onReload,
+  onCreate,
+  onEdit,
+  onDelete,
+}: {
+  notes?: StudentNote[];
+  loading: boolean;
+  error?: string;
+  onReload: () => Promise<void>;
+  onCreate: () => void;
+  onEdit: (note: StudentNote) => void;
+  onDelete: (note: StudentNote) => void;
+}) {
+  return (
+    <div className="student-tab-content">
+      <div className="student-section-heading">
+        <div>
+          <span className="eyebrow">ÖZEL TAKİP</span>
+          <h2>Öğrenci notları</h2>
+          <p>Durum, ihtiyaç ve takip edilmesi gereken konuları tarihçe halinde kaydedin.</p>
+        </div>
+        <div className="student-row-actions">
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Notları yenile"
+            aria-label="Notları yenile"
+            onClick={() => void onReload()}
+            loading={loading}
+          >
+            <RefreshCw aria-hidden="true" />
+          </Button>
+          <Button onClick={onCreate}>
+            <Plus aria-hidden="true" />
+            Yeni not
+          </Button>
+        </div>
+      </div>
+      {error ? (
+        <Alert tone="danger" title="Notlar yüklenemedi">
+          {error}
+        </Alert>
+      ) : loading && !notes ? (
+        <div className="student-private-note-list">
+          <Skeleton className="student-private-note-skeleton" />
+          <Skeleton className="student-private-note-skeleton" />
+        </div>
+      ) : notes?.length ? (
+        <div className="student-private-note-list">
+          {notes.map((note) => {
+            const edited = note.updatedAt !== note.createdAt;
+            return (
+              <article className="student-private-note" key={note.id}>
+                <div className="student-private-note__meta">
+                  <div>
+                    <NotebookPen aria-hidden="true" />
+                    <strong>{formatDateTime(note.createdAt)}</strong>
+                  </div>
+                  <div className="student-row-actions">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Notu düzenle"
+                      aria-label="Notu düzenle"
+                      onClick={() => onEdit(note)}
+                    >
+                      <Pencil aria-hidden="true" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      title="Notu sil"
+                      aria-label="Notu sil"
+                      onClick={() => onDelete(note)}
+                    >
+                      <Trash2 aria-hidden="true" />
+                    </Button>
+                  </div>
+                </div>
+                <p>{note.content}</p>
+                <small>
+                  {note.createdBy}
+                  {edited
+                    ? ` · ${formatDateTime(note.updatedAt)} tarihinde ${note.updatedBy} tarafından düzenlendi`
+                    : ''}
+                </small>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <EmptyState
+          title="Henüz öğrenci notu yok"
+          description="İlk takip notunu ekleyerek öğrencinin güncel durumunu kaydedin."
+          icon={NotebookPen}
+          action={
+            <Button onClick={onCreate}>
+              <Plus aria-hidden="true" />
+              İlk notu ekle
+            </Button>
+          }
+        />
+      )}
+    </div>
   );
 }
 

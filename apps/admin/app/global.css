@@ -2,6 +2,28 @@ html,
 body {
   min-height: 100%;
 }
+
+.session-boundary-state {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  text-align: center;
+}
+.session-boundary-state > svg {
+  width: 24px;
+  height: 24px;
+  color: var(--color-brand);
+}
+.session-boundary-state p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.8125rem;
+}
 :root {
   --color-canvas: #f3f7f5;
   --color-surface-subtle: #edf3f0;
@@ -2938,6 +2960,71 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.student-private-note-list {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+.student-private-note {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+.student-private-note:first-child {
+  border-top: 0;
+}
+.student-private-note__meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+.student-private-note__meta > div:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.student-private-note__meta svg {
+  width: 16px;
+  color: var(--color-brand);
+}
+.student-private-note__meta strong {
+  font-size: 0.8125rem;
+}
+.student-private-note p,
+.student-note-delete-preview {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+  line-height: 1.65;
+}
+.student-private-note > small,
+.student-note-counter {
+  color: var(--color-ink-muted);
+  font-size: 0.6875rem;
+}
+.student-note-counter {
+  justify-self: end;
+}
+.student-note-delete-preview {
+  max-height: 240px;
+  overflow: auto;
+  padding: var(--space-4);
+  border-left: 3px solid var(--color-danger);
+  background: var(--color-surface-subtle);
+}
+.student-private-note-skeleton {
+  display: block;
+  min-height: 128px;
+  border-top: 1px solid var(--color-border);
+}
+.student-private-note-skeleton:first-child {
+  border-top: 0;
+}
 .student-channel-list > div,
 .student-consent-list > div {
   grid-template-columns: minmax(150px, 0.7fr) minmax(0, 1fr) auto;
@@ -3029,6 +3116,9 @@ a {
   }
   .student-tabs button {
     padding-inline: var(--space-3);
+  }
+  .student-private-note {
+    padding: var(--space-4);
   }
   .student-table--professional {
     border: 0;

@@ -17,7 +17,7 @@ import { PrismaService } from '../database/prisma.service.js';
 import { FIELD_ENCRYPTION, SESSION_HMAC } from './auth.constants.js';
 
 const idleSessionMilliseconds = 30 * 60 * 1000;
-const absoluteSessionMilliseconds = 12 * 60 * 60 * 1000;
+const absoluteSessionMilliseconds = 7 * 24 * 60 * 60 * 1000;
 const maximumLoginFailures = 5;
 const lockoutMilliseconds = 15 * 60 * 1000;
 
@@ -37,6 +37,10 @@ export interface LoginResult {
   expiresAt: Date;
   absoluteExpiresAt: Date;
   admin: { id: string; email: string; role: AdminRole };
+}
+
+export interface SessionRenewalResult extends LoginResult {
+  sessionId: string;
 }
 
 export interface BootstrapResult {
@@ -141,7 +145,7 @@ export class AdminAuthService {
     }
 
     const sessionToken = randomBytes(32).toString('base64url');
-    const csrfToken = randomBytes(32).toString('base64url');
+    const csrfToken = this.csrfToken(sessionToken);
     const expiresAt = new Date(now.getTime() + idleSessionMilliseconds);
     const absoluteExpiresAt = new Date(now.getTime() + absoluteSessionMilliseconds);
     await this.prisma.$transaction(async (transaction) => {
@@ -235,6 +239,57 @@ export class AdminAuthService {
     };
   }
 
+  async renew(sessionToken: string): Promise<SessionRenewalResult> {
+    const now = this.clock.now();
+    const session = await this.prisma.adminSession.findUnique({
+      where: { tokenHash: this.sessionHmac.digest(sessionToken) },
+      include: { adminUser: true },
+    });
+    if (
+      !session ||
+      session.revokedAt ||
+      session.absoluteExpiresAt <= now ||
+      !session.adminUser.active
+    ) {
+      throw new UnauthorizedException('Authentication required.');
+    }
+
+    const csrfToken = this.csrfToken(sessionToken);
+    const renewalCeiling = new Date(session.createdAt.getTime() + absoluteSessionMilliseconds);
+    const absoluteExpiresAt =
+      session.absoluteExpiresAt < renewalCeiling ? renewalCeiling : session.absoluteExpiresAt;
+    const expiresAt = new Date(
+      Math.min(now.getTime() + idleSessionMilliseconds, absoluteExpiresAt.getTime()),
+    );
+    const renewed = await this.prisma.adminSession.updateMany({
+      where: {
+        id: session.id,
+        revokedAt: null,
+        absoluteExpiresAt: { gt: now },
+      },
+      data: {
+        csrfTokenHash: this.sessionHmac.digest(csrfToken),
+        lastSeenAt: now,
+        expiresAt,
+        absoluteExpiresAt,
+      },
+    });
+    if (renewed.count !== 1) throw new UnauthorizedException('Authentication required.');
+
+    return {
+      sessionId: session.id,
+      sessionToken,
+      csrfToken,
+      expiresAt,
+      absoluteExpiresAt,
+      admin: {
+        id: session.adminUser.id,
+        email: session.adminUser.email,
+        role: session.adminUser.role,
+      },
+    };
+  }
+
   async logout(sessionToken: string, csrfToken: string): Promise<void> {
     const tokenHash = this.sessionHmac.digest(sessionToken);
     const session = await this.prisma.adminSession.findUnique({ where: { tokenHash } });
@@ -293,5 +348,9 @@ export class AdminAuthService {
       { ciphertext: Buffer.from(admin.totpSecretEncrypted), keyId: admin.totpSecretKeyId },
       `admin:${admin.email}:totp`,
     );
+  }
+
+  private csrfToken(sessionToken: string): string {
+    return this.sessionHmac.digest(`admin-csrf:${sessionToken}`);
   }
 }
