@@ -12,6 +12,7 @@ import { PracticeModule } from './practice/practice.module.js';
 import { MeetingsModule } from './meetings/meetings.module.js';
 import { LlmModule } from './llm/llm.module.js';
 import { KnowledgeModule } from './knowledge/knowledge.module.js';
+import { DrawingModule } from './drawings/drawing.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { KnowledgeModule } from './knowledge/knowledge.module.js';
     MeetingsModule,
     LlmModule,
     KnowledgeModule,
+    DrawingModule,
   ],
   controllers: [HealthController],
 })

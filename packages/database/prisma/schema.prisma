@@ -1087,8 +1087,31 @@ model AdminUser {
   googleOAuthStates GoogleOAuthState[]
   createdStudentNotes StudentNote[] @relation("StudentNoteCreatedBy")
   updatedStudentNotes StudentNote[] @relation("StudentNoteUpdatedBy")
+  createdDrawings Drawing[] @relation("DrawingCreatedBy")
+  updatedDrawings Drawing[] @relation("DrawingUpdatedBy")
 
   @@map("admin_users")
+}
+
+model Drawing {
+  id               String   @id @default(uuid()) @db.Uuid
+  title            String
+  description      String?
+  storageKey       String   @map("storage_key")
+  contentHash      String   @map("content_hash")
+  byteSize         Int      @map("byte_size")
+  elementCount     Int      @default(0) @map("element_count")
+  version          Int      @default(1)
+  createdByAdminId String   @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId String   @map("updated_by_admin_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  createdByAdmin AdminUser @relation("DrawingCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  updatedByAdmin AdminUser @relation("DrawingUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: Restrict)
+
+  @@index([updatedAt])
+  @@map("drawings")
 }
 
 model StudentNote {

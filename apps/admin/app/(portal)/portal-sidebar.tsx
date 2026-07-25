@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   MessageSquareText,
   Palette,
+  PencilRuler,
   ShieldAlert,
   Sprout,
   Users,
@@ -39,6 +40,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
     items: [
       { href: '/standard-messages', label: 'Mesaj şablonları', icon: FileText },
       { href: '/knowledge', label: 'Bilgi bankası', icon: BookOpen },
+      { href: '/drawings', label: 'Çizimler', icon: PencilRuler },
       { href: '/llm', label: 'LLM platformu', icon: BrainCircuit },
     ],
   },
@@ -76,7 +78,12 @@ export function PortalSidebar() {
                 const Icon = item.icon;
                 const active = isActive(pathname, item.href);
                 return (
-                  <Link aria-current={active ? 'page' : undefined} href={item.href} key={item.href}>
+                  <Link
+                    aria-current={active ? 'page' : undefined}
+                    href={item.href}
+                    key={item.href}
+                    title={item.label}
+                  >
                     <Icon aria-hidden="true" />
                     <span>{item.label}</span>
                   </Link>
