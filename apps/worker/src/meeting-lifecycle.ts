@@ -423,12 +423,26 @@ export async function processMeetingLifecycle(
       status: 'SCHEDULED',
       startsAt: { gt: now, lte: new Date(now.getTime() + 25 * 60 * 60_000) },
     },
-    select: { id: true, startsAt: true, version: true },
+    select: {
+      id: true,
+      startsAt: true,
+      version: true,
+      createdAt: true,
+      scheduleEvents: {
+        where: {
+          OR: [{ action: 'RESCHEDULED' }, { action: 'STATUS_CHANGED', newStatus: 'SCHEDULED' }],
+        },
+        select: { createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
     orderBy: { startsAt: 'asc' },
     take: 250,
   });
   for (const meeting of meetings) {
-    if (isReminderDue(now, meeting.startsAt, 24 * 60 * 60_000)) {
+    const lastScheduledAt = meeting.scheduleEvents[0]?.createdAt ?? meeting.createdAt;
+    if (shouldSendMeetingReminder(now, meeting.startsAt, 24 * 60 * 60_000, lastScheduledAt)) {
       await createMeetingIntent(
         prisma,
         clock,
@@ -438,7 +452,7 @@ export async function processMeetingLifecycle(
         `meeting:${meeting.id}:reminder:24h:v${meeting.version}`,
       );
     }
-    if (isReminderDue(now, meeting.startsAt, 60 * 60_000)) {
+    if (shouldSendMeetingReminder(now, meeting.startsAt, 60 * 60_000, lastScheduledAt)) {
       await createMeetingIntent(
         prisma,
         clock,
@@ -467,13 +481,27 @@ export async function processMeetingReminder(
       status: 'SCHEDULED',
       startsAt: { gt: now, lte: new Date(now.getTime() + leadTimeMs) },
     },
-    select: { id: true, startsAt: true, version: true },
+    select: {
+      id: true,
+      startsAt: true,
+      version: true,
+      createdAt: true,
+      scheduleEvents: {
+        where: {
+          OR: [{ action: 'RESCHEDULED' }, { action: 'STATUS_CHANGED', newStatus: 'SCHEDULED' }],
+        },
+        select: { createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+      },
+    },
     orderBy: { startsAt: 'asc' },
     take: 250,
   });
   const suffix = eventKey === 'MEETING_REMINDER_24H' ? '24h' : '1h';
   for (const meeting of meetings) {
-    if (!isReminderDue(now, meeting.startsAt, leadTimeMs)) continue;
+    const lastScheduledAt = meeting.scheduleEvents[0]?.createdAt ?? meeting.createdAt;
+    if (!shouldSendMeetingReminder(now, meeting.startsAt, leadTimeMs, lastScheduledAt)) continue;
     await createMeetingIntent(
       prisma,
       clock,
@@ -502,6 +530,17 @@ export async function processMeetingSummaries(prisma: PrismaClient, clock: Clock
 export function isReminderDue(now: Date, startsAt: Date, leadTimeMs: number): boolean {
   const remaining = startsAt.getTime() - now.getTime();
   return remaining > 0 && remaining <= leadTimeMs;
+}
+
+export function shouldSendMeetingReminder(
+  now: Date,
+  startsAt: Date,
+  leadTimeMs: number,
+  lastScheduledAt: Date,
+): boolean {
+  if (!isReminderDue(now, startsAt, leadTimeMs)) return false;
+  const reminderBoundary = startsAt.getTime() - leadTimeMs;
+  return lastScheduledAt.getTime() < reminderBoundary;
 }
 
 function createEncryption(config: MeetingLifecycleConfig): FieldEncryption {
