@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { FakeClock, FieldEncryption } from '@meditation/core';
 import { PracticeSessionStatus, type PrismaClient } from '@meditation/database';
 import { describe, expect, it, vi } from 'vitest';
-import { createPracticeLifecycleIntent } from './practice-lifecycle.js';
+import { createPracticeLifecycleIntent, processPracticeLifecycle } from './practice-lifecycle.js';
 
 function fixture() {
   const studentId = '10000000-0000-4000-8000-000000000002';
@@ -23,7 +23,7 @@ function fixture() {
     serviceDate: new Date('2026-07-01T00:00:00Z'),
     startAt: new Date('2026-07-01T05:00:00Z'),
     durationMinutes: 15,
-    status: PracticeSessionStatus.SCHEDULED,
+    status: PracticeSessionStatus.SCHEDULED as PracticeSessionStatus,
     version: 1,
     student: {
       preferredLocale: 'tr-TR',
@@ -86,7 +86,7 @@ function fixture() {
   const prisma = {
     $transaction: async (callback: (value: typeof tx) => unknown) => callback(tx),
   } as unknown as PrismaClient;
-  return { prisma, session, config, occurrenceCreate, intentCreate, outboxCreate };
+  return { prisma, session, config, tx, occurrenceCreate, intentCreate, outboxCreate };
 }
 
 describe('practice lifecycle', () => {
@@ -130,5 +130,83 @@ describe('practice lifecycle', () => {
       ),
     ).resolves.toBe(false);
     expect(value.intentCreate).toHaveBeenCalledOnce();
+  });
+
+  it('creates a check-in for a named student without adding an unsupported name variable', async () => {
+    const value = fixture();
+    value.session.status = PracticeSessionStatus.REMINDED;
+    value.session.version = 2;
+    value.tx.standardMessageVersion.findMany.mockResolvedValueOnce([
+      {
+        id: '10000000-0000-4000-8000-000000000009',
+        content: 'Pratiğin nasıl geçti? Planlanan süre {{durationText}}.',
+        placeholders: ['durationText'],
+        effectiveAt: new Date('2026-06-01T00:00:00Z'),
+        variant: {
+          locale: 'tr-TR',
+          curriculumStage: null,
+          slot: null,
+          priority: 0,
+          requiresStudentName: false,
+          providerBinding: {
+            status: 'APPROVED',
+            templateName: 'practice_checkin',
+            providerLocale: 'tr',
+          },
+        },
+      },
+    ] as never);
+
+    await expect(
+      createPracticeLifecycleIntent(
+        value.prisma,
+        new FakeClock('2026-07-01T05:30:00Z'),
+        value.config,
+        value.session.id,
+        PracticeSessionStatus.REMINDED,
+        2,
+        'PRACTICE_CHECKIN',
+      ),
+    ).resolves.toBe(true);
+    expect(value.occurrenceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ variables: { durationText: '15 dakika' } }),
+      }),
+    );
+    expect(value.intentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          payload: expect.objectContaining({
+            providerTemplateParameters: ['15 dakika'],
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('does not mark awaiting practices as missed when the local day closes', async () => {
+    const findMany = vi
+      .fn()
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: '10000000-0000-4000-8000-000000000010',
+          status: PracticeSessionStatus.AWAITING_RESPONSE,
+          version: 2,
+          serviceDate: new Date('2026-07-01T00:00:00Z'),
+          student: { timezone: 'Europe/Istanbul' },
+        },
+      ]);
+    const updateMany = vi.fn();
+    const prisma = {
+      practiceSession: { findMany, updateMany },
+    } as unknown as PrismaClient;
+    const clock = new FakeClock('2026-07-02T00:30:00Z');
+
+    await processPracticeLifecycle(prisma, clock, fixture().config as never);
+
+    expect(findMany).toHaveBeenCalledTimes(2);
+    expect(updateMany).not.toHaveBeenCalled();
   });
 });

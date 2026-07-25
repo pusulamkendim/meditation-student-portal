@@ -114,7 +114,7 @@ export async function createPracticeLifecycleIntent(
 
     const variables: Record<string, string> = {
       ...timingVariables(eventKey, session, session.student.timezone),
-      ...(studentDisplayName
+      ...(eventKey === 'PRACTICE_REMINDER' && studentDisplayName
         ? { studentDisplayName: ` ${studentDisplayName.trim().split(/\s+/)[0]}` }
         : {}),
     };
@@ -261,23 +261,5 @@ export async function processPracticeLifecycle(
       session.version,
       'PRACTICE_CHECKIN',
     );
-  }
-
-  const awaiting = await prisma.practiceSession.findMany({
-    where: { status: PracticeSessionStatus.AWAITING_RESPONSE },
-    include: { student: { select: { timezone: true } } },
-    orderBy: { startAt: 'asc' },
-    take: 200,
-  });
-  for (const session of awaiting) {
-    if (endOfLocalServiceDate(session.serviceDate, session.student.timezone) > now) continue;
-    await prisma.practiceSession.updateMany({
-      where: {
-        id: session.id,
-        status: PracticeSessionStatus.AWAITING_RESPONSE,
-        version: session.version,
-      },
-      data: { status: PracticeSessionStatus.MISSED, version: { increment: 1 } },
-    });
   }
 }

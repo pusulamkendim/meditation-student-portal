@@ -1974,6 +1974,45 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     ).toBe(0);
   });
 
+  it('FLOW-03D applies a signed practice button only to its bound session', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    const otherSession = await prisma.practiceSession.findFirstOrThrow({
+      where: {
+        studentId: current.studentId,
+        id: { not: current.sessionId },
+        status: 'SCHEDULED',
+      },
+      orderBy: { startAt: 'asc' },
+    });
+    await prisma.practiceSession.update({
+      where: { id: otherSession.id },
+      data: { status: 'AWAITING_RESPONSE' },
+    });
+    const checkin = await prisma.messageIntent.findFirstOrThrow({
+      where: {
+        studentId: current.studentId,
+        payload: { path: ['eventKey'], equals: 'PRACTICE_CHECKIN' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const quickReplies = (checkin.payload as { quickReplies: Array<{ id: string; title: string }> })
+      .quickReplies;
+    const completedPayload = quickReplies.find((reply) => reply.title === 'Yaptım')!.id;
+
+    const attempt = await pressPracticeButton(current.senderId, completedPayload);
+    await dispatchPending(current.studentId);
+
+    expect(attempt).toMatchObject({ route: 'practice.inbound', processed: true });
+    const sessions = await prisma.practiceSession.findMany({
+      where: { id: { in: [current.sessionId, otherSession.id] } },
+      select: { id: true, status: true },
+    });
+    expect(Object.fromEntries(sessions.map((session) => [session.id, session.status]))).toEqual({
+      [current.sessionId]: 'COMPLETED',
+      [otherSession.id]: 'AWAITING_RESPONSE',
+    });
+  });
+
   it('FLOW-04 observes practice-independent questions after activation', async () => {
     clock.set('2026-07-15T09:00:00.000Z');
     const current = scenario();
