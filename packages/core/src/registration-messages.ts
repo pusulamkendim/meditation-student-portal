@@ -143,7 +143,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'MEETING_REMINDER_24H',
     content:
-      'Merhaba{{studentDisplayName}}, yarın {{startsAtText}} tarihinde online görüşmemiz var. Görüşmeye şu bağlantıdan katılabilirsin:\n\n{{meetUrl}}\n\nÖzellikle konuşmak istediğin bir konu varsa önceden bana yazabilirsin.',
+      'Merhaba{{studentDisplayName}}, {{startsAtText}} tarihinde online görüşmemiz var. Görüşmeye şu bağlantıdan katılabilirsin:\n\n{{meetUrl}}\n\nÖzellikle konuşmak istediğin bir konu varsa önceden bana yazabilirsin.',
   },
   {
     eventKey: 'MEETING_REMINDER_1H',

@@ -25,4 +25,15 @@ describe('default registration messages', () => {
       'Bir tercih daha: Sorularına destek olmak ve pratik sonrası paylaşımlarını değerlendirmek için yapay zekadan yararlanabilirim. Bu özellik isteğe bağlıdır; onay vermesen de programın aynı şekilde devam eder. {{privacyNoticeUrl}} Kabul ediyorsan EVET, istemiyorsan HAYIR yazabilir veya aşağıdaki seçeneği kullanabilirsin.',
     );
   });
+
+  it('uses the exact date instead of a fixed relative day in meeting reminders', () => {
+    const meetingReminder = defaultRegistrationMessages.find(
+      (message) => message.eventKey === 'MEETING_REMINDER_24H',
+    );
+
+    expect(meetingReminder?.content).toContain(
+      'Merhaba{{studentDisplayName}}, {{startsAtText}} tarihinde online görüşmemiz var.',
+    );
+    expect(meetingReminder?.content).not.toMatch(/\b(?:bugün|yarın)\b/iu);
+  });
 });
