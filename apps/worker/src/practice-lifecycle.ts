@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
+  FieldEncryption,
   endOfLocalServiceDate,
   createPracticeResponsePayload,
   LookupHmac,
@@ -21,7 +22,10 @@ import {
 } from '@meditation/database';
 
 type LifecycleEvent = 'PRACTICE_REMINDER' | 'PRACTICE_CHECKIN';
-type PracticeLifecycleConfig = Pick<ApplicationConfig, 'LOOKUP_HMAC_KEY'>;
+type PracticeLifecycleConfig = Pick<
+  ApplicationConfig,
+  'LOOKUP_HMAC_KEY' | 'DATA_ENCRYPTION_KEYS_JSON' | 'ACTIVE_DATA_KEY_ID'
+>;
 
 function timingVariables(
   eventKey: LifecycleEvent,
@@ -49,6 +53,7 @@ export async function createPracticeLifecycleIntent(
   expectedVersion: number,
   eventKey: LifecycleEvent,
 ): Promise<boolean> {
+  const encryption = createEncryption(config);
   const now = clock.now();
   return prisma.$transaction(async (tx) => {
     const session = await tx.practiceSession.findUniqueOrThrow({
@@ -78,6 +83,16 @@ export async function createPracticeLifecycleIntent(
       },
       include: { variant: { include: { providerBinding: true } } },
     });
+    const studentDisplayName =
+      session.student.fullNameEncrypted && session.student.fullNameKeyId
+        ? encryption.decrypt(
+            {
+              ciphertext: Buffer.from(session.student.fullNameEncrypted),
+              keyId: session.student.fullNameKeyId,
+            },
+            `student:${session.studentId}:name`,
+          )
+        : undefined;
     const variant = resolveMessageVariant(
       versions.map((version) => ({
         ...version,
@@ -92,12 +107,17 @@ export async function createPracticeLifecycleIntent(
         locale: session.student.preferredLocale,
         stage: session.student.curriculumStage,
         slot: session.practiceSlot?.slotKey,
-        hasStudentName: false,
+        hasStudentName: Boolean(studentDisplayName),
       },
     );
     if (!variant) return false;
 
-    const variables = timingVariables(eventKey, session, session.student.timezone);
+    const variables: Record<string, string> = {
+      ...timingVariables(eventKey, session, session.student.timezone),
+      ...(studentDisplayName
+        ? { studentDisplayName: ` ${studentDisplayName.trim().split(/\s+/)[0]}` }
+        : {}),
+    };
     const rendered = renderMessageTemplate(eventKey as SystemEventKey, variant.content, variables);
     const timing = practiceTiming(session.startAt, session.durationMinutes);
     const dueAt = eventKey === 'PRACTICE_REMINDER' ? timing.reminderDueAt : timing.checkinDueAt;
@@ -185,6 +205,16 @@ export async function createPracticeLifecycleIntent(
     });
     return true;
   });
+}
+
+function createEncryption(config: PracticeLifecycleConfig): FieldEncryption {
+  if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID)
+    throw new Error('Worker encryption keys are required.');
+  const keys = JSON.parse(config.DATA_ENCRYPTION_KEYS_JSON) as Record<string, string>;
+  return new FieldEncryption(
+    new Map(Object.entries(keys).map(([id, key]) => [id, Buffer.from(key, 'base64')])),
+    config.ACTIVE_DATA_KEY_ID,
+  );
 }
 
 export async function processPracticeLifecycle(

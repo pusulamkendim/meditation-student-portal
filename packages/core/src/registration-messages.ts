@@ -93,7 +93,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PRACTICE_CHECKIN',
     content:
-      '{{durationText}} pratiğin nasıl geçti? Tamamladıysan YAPTIM, bugün yapamadıysan YAPAMADIM seçeneğini kullanabilirsin.',
+      'Pratiğin nasıl geçti? Planlanan süre {{durationText}}. Tamamladıysan YAPTIM, bugün yapamadıysan YAPAMADIM seçeneğini kullanabilirsin.',
   },
   {
     eventKey: 'PRACTICE_REFLECTION_REQUEST',
