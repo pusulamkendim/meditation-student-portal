@@ -92,8 +92,16 @@ export class MessageCatalogController {
 
   @Post('standard-messages/quick')
   @UseGuards(AdminCsrfGuard)
-  quickCreate(@Body() body: unknown) {
-    return this.catalog.quickCreate(quickMessageSchema.parse(body));
+  async quickCreate(@Body() body: unknown) {
+    const parsed = quickMessageSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Invalid message payload.');
+    try {
+      return await this.catalog.quickCreate(parsed.data);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Message creation failed.',
+      );
+    }
   }
 
   @Post('standard-messages/:id/variants')
@@ -111,9 +119,16 @@ export class MessageCatalogController {
 
   @Post('standard-message-variants/:id/versions')
   @UseGuards(AdminCsrfGuard)
-  createVersion(@Param('id') id: string, @Body() body: unknown) {
-    const value = versionSchema.parse(body);
-    return this.catalog.createVersion(id, value.content, value.expertApproved);
+  async createVersion(@Param('id') id: string, @Body() body: unknown) {
+    const parsed = versionSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Invalid message version payload.');
+    try {
+      return await this.catalog.createVersion(id, parsed.data.content, parsed.data.expertApproved);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : 'Message version creation failed.',
+      );
+    }
   }
 
   @Post('standard-message-versions/:id/publish')

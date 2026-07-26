@@ -126,6 +126,7 @@ export default function StandardMessagesPage() {
   const [view, setView] = useState<View>('DEFINED');
   const [search, setSearch] = useState('');
   const [preview, setPreview] = useState<string>();
+  const [draftContent, setDraftContent] = useState('');
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger' | 'info'; text: string }>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -143,6 +144,13 @@ export default function StandardMessagesPage() {
       const messageItems = ((await messagesResponse.json()) as { items: Message[] }).items;
       setEvents(eventItems);
       setMessages(messageItems);
+      setActiveVariant((current) =>
+        current
+          ? messageItems
+              .flatMap((message) => message.variants)
+              .find((variant) => variant.id === current.id)
+          : undefined,
+      );
       setSelected((current) =>
         current ? eventItems.find((item) => item.key === current.key) : eventItems[0],
       );
@@ -238,14 +246,24 @@ export default function StandardMessagesPage() {
   }
   async function createVersion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!activeVariant) return;
+    if (!activeVariant || !selected) return;
+    const missingRequired = selected.variableSchema.required.filter(
+      (key) => !draftContent.includes(`{{${key}}}`),
+    );
+    if (missingRequired.length) {
+      setNotice({
+        tone: 'danger',
+        text: `Zorunlu değişken eksik: ${missingRequired.map((key) => `{{${key}}}`).join(', ')}. Sabit değer yazmak yerine bu alanları mesajda koruyun.`,
+      });
+      return;
+    }
     const form = event.currentTarget;
     const data = new FormData(form);
-    await mutate(`standard-message-variants/${activeVariant.id}/versions`, {
-      content: data.get('content'),
+    const result = await mutate(`standard-message-variants/${activeVariant.id}/versions`, {
+      content: draftContent,
       expertApproved: data.get('expertApproved') === 'on',
     });
-    form.reset();
+    if (result) form.reset();
   }
   async function showPreview(content: string) {
     if (!selected) return;
@@ -324,6 +342,7 @@ export default function StandardMessagesPage() {
                         setSelected(item);
                         setActiveVariant(undefined);
                         setPreview(undefined);
+                        setDraftContent('');
                       }}
                     >
                       <span>
@@ -422,9 +441,11 @@ export default function StandardMessagesPage() {
                       <label className="ui-field quick-message-content">
                         <span className="ui-field__label">Mesaj içeriği</span>
                         <textarea
+                          key={`${selected.key}:${selected.defaultContent ?? ''}`}
                           className="ui-input"
                           name="content"
                           required
+                          defaultValue={selected.defaultContent ?? ''}
                           placeholder="Mesajı ve gerekli {{değişkenleri}} yazın..."
                         />
                       </label>
@@ -486,6 +507,12 @@ export default function StandardMessagesPage() {
                                 onClick={() => {
                                   setActiveVariant(variant);
                                   setPreview(undefined);
+                                  setDraftContent(
+                                    [...variant.versions].sort((a, b) => b.version - a.version)[0]
+                                      ?.content ??
+                                      selected.defaultContent ??
+                                      '',
+                                  );
                                 }}
                               >
                                 <span>
@@ -524,7 +551,13 @@ export default function StandardMessagesPage() {
                       <form onSubmit={createVersion}>
                         <label className="ui-field">
                           <span className="ui-field__label">Yeni sürüm içeriği</span>
-                          <textarea name="content" className="ui-input catalog-textarea" required />
+                          <textarea
+                            name="content"
+                            className="ui-input catalog-textarea"
+                            required
+                            value={draftContent}
+                            onChange={(event) => setDraftContent(event.target.value)}
+                          />
                         </label>
                         <label className="check-field">
                           <input type="checkbox" name="expertApproved" /> Uzman onaylı
