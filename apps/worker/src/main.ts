@@ -58,6 +58,7 @@ async function bootstrap(): Promise<void> {
       const events = await prisma.outboxEvent.findMany({
         where: {
           status: 'PENDING',
+          availableAt: { lte: systemClock.now() },
           topic: {
             in: [
               'message.intents',
