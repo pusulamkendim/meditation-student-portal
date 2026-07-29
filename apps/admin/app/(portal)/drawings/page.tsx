@@ -11,14 +11,19 @@ import {
   Toast,
 } from '@meditation/ui';
 import {
+  Archive,
   Download,
   FileUp,
+  Link2,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   RefreshCw,
+  RotateCcw,
   Save,
   Search,
+  Send,
+  Share2,
   Trash2,
   Upload,
 } from 'lucide-react';
@@ -51,17 +56,47 @@ type DrawingSummary = {
   description?: string | null;
   byteSize: number;
   elementCount: number;
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
   version: number;
   createdAt: string;
   updatedAt: string;
   createdByAdmin: { email: string };
   updatedByAdmin: { email: string };
+  _count: { assignments: number };
+};
+
+type DrawingAssignment = {
+  id: string;
+  status: 'SHARED' | 'OPENED' | 'REVOKED';
+  sharedVersion: number;
+  assignedAt: string;
+  firstOpenedAt?: string | null;
+  lastOpenedAt?: string | null;
+  student: { id: string; fullName?: string; status: string };
+  messageIntent?: { status: string; suppressionReason?: string | null } | null;
 };
 
 type DrawingDetail = DrawingSummary & {
   storageKey: string;
   contentHash: string;
   scene: DrawingScene;
+  assignments: DrawingAssignment[];
+};
+
+type Student = {
+  id: string;
+  fullName?: string;
+  status: string;
+  channel?: { type: string; identifier?: string };
+};
+
+type ShareResult = {
+  studentId: string;
+  assignmentId?: string;
+  drawingUrl?: string;
+  sent: boolean;
+  messageIntentId?: string;
+  error?: string;
 };
 
 type Notice = { tone: 'success' | 'danger' | 'info'; text: string };
@@ -118,6 +153,12 @@ export default function DrawingsPage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareResultsOpen, setShareResultsOpen] = useState(false);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
+  const [studentQuery, setStudentQuery] = useState('');
+  const [shareResults, setShareResults] = useState<ShareResult[]>([]);
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [notice, setNotice] = useState<Notice>();
   const [error, setError] = useState<string>();
@@ -179,6 +220,17 @@ export default function DrawingsPage() {
         drawing.description?.toLocaleLowerCase('tr-TR').includes(term),
     );
   }, [drawings, query]);
+
+  const filteredStudents = useMemo(() => {
+    const term = studentQuery.trim().toLocaleLowerCase('tr-TR');
+    return students.filter(
+      (student) =>
+        student.status === 'ACTIVE' &&
+        (!term ||
+          student.fullName?.toLocaleLowerCase('tr-TR').includes(term) ||
+          student.id.startsWith(term)),
+    );
+  }, [studentQuery, students]);
 
   async function createDrawing(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -294,6 +346,102 @@ export default function DrawingsPage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  async function changeStatus(status: DrawingSummary['status']) {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await request(`/v1/admin/drawings/${detail.id}`, {
+        method: 'PATCH',
+        headers: csrfHeaders(true),
+        body: JSON.stringify({ expectedVersion: detail.version, status }),
+      });
+      setDeleteOpen(false);
+      setNotice({
+        tone: 'success',
+        text: status === 'ARCHIVED' ? 'Çizim arşivlendi.' : 'Çizim yeniden kullanıma açıldı.',
+      });
+      await loadDrawings(detail.id);
+      await loadDrawing(detail.id);
+    } catch (reason) {
+      setNotice({
+        tone: 'danger',
+        text: reason instanceof Error ? reason.message : 'Çizim durumu değiştirilemedi.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function openShare() {
+    if (!detail || detail.status === 'ARCHIVED') return;
+    setShareOpen(true);
+    setSelectedStudents([]);
+    setStudentQuery('');
+    if (students.length) return;
+    try {
+      const result = await request<{ items: Student[] }>('/v1/admin/students');
+      setStudents(result.items);
+    } catch (reason) {
+      setNotice({
+        tone: 'danger',
+        text: reason instanceof Error ? reason.message : 'Öğrenciler yüklenemedi.',
+      });
+    }
+  }
+
+  async function shareDrawing() {
+    if (!detail || selectedStudents.length === 0) return;
+    setBusy(true);
+    try {
+      const result = await request<{ items: ShareResult[] }>(
+        `/v1/admin/drawings/${detail.id}/assignments`,
+        {
+          method: 'POST',
+          headers: csrfHeaders(true),
+          body: JSON.stringify({ studentIds: selectedStudents }),
+        },
+      );
+      setShareResults(result.items);
+      setShareOpen(false);
+      setShareResultsOpen(true);
+      await loadDrawings(detail.id);
+      await loadDrawing(detail.id);
+    } catch (reason) {
+      setNotice({
+        tone: 'danger',
+        text: reason instanceof Error ? reason.message : 'Çizim paylaşılamadı.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeAssignment(assignmentId: string) {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await request(`/v1/admin/drawings/${detail.id}/assignments/${assignmentId}`, {
+        method: 'DELETE',
+        headers: csrfHeaders(),
+      });
+      setNotice({ tone: 'success', text: 'Öğrencinin çizim erişimi kaldırıldı.' });
+      await loadDrawing(detail.id);
+    } catch (reason) {
+      setNotice({
+        tone: 'danger',
+        text: reason instanceof Error ? reason.message : 'Erişim kaldırılamadı.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyLink(value?: string) {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    setNotice({ tone: 'success', text: 'Çizim bağlantısı kopyalandı.' });
   }
 
   return (
@@ -457,11 +605,40 @@ export default function DrawingsPage() {
                   <Button
                     size="icon"
                     variant="secondary"
+                    title={
+                      detail.status === 'ARCHIVED'
+                        ? 'Arşivlenmiş çizim paylaşılamaz'
+                        : 'Öğrenciyle paylaş'
+                    }
+                    aria-label="Öğrenciyle paylaş"
+                    disabled={detail.status === 'ARCHIVED'}
+                    onClick={() => void openShare()}
+                  >
+                    <Share2 size={17} aria-hidden="true" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="secondary"
                     title="Excalidraw dosyasını indir"
                     aria-label="Excalidraw dosyasını indir"
                     onClick={downloadDrawing}
                   >
                     <Download size={17} aria-hidden="true" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="secondary"
+                    title={detail.status === 'ARCHIVED' ? 'Arşivden çıkar' : 'Arşivle'}
+                    aria-label={detail.status === 'ARCHIVED' ? 'Arşivden çıkar' : 'Arşivle'}
+                    onClick={() =>
+                      void changeStatus(detail.status === 'ARCHIVED' ? 'PUBLISHED' : 'ARCHIVED')
+                    }
+                  >
+                    {detail.status === 'ARCHIVED' ? (
+                      <RotateCcw size={17} aria-hidden="true" />
+                    ) : (
+                      <Archive size={17} aria-hidden="true" />
+                    )}
                   </Button>
                   <Button
                     size="icon"
@@ -496,7 +673,11 @@ export default function DrawingsPage() {
                 <span>
                   Son kayıt {formatDate(detail.updatedAt)} · {detail.updatedByAdmin.email}
                 </span>
-                <Badge tone="success">Özel depolama</Badge>
+                <Badge tone={detail.status === 'ARCHIVED' ? 'neutral' : 'success'}>
+                  {detail.status === 'ARCHIVED'
+                    ? 'Arşivde'
+                    : `${detail.assignments.length} öğrenci`}
+                </Badge>
               </footer>
             </>
           ) : (
@@ -550,18 +731,163 @@ export default function DrawingsPage() {
       {deleteOpen ? (
         <Modal title="Çizimi sil" onClose={() => setDeleteOpen(false)}>
           <div className="modal-form">
-            <Alert tone="warning" title="Bu işlem geri alınamaz">
-              “{detail?.title}” çizimi özel depolama ve kütüphaneden kalıcı olarak silinecek.
-            </Alert>
+            {detail?.assignments.length ? (
+              <Alert tone="warning" title="Bu çizim öğrenciyle paylaşıldı">
+                Öğrenci erişim geçmişini korumak için çizimi kalıcı olarak silemezsiniz. Çizimi
+                arşivleyebilirsiniz.
+              </Alert>
+            ) : (
+              <Alert tone="warning" title="Bu işlem geri alınamaz">
+                “{detail?.title}” çizimi özel depolama ve kütüphaneden kalıcı olarak silinecek.
+              </Alert>
+            )}
             <div className="modal-actions">
               <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
                 Vazgeç
               </Button>
-              <Button variant="danger" loading={busy} onClick={() => void deleteDrawing()}>
-                <Trash2 size={16} aria-hidden="true" />
-                Çizimi sil
+              {detail?.assignments.length ? (
+                detail.status !== 'ARCHIVED' ? (
+                  <Button loading={busy} onClick={() => void changeStatus('ARCHIVED')}>
+                    <Archive size={16} aria-hidden="true" />
+                    Arşivle
+                  </Button>
+                ) : null
+              ) : (
+                <Button variant="danger" loading={busy} onClick={() => void deleteDrawing()}>
+                  <Trash2 size={16} aria-hidden="true" />
+                  Çizimi sil
+                </Button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {shareOpen && detail ? (
+        <Modal
+          title="Öğrenciyle paylaş"
+          description="Her öğrenciye kişisel, salt okunur bir çizim bağlantısı gönderilir."
+          onClose={() => setShareOpen(false)}
+        >
+          <div className="drawing-share-dialog">
+            <label className="drawing-share-search">
+              <Search aria-hidden="true" />
+              <input
+                value={studentQuery}
+                onChange={(event) => setStudentQuery(event.target.value)}
+                placeholder="Öğrenci ara"
+              />
+            </label>
+            <div className="drawing-share-students">
+              {filteredStudents.map((student) => {
+                const previous = detail.assignments.find(
+                  (assignment) => assignment.student.id === student.id,
+                );
+                return (
+                  <label key={student.id}>
+                    <input
+                      type="checkbox"
+                      checked={selectedStudents.includes(student.id)}
+                      onChange={(event) =>
+                        setSelectedStudents((current) =>
+                          event.target.checked
+                            ? [...current, student.id]
+                            : current.filter((id) => id !== student.id),
+                        )
+                      }
+                    />
+                    <span>
+                      <strong>{student.fullName ?? student.id.slice(0, 8)}</strong>
+                      <small>
+                        {previous
+                          ? previous.status === 'REVOKED'
+                            ? 'Erişimi kaldırılmış · yeniden paylaşılabilir'
+                            : 'Daha önce paylaşıldı · bağlantı yenilenir'
+                          : (student.channel?.type ?? 'Kanal yok')}
+                      </small>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {detail.assignments.length > 0 ? (
+              <section className="drawing-share-history">
+                <h3>Paylaşım geçmişi</h3>
+                {detail.assignments.map((assignment) => (
+                  <article key={assignment.id}>
+                    <span>
+                      <strong>
+                        {assignment.student.fullName ?? assignment.student.id.slice(0, 8)}
+                      </strong>
+                      <small>
+                        {assignment.status === 'OPENED'
+                          ? `Açıldı · ${formatDate(assignment.lastOpenedAt!)}`
+                          : assignment.status === 'REVOKED'
+                            ? 'Erişim kaldırıldı'
+                            : `Gönderildi · ${formatDate(assignment.assignedAt)}`}
+                      </small>
+                    </span>
+                    {assignment.status !== 'REVOKED' ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => void revokeAssignment(assignment.id)}
+                      >
+                        Erişimi kaldır
+                      </Button>
+                    ) : null}
+                  </article>
+                ))}
+              </section>
+            ) : null}
+
+            <div className="modal-actions">
+              <Button variant="ghost" onClick={() => setShareOpen(false)}>
+                Vazgeç
+              </Button>
+              <Button
+                loading={busy}
+                disabled={selectedStudents.length === 0}
+                onClick={() => void shareDrawing()}
+              >
+                <Send size={16} aria-hidden="true" />
+                {selectedStudents.length} öğrenciye gönder
               </Button>
             </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {shareResultsOpen ? (
+        <Modal
+          title="Paylaşım sonuçları"
+          description="Mesaj gönderilemese de kişisel bağlantıyı manuel paylaşabilirsiniz."
+          onClose={() => setShareResultsOpen(false)}
+        >
+          <div className="drawing-share-results">
+            {shareResults.map((result) => {
+              const student = students.find((item) => item.id === result.studentId);
+              return (
+                <article key={result.studentId}>
+                  <span>
+                    <strong>{student?.fullName ?? result.studentId.slice(0, 8)}</strong>
+                    <small>{result.sent ? 'Mesaj kuyruğa alındı' : result.error}</small>
+                  </span>
+                  {result.drawingUrl ? (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => void copyLink(result.drawingUrl)}
+                    >
+                      <Link2 size={15} aria-hidden="true" />
+                      Kopyala
+                    </Button>
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
         </Modal>
       ) : null}

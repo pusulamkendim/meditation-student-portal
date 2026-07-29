@@ -35,7 +35,7 @@ export async function syncSystemEventRegistry(database: DatabaseClient): Promise
     }
   };
   if ('$transaction' in database) {
-    await database.$transaction(synchronize);
+    await database.$transaction(synchronize, { maxWait: 5_000, timeout: 30_000 });
   } else {
     await synchronize(database);
   }
@@ -110,7 +110,7 @@ export async function syncDefaultRegistrationMessages(database: DatabaseClient):
     }
   };
   if ('$transaction' in database) {
-    await database.$transaction(synchronize);
+    await database.$transaction(synchronize, { maxWait: 5_000, timeout: 30_000 });
   } else {
     await synchronize(database);
   }

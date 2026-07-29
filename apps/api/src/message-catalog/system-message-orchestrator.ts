@@ -10,6 +10,7 @@ import {
 } from '@meditation/core';
 import {
   MessageIntentStatus,
+  ProviderTemplateStatus,
   StandardMessageVersionStatus,
   type Prisma,
 } from '@meditation/database';
@@ -93,6 +94,20 @@ export class SystemMessageOrchestrator {
             standardMessageVersionId: variant.id,
             rendered,
             locale: variant.variant.locale,
+            providerTemplateName:
+              variant.variant.providerBinding?.status === ProviderTemplateStatus.APPROVED
+                ? variant.variant.providerBinding.templateName
+                : undefined,
+            providerTemplateLocale:
+              variant.variant.providerBinding?.status === ProviderTemplateStatus.APPROVED
+                ? variant.variant.providerBinding.providerLocale
+                : undefined,
+            providerTemplateParameters:
+              variant.variant.providerBinding?.status === ProviderTemplateStatus.APPROVED
+                ? (variant.placeholders as string[]).map((key) =>
+                    String(command.variables[key] ?? ''),
+                  )
+                : undefined,
           },
         },
       });
@@ -131,7 +146,7 @@ export class SystemMessageOrchestrator {
           standardMessage: { eventKey: command.eventKey, audience: 'STUDENT' },
         },
       },
-      include: { variant: true },
+      include: { variant: { include: { providerBinding: true } } },
     });
     return resolveMessageVariant(
       versions.map((version) => ({

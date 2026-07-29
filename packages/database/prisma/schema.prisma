@@ -215,6 +215,35 @@ enum ProviderTemplateStatus {
   PAUSED
 }
 
+enum ReadingStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ReadingAssignmentStatus {
+  ASSIGNED
+  OPENED
+  COMPLETED
+}
+
+enum ReadingPublicShareStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum DrawingStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum DrawingAssignmentStatus {
+  SHARED
+  OPENED
+  REVOKED
+}
+
 enum ResponseOwner {
   SYSTEM_STANDARD_MESSAGE
   AGENT_CONTEXTUAL
@@ -300,22 +329,22 @@ model SystemSetting {
 }
 
 model Student {
-  id                       String          @id @default(uuid()) @db.Uuid
-  status                   StudentStatus   @default(LEAD)
+  id                       String           @id @default(uuid()) @db.Uuid
+  status                   StudentStatus    @default(LEAD)
   registrationStep         RegistrationStep @default(STARTED) @map("registration_step")
-  fullNameEncrypted        Bytes?          @map("full_name_encrypted")
-  fullNameKeyId            String?         @map("full_name_key_id")
-  phoneEncrypted           Bytes?          @map("phone_encrypted")
-  phoneKeyId               String?         @map("phone_key_id")
-  phoneHmac                String?         @unique @map("phone_hmac")
-  timezone                 String          @default("Europe/Istanbul")
-  preferredLocale          String          @default("tr-TR") @map("preferred_locale")
-  curriculumStage          CurriculumStage @default(WEEK_1) @map("curriculum_stage")
-  curriculumStageSource    StageSource     @default(AUTO) @map("curriculum_stage_source")
-  defaultChannelIdentityId String?         @unique @map("default_channel_identity_id") @db.Uuid
-  version                  Int             @default(1)
-  createdAt                DateTime        @default(now()) @map("created_at")
-  updatedAt                DateTime        @updatedAt @map("updated_at")
+  fullNameEncrypted        Bytes?           @map("full_name_encrypted")
+  fullNameKeyId            String?          @map("full_name_key_id")
+  phoneEncrypted           Bytes?           @map("phone_encrypted")
+  phoneKeyId               String?          @map("phone_key_id")
+  phoneHmac                String?          @unique @map("phone_hmac")
+  timezone                 String           @default("Europe/Istanbul")
+  preferredLocale          String           @default("tr-TR") @map("preferred_locale")
+  curriculumStage          CurriculumStage  @default(WEEK_1) @map("curriculum_stage")
+  curriculumStageSource    StageSource      @default(AUTO) @map("curriculum_stage_source")
+  defaultChannelIdentityId String?          @unique @map("default_channel_identity_id") @db.Uuid
+  version                  Int              @default(1)
+  createdAt                DateTime         @default(now()) @map("created_at")
+  updatedAt                DateTime         @updatedAt @map("updated_at")
 
   defaultChannelIdentity StudentChannelIdentity?  @relation("DefaultChannel", fields: [defaultChannelIdentityId], references: [id], onDelete: SetNull)
   channelIdentities      StudentChannelIdentity[] @relation("StudentIdentities")
@@ -338,6 +367,8 @@ model Student {
   handoffs               Handoff[]
   notes                  StudentNote[]
   inboundIntentDecisions InboundIntentDecision[]
+  readingAssignments     ReadingAssignment[]
+  drawingAssignments     DrawingAssignment[]
 
   @@index([status])
   @@map("students")
@@ -444,16 +475,17 @@ model StudentChannelIdentity {
 }
 
 model ChannelLinkToken {
-  id          String      @id @default(uuid()) @db.Uuid
-  studentId   String      @map("student_id") @db.Uuid
-  channel     ChannelType
-  tokenHash   String      @unique @map("token_hash")
-  expiresAt   DateTime    @map("expires_at")
-  usedAt      DateTime?   @map("used_at")
-  revokedAt   DateTime?   @map("revoked_at")
-  createdAt   DateTime    @default(now()) @map("created_at")
+  id        String      @id @default(uuid()) @db.Uuid
+  studentId String      @map("student_id") @db.Uuid
+  channel   ChannelType
+  tokenHash String      @unique @map("token_hash")
+  expiresAt DateTime    @map("expires_at")
+  usedAt    DateTime?   @map("used_at")
+  revokedAt DateTime?   @map("revoked_at")
+  createdAt DateTime    @default(now()) @map("created_at")
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
   @@index([studentId, expiresAt])
   @@map("channel_link_tokens")
 }
@@ -466,6 +498,7 @@ model MessageDeliveryEvent {
   providerTimestamp DateTime      @map("provider_timestamp")
   payloadHash       String        @map("payload_hash")
   createdAt         DateTime      @default(now()) @map("created_at")
+
   @@unique([channel, externalMessageId, status, providerTimestamp, payloadHash])
   @@index([externalMessageId, providerTimestamp])
   @@map("message_delivery_events")
@@ -575,24 +608,24 @@ model PracticeSlot {
 }
 
 model PracticeSession {
-  id              String                @id @default(uuid()) @db.Uuid
-  studentId       String                @map("student_id") @db.Uuid
-  practicePlanId  String                @map("practice_plan_id") @db.Uuid
-  practiceSlotId  String?               @map("practice_slot_id") @db.Uuid
-  serviceDate     DateTime              @map("service_date") @db.Date
-  startAt         DateTime              @map("start_at")
-  durationMinutes Int                   @map("duration_minutes")
-  status          PracticeSessionStatus @default(SCHEDULED)
-  replyNonceHmac  String?               @map("reply_nonce_hmac")
-  cancelledAt     DateTime?             @map("cancelled_at")
-  cancellationReason String?            @map("cancellation_reason")
-  version         Int                   @default(1)
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
+  id                 String                @id @default(uuid()) @db.Uuid
+  studentId          String                @map("student_id") @db.Uuid
+  practicePlanId     String                @map("practice_plan_id") @db.Uuid
+  practiceSlotId     String?               @map("practice_slot_id") @db.Uuid
+  serviceDate        DateTime              @map("service_date") @db.Date
+  startAt            DateTime              @map("start_at")
+  durationMinutes    Int                   @map("duration_minutes")
+  status             PracticeSessionStatus @default(SCHEDULED)
+  replyNonceHmac     String?               @map("reply_nonce_hmac")
+  cancelledAt        DateTime?             @map("cancelled_at")
+  cancellationReason String?               @map("cancellation_reason")
+  version            Int                   @default(1)
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt @map("updated_at")
 
-  student      Student       @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  practicePlan PracticePlan  @relation(fields: [practicePlanId], references: [id], onDelete: Restrict)
-  practiceSlot PracticeSlot? @relation(fields: [practiceSlotId], references: [id], onDelete: SetNull)
+  student      Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  practicePlan PracticePlan        @relation(fields: [practicePlanId], references: [id], onDelete: Restrict)
+  practiceSlot PracticeSlot?       @relation(fields: [practiceSlotId], references: [id], onDelete: SetNull)
   reflection   PracticeReflection?
 
   @@unique([practicePlanId, serviceDate, practiceSlotId])
@@ -632,8 +665,8 @@ model MeetingSeries {
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")
 
-  student            Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  subscriptionPeriod SubscriptionPeriod @relation(fields: [subscriptionPeriodId], references: [id], onDelete: Restrict)
+  student            Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  subscriptionPeriod SubscriptionPeriod     @relation(fields: [subscriptionPeriodId], references: [id], onDelete: Restrict)
   meetings           WeeklyMeeting[]
   scheduleEvents     MeetingScheduleEvent[]
   discrepancies      CalendarDiscrepancy[]
@@ -660,13 +693,13 @@ model WeeklyMeeting {
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
 
-  meetingSeries MeetingSeries          @relation(fields: [meetingSeriesId], references: [id], onDelete: Restrict)
-  creditEvents  MeetingCreditEvent[]
+  meetingSeries  MeetingSeries               @relation(fields: [meetingSeriesId], references: [id], onDelete: Restrict)
+  creditEvents   MeetingCreditEvent[]
   scheduleEvents MeetingScheduleEvent[]
-  summary       WeeklySummary?
-  draftVersions WeeklySummaryDraftVersion[]
-  coachNotes    CoachNoteVersion[]
-  discrepancies CalendarDiscrepancy[]
+  summary        WeeklySummary?
+  draftVersions  WeeklySummaryDraftVersion[]
+  coachNotes     CoachNoteVersion[]
+  discrepancies  CalendarDiscrepancy[]
 
   @@unique([meetingSeriesId, occurrenceNumber])
   @@index([startsAt, status])
@@ -674,18 +707,18 @@ model WeeklyMeeting {
 }
 
 model MeetingScheduleEvent {
-  id               String               @id @default(uuid()) @db.Uuid
-  meetingSeriesId  String               @map("meeting_series_id") @db.Uuid
-  meetingId        String?              @map("meeting_id") @db.Uuid
+  id               String                @id @default(uuid()) @db.Uuid
+  meetingSeriesId  String                @map("meeting_series_id") @db.Uuid
+  meetingId        String?               @map("meeting_id") @db.Uuid
   action           MeetingScheduleAction
-  previousStartsAt DateTime?            @map("previous_starts_at")
-  newStartsAt      DateTime?            @map("new_starts_at")
-  previousStatus   MeetingStatus?       @map("previous_status")
-  newStatus        MeetingStatus?       @map("new_status")
+  previousStartsAt DateTime?             @map("previous_starts_at")
+  newStartsAt      DateTime?             @map("new_starts_at")
+  previousStatus   MeetingStatus?        @map("previous_status")
+  newStatus        MeetingStatus?        @map("new_status")
   reason           String?
-  adminUserId      String               @map("admin_user_id") @db.Uuid
-  idempotencyKey   String               @unique @map("idempotency_key")
-  createdAt        DateTime             @default(now()) @map("created_at")
+  adminUserId      String                @map("admin_user_id") @db.Uuid
+  idempotencyKey   String                @unique @map("idempotency_key")
+  createdAt        DateTime              @default(now()) @map("created_at")
 
   meetingSeries MeetingSeries  @relation(fields: [meetingSeriesId], references: [id], onDelete: Restrict)
   meeting       WeeklyMeeting? @relation(fields: [meetingId], references: [id], onDelete: Restrict)
@@ -734,7 +767,7 @@ model CoachNoteVersion {
 model GoogleCalendarIntegration {
   id                    String                         @id @default("default")
   status                GoogleCalendarConnectionStatus @default(DISCONNECTED)
-  refreshTokenEncrypted Bytes?                        @map("refresh_token_encrypted")
+  refreshTokenEncrypted Bytes?                         @map("refresh_token_encrypted")
   refreshTokenKeyId     String?                        @map("refresh_token_key_id")
   calendarId            String?                        @map("calendar_id")
   calendarName          String?                        @map("calendar_name")
@@ -747,14 +780,14 @@ model GoogleCalendarIntegration {
 }
 
 model GoogleOAuthState {
-  id                    String   @id @default(uuid()) @db.Uuid
-  stateHash             String   @unique @map("state_hash")
-  codeVerifierEncrypted Bytes    @map("code_verifier_encrypted")
-  codeVerifierKeyId     String   @map("code_verifier_key_id")
-  adminUserId           String   @map("admin_user_id") @db.Uuid
-  expiresAt             DateTime @map("expires_at")
+  id                    String    @id @default(uuid()) @db.Uuid
+  stateHash             String    @unique @map("state_hash")
+  codeVerifierEncrypted Bytes     @map("code_verifier_encrypted")
+  codeVerifierKeyId     String    @map("code_verifier_key_id")
+  adminUserId           String    @map("admin_user_id") @db.Uuid
+  expiresAt             DateTime  @map("expires_at")
   usedAt                DateTime? @map("used_at")
-  createdAt              DateTime @default(now()) @map("created_at")
+  createdAt             DateTime  @default(now()) @map("created_at")
 
   adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 
@@ -841,9 +874,11 @@ model MessageIntent {
   createdAt         DateTime            @default(now()) @map("created_at")
   updatedAt         DateTime            @updatedAt @map("updated_at")
 
-  student         Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  channelIdentity StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
-  message         Message?
+  student           Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  channelIdentity   StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
+  message           Message?
+  readingAssignment ReadingAssignment?
+  drawingAssignment DrawingAssignment?
 
   @@index([status, dueAt])
   @@map("message_intents")
@@ -885,16 +920,16 @@ model StandardMessage {
 }
 
 model StandardMessageVariant {
-  id                String              @id @default(uuid()) @db.Uuid
-  standardMessageId String              @map("standard_message_id") @db.Uuid
-  channel           NotificationChannel
-  locale            String
-  curriculumStage   CurriculumStage?    @map("curriculum_stage")
-  slot              String?
-  requiresStudentName Boolean           @default(false) @map("requires_student_name")
-  priority          Int                 @default(0)
-  createdAt         DateTime            @default(now()) @map("created_at")
-  updatedAt         DateTime            @updatedAt @map("updated_at")
+  id                  String              @id @default(uuid()) @db.Uuid
+  standardMessageId   String              @map("standard_message_id") @db.Uuid
+  channel             NotificationChannel
+  locale              String
+  curriculumStage     CurriculumStage?    @map("curriculum_stage")
+  slot                String?
+  requiresStudentName Boolean             @default(false) @map("requires_student_name")
+  priority            Int                 @default(0)
+  createdAt           DateTime            @default(now()) @map("created_at")
+  updatedAt           DateTime            @updatedAt @map("updated_at")
 
   standardMessage StandardMessage          @relation(fields: [standardMessageId], references: [id], onDelete: Cascade)
   versions        StandardMessageVersion[]
@@ -981,8 +1016,8 @@ model InboxEvent {
   processedAt    DateTime?   @map("processed_at")
   createdAt      DateTime    @default(now()) @map("created_at")
 
-  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
-  message Message?
+  student           Student?                       @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  message           Message?
   contextResolution ConversationContextResolution?
   intentDecision    InboundIntentDecision?
 
@@ -991,19 +1026,19 @@ model InboxEvent {
 }
 
 model InboundIntentDecision {
-  id              String   @id @default(uuid()) @db.Uuid
-  inboxEventId    String   @unique @map("inbox_event_id") @db.Uuid
-  studentId       String   @map("student_id") @db.Uuid
-  operationId     String   @unique @map("operation_id")
+  id              String    @id @default(uuid()) @db.Uuid
+  inboxEventId    String    @unique @map("inbox_event_id") @db.Uuid
+  studentId       String    @map("student_id") @db.Uuid
+  operationId     String    @unique @map("operation_id")
   domain          String
   action          String
   confidence      Int
-  contextSource   String   @map("context_source")
-  contextSnapshot Json     @map("context_snapshot")
-  status          String   @default("CLASSIFIED")
+  contextSource   String    @map("context_source")
+  contextSnapshot Json      @map("context_snapshot")
+  status          String    @default("CLASSIFIED")
   appliedAt       DateTime? @map("applied_at")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   inboxEvent InboxEvent @relation(fields: [inboxEventId], references: [id], onDelete: Cascade)
   student    Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -1014,15 +1049,15 @@ model InboundIntentDecision {
 }
 
 model ConversationContextResolution {
-  id                String   @id @default(uuid()) @db.Uuid
-  inboxEventId      String   @unique @map("inbox_event_id") @db.Uuid
-  sourceMessageId   String?  @map("source_message_id") @db.Uuid
-  eventKey           String?  @map("event_key")
-  entityType         String?  @map("entity_type")
-  entityId           String?  @map("entity_id") @db.Uuid
-  resolutionMethod   String   @map("resolution_method")
-  expiresAt          DateTime? @map("expires_at")
-  resolvedAt         DateTime @map("resolved_at")
+  id               String    @id @default(uuid()) @db.Uuid
+  inboxEventId     String    @unique @map("inbox_event_id") @db.Uuid
+  sourceMessageId  String?   @map("source_message_id") @db.Uuid
+  eventKey         String?   @map("event_key")
+  entityType       String?   @map("entity_type")
+  entityId         String?   @map("entity_id") @db.Uuid
+  resolutionMethod String    @map("resolution_method")
+  expiresAt        DateTime? @map("expires_at")
+  resolvedAt       DateTime  @map("resolved_at")
 
   inboxEvent InboxEvent @relation(fields: [inboxEventId], references: [id], onDelete: Cascade)
 
@@ -1079,39 +1114,202 @@ model AdminUser {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  sessions         AdminSession[]
-  recoveryCodes    TotpRecoveryCode[]
-  approvedPayments Payment[]
+  sessions              AdminSession[]
+  recoveryCodes         TotpRecoveryCode[]
+  approvedPayments      Payment[]
   meetingScheduleEvents MeetingScheduleEvent[]
-  coachNoteVersions CoachNoteVersion[]
-  googleOAuthStates GoogleOAuthState[]
-  createdStudentNotes StudentNote[] @relation("StudentNoteCreatedBy")
-  updatedStudentNotes StudentNote[] @relation("StudentNoteUpdatedBy")
-  createdDrawings Drawing[] @relation("DrawingCreatedBy")
-  updatedDrawings Drawing[] @relation("DrawingUpdatedBy")
+  coachNoteVersions     CoachNoteVersion[]
+  googleOAuthStates     GoogleOAuthState[]
+  createdStudentNotes   StudentNote[]          @relation("StudentNoteCreatedBy")
+  updatedStudentNotes   StudentNote[]          @relation("StudentNoteUpdatedBy")
+  createdDrawings       Drawing[]              @relation("DrawingCreatedBy")
+  updatedDrawings       Drawing[]              @relation("DrawingUpdatedBy")
+  assignedDrawings      DrawingAssignment[]    @relation("DrawingAssignedBy")
+  createdReadings       Reading[]              @relation("ReadingCreatedBy")
+  updatedReadings       Reading[]              @relation("ReadingUpdatedBy")
+  assignedReadings      ReadingAssignment[]    @relation("ReadingAssignedBy")
+  createdReadingShares  ReadingPublicShare[]   @relation("ReadingPublicShareCreatedBy")
+  updatedReadingShares  ReadingPublicShare[]   @relation("ReadingPublicShareUpdatedBy")
 
   @@map("admin_users")
 }
 
 model Drawing {
-  id               String   @id @default(uuid()) @db.Uuid
+  id               String        @id @default(uuid()) @db.Uuid
   title            String
   description      String?
-  storageKey       String   @map("storage_key")
-  contentHash      String   @map("content_hash")
-  byteSize         Int      @map("byte_size")
-  elementCount     Int      @default(0) @map("element_count")
-  version          Int      @default(1)
-  createdByAdminId String   @map("created_by_admin_id") @db.Uuid
-  updatedByAdminId String   @map("updated_by_admin_id") @db.Uuid
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  status           DrawingStatus @default(DRAFT)
+  storageKey       String        @map("storage_key")
+  contentHash      String        @map("content_hash")
+  byteSize         Int           @map("byte_size")
+  elementCount     Int           @default(0) @map("element_count")
+  version          Int           @default(1)
+  createdByAdminId String        @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId String        @map("updated_by_admin_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  createdByAdmin AdminUser @relation("DrawingCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
-  updatedByAdmin AdminUser @relation("DrawingUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: Restrict)
+  createdByAdmin AdminUser           @relation("DrawingCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  updatedByAdmin AdminUser           @relation("DrawingUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: Restrict)
+  assignments    DrawingAssignment[]
 
-  @@index([updatedAt])
+  @@index([status, updatedAt])
   @@map("drawings")
+}
+
+model DrawingAssignment {
+  id                String                  @id @default(uuid()) @db.Uuid
+  drawingId         String                  @map("drawing_id") @db.Uuid
+  studentId         String                  @map("student_id") @db.Uuid
+  assignedByAdminId String                  @map("assigned_by_admin_id") @db.Uuid
+  accessTokenHmac   String                  @unique @map("access_token_hmac")
+  status            DrawingAssignmentStatus @default(SHARED)
+  sharedVersion     Int                     @map("shared_version")
+  messageIntentId   String?                 @unique @map("message_intent_id") @db.Uuid
+  version           Int                     @default(1)
+  assignedAt        DateTime                @default(now()) @map("assigned_at")
+  firstOpenedAt     DateTime?               @map("first_opened_at")
+  lastOpenedAt      DateTime?               @map("last_opened_at")
+  revokedAt         DateTime?               @map("revoked_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+
+  drawing         Drawing        @relation(fields: [drawingId], references: [id], onDelete: Cascade)
+  student         Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignedByAdmin AdminUser      @relation("DrawingAssignedBy", fields: [assignedByAdminId], references: [id], onDelete: Restrict)
+  messageIntent   MessageIntent? @relation(fields: [messageIntentId], references: [id], onDelete: SetNull)
+
+  @@unique([drawingId, studentId])
+  @@index([studentId, status])
+  @@index([drawingId, status])
+  @@map("drawing_assignments")
+}
+
+model Reading {
+  id               String        @id @default(uuid()) @db.Uuid
+  title            String
+  description      String?
+  author           String?
+  estimatedMinutes Int           @map("estimated_minutes")
+  status           ReadingStatus @default(DRAFT)
+  allowAgent       Boolean       @default(false) @map("allow_agent")
+  sourceFilename   String        @map("source_filename")
+  sourceStorageKey String        @map("source_storage_key")
+  sourceHash       String        @map("source_hash")
+  sourceByteSize   Int           @map("source_byte_size")
+  pdfFilename      String?       @map("pdf_filename")
+  pdfStorageKey    String?       @map("pdf_storage_key")
+  pdfHash          String?       @map("pdf_hash")
+  pdfByteSize      Int?          @map("pdf_byte_size")
+  version          Int           @default(1)
+  createdByAdminId String        @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId String        @map("updated_by_admin_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  createdByAdmin AdminUser           @relation("ReadingCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  updatedByAdmin AdminUser           @relation("ReadingUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: Restrict)
+  sections       ReadingSection[]
+  assignments    ReadingAssignment[]
+  publicShare    ReadingPublicShare?
+
+  @@index([status, updatedAt])
+  @@map("readings")
+}
+
+model ReadingSection {
+  id              String   @id @default(uuid()) @db.Uuid
+  readingId       String   @map("reading_id") @db.Uuid
+  position        Int
+  title           String
+  contentMarkdown String   @map("content_markdown")
+  wordCount       Int      @map("word_count")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  reading Reading @relation(fields: [readingId], references: [id], onDelete: Cascade)
+
+  @@unique([readingId, position])
+  @@index([readingId])
+  @@map("reading_sections")
+}
+
+model ReadingAssignment {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  readingId           String                  @map("reading_id") @db.Uuid
+  studentId           String                  @map("student_id") @db.Uuid
+  assignedByAdminId   String                  @map("assigned_by_admin_id") @db.Uuid
+  accessTokenHmac     String                  @unique @map("access_token_hmac")
+  status              ReadingAssignmentStatus @default(ASSIGNED)
+  lastSectionPosition Int                     @default(1) @map("last_section_position")
+  progressPercent     Int                     @default(0) @map("progress_percent")
+  responseEncrypted   Bytes?                  @map("response_encrypted")
+  responseKeyId       String?                 @map("response_key_id")
+  messageIntentId     String?                 @unique @map("message_intent_id") @db.Uuid
+  version             Int                     @default(1)
+  assignedAt          DateTime                @default(now()) @map("assigned_at")
+  openedAt            DateTime?               @map("opened_at")
+  completedAt         DateTime?               @map("completed_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+
+  reading         Reading        @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  student         Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assignedByAdmin AdminUser      @relation("ReadingAssignedBy", fields: [assignedByAdminId], references: [id], onDelete: Restrict)
+  messageIntent   MessageIntent? @relation(fields: [messageIntentId], references: [id], onDelete: SetNull)
+
+  @@unique([readingId, studentId])
+  @@index([studentId, status])
+  @@index([readingId, status])
+  @@map("reading_assignments")
+}
+
+model ReadingPublicShare {
+  id               String                   @id @default(uuid()) @db.Uuid
+  readingId        String                   @unique @map("reading_id") @db.Uuid
+  slug             String                   @unique
+  status           ReadingPublicShareStatus @default(ACTIVE)
+  allowPdf         Boolean                  @default(false) @map("allow_pdf")
+  allowIndexing    Boolean                  @default(false) @map("allow_indexing")
+  expiresAt        DateTime?                @map("expires_at")
+  version          Int                      @default(1)
+  createdByAdminId String                   @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId String                   @map("updated_by_admin_id") @db.Uuid
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+
+  reading        Reading              @relation(fields: [readingId], references: [id], onDelete: Cascade)
+  createdByAdmin AdminUser            @relation("ReadingPublicShareCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  updatedByAdmin AdminUser            @relation("ReadingPublicShareUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: Restrict)
+  visits         ReadingPublicVisit[]
+
+  @@index([status, updatedAt])
+  @@map("reading_public_shares")
+}
+
+model ReadingPublicVisit {
+  id                    String    @id @default(uuid()) @db.Uuid
+  shareId               String    @map("share_id") @db.Uuid
+  visitorHmac           String    @map("visitor_hmac")
+  viewCount             Int       @default(1) @map("view_count")
+  maxSectionPosition    Int       @default(1) @map("max_section_position")
+  progressPercent       Int       @default(0) @map("progress_percent")
+  pdfDownloadCount      Int       @default(0) @map("pdf_download_count")
+  whatsappClickCount    Int       @default(0) @map("whatsapp_click_count")
+  source                String?
+  medium                String?
+  campaign              String?
+  firstOpenedAt         DateTime  @default(now()) @map("first_opened_at")
+  lastSeenAt            DateTime  @default(now()) @map("last_seen_at")
+  lastPdfDownloadedAt   DateTime? @map("last_pdf_downloaded_at")
+  lastWhatsappClickedAt DateTime? @map("last_whatsapp_clicked_at")
+  completedAt           DateTime? @map("completed_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+
+  share ReadingPublicShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+
+  @@unique([shareId, visitorHmac])
+  @@index([shareId, lastSeenAt])
+  @@index([shareId, completedAt])
+  @@map("reading_public_visits")
 }
 
 model StudentNote {
@@ -1243,22 +1441,22 @@ model LlmProvider {
 }
 
 model LlmModel {
-  id                     String        @id @default(uuid()) @db.Uuid
-  providerId             String        @map("provider_id") @db.Uuid
-  providerModelId        String        @map("provider_model_id")
-  displayName            String        @map("display_name")
-  status                 LlmModelStatus @default(INACTIVE)
-  inputTokenLimit       Int           @map("input_token_limit")
-  outputTokenLimit      Int           @map("output_token_limit")
-  supportsTools         Boolean       @default(false) @map("supports_tools")
-  supportsStructured    Boolean       @default(true) @map("supports_structured")
-  createdAt              DateTime      @default(now()) @map("created_at")
-  updatedAt              DateTime      @updatedAt @map("updated_at")
+  id                 String         @id @default(uuid()) @db.Uuid
+  providerId         String         @map("provider_id") @db.Uuid
+  providerModelId    String         @map("provider_model_id")
+  displayName        String         @map("display_name")
+  status             LlmModelStatus @default(INACTIVE)
+  inputTokenLimit    Int            @map("input_token_limit")
+  outputTokenLimit   Int            @map("output_token_limit")
+  supportsTools      Boolean        @default(false) @map("supports_tools")
+  supportsStructured Boolean        @default(true) @map("supports_structured")
+  createdAt          DateTime       @default(now()) @map("created_at")
+  updatedAt          DateTime       @updatedAt @map("updated_at")
 
-  provider       LlmProvider             @relation(fields: [providerId], references: [id], onDelete: Restrict)
-  priceVersions  LlmModelPriceVersion[]
-  primaryTasks   LlmTaskConfig[]         @relation("PrimaryTaskModel")
-  fallbackTasks  LlmTaskConfig[]         @relation("FallbackTaskModel")
+  provider      LlmProvider            @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  priceVersions LlmModelPriceVersion[]
+  primaryTasks  LlmTaskConfig[]        @relation("PrimaryTaskModel")
+  fallbackTasks LlmTaskConfig[]        @relation("FallbackTaskModel")
 
   @@unique([providerId, providerModelId])
   @@index([status])
@@ -1266,17 +1464,17 @@ model LlmModel {
 }
 
 model LlmModelPriceVersion {
-  id                 String   @id @default(uuid()) @db.Uuid
-  modelId            String   @map("model_id") @db.Uuid
+  id                 String    @id @default(uuid()) @db.Uuid
+  modelId            String    @map("model_id") @db.Uuid
   version            Int
-  inputMicroUsdPerM  BigInt   @map("input_micro_usd_per_m")
-  outputMicroUsdPerM BigInt   @map("output_micro_usd_per_m")
-  effectiveAt        DateTime @map("effective_at")
+  inputMicroUsdPerM  BigInt    @map("input_micro_usd_per_m")
+  outputMicroUsdPerM BigInt    @map("output_micro_usd_per_m")
+  effectiveAt        DateTime  @map("effective_at")
   retiredAt          DateTime? @map("retired_at")
-  sourceUrl          String?  @map("source_url")
-  createdAt          DateTime @default(now()) @map("created_at")
+  sourceUrl          String?   @map("source_url")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
-  model LlmModel @relation(fields: [modelId], references: [id], onDelete: Restrict)
+  model     LlmModel      @relation(fields: [modelId], references: [id], onDelete: Restrict)
   usageLogs LlmUsageLog[]
 
   @@unique([modelId, version])
@@ -1285,15 +1483,15 @@ model LlmModelPriceVersion {
 }
 
 model LlmPromptVersion {
-  id                   String   @id @default(uuid()) @db.Uuid
-  task                 LlmTask
-  semanticVersion      String   @map("semantic_version")
-  sourcePath            String   @map("source_path")
-  sha256               String
-  content              String
-  outputSchemaVersion  String   @map("output_schema_version")
-  approvedAt           DateTime? @map("approved_at")
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                  String    @id @default(uuid()) @db.Uuid
+  task                LlmTask
+  semanticVersion     String    @map("semantic_version")
+  sourcePath          String    @map("source_path")
+  sha256              String
+  content             String
+  outputSchemaVersion String    @map("output_schema_version")
+  approvedAt          DateTime? @map("approved_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
 
   taskConfigs LlmTaskConfig[]
 
@@ -1303,18 +1501,18 @@ model LlmPromptVersion {
 }
 
 model LlmTaskConfig {
-  id             String   @id @default(uuid()) @db.Uuid
-  task           LlmTask  @unique
-  primaryModelId String?  @map("primary_model_id") @db.Uuid
-  fallbackModelId String? @map("fallback_model_id") @db.Uuid
-  promptVersionId String? @map("prompt_version_id") @db.Uuid
-  enabled        Boolean  @default(false)
-  version        Int      @default(1)
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(uuid()) @db.Uuid
+  task            LlmTask  @unique
+  primaryModelId  String?  @map("primary_model_id") @db.Uuid
+  fallbackModelId String?  @map("fallback_model_id") @db.Uuid
+  promptVersionId String?  @map("prompt_version_id") @db.Uuid
+  enabled         Boolean  @default(false)
+  version         Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
-  primaryModel  LlmModel?        @relation("PrimaryTaskModel", fields: [primaryModelId], references: [id], onDelete: Restrict)
-  fallbackModel LlmModel?        @relation("FallbackTaskModel", fields: [fallbackModelId], references: [id], onDelete: Restrict)
+  primaryModel  LlmModel?         @relation("PrimaryTaskModel", fields: [primaryModelId], references: [id], onDelete: Restrict)
+  fallbackModel LlmModel?         @relation("FallbackTaskModel", fields: [fallbackModelId], references: [id], onDelete: Restrict)
   promptVersion LlmPromptVersion? @relation(fields: [promptVersionId], references: [id], onDelete: Restrict)
 
   @@map("llm_task_configs")
@@ -1338,12 +1536,12 @@ model LlmUsageLog {
   estimatedMicroUsd BigInt   @default(0) @map("estimated_micro_usd")
   latencyMs         Int?     @map("latency_ms")
   status            String
-  fallbackUsed     Boolean  @default(false) @map("fallback_used")
-  errorCode        String?  @map("error_code")
-  metadata         Json?
-  createdAt        DateTime @default(now()) @map("created_at")
+  fallbackUsed      Boolean  @default(false) @map("fallback_used")
+  errorCode         String?  @map("error_code")
+  metadata          Json?
+  createdAt         DateTime @default(now()) @map("created_at")
 
-  student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+  student      Student?              @relation(fields: [studentId], references: [id], onDelete: SetNull)
   priceVersion LlmModelPriceVersion? @relation(fields: [priceVersionId], references: [id], onDelete: Restrict)
 
   @@unique([operationId, attempt])
@@ -1355,8 +1553,8 @@ model LlmUsageLog {
 model LlmBudget {
   id                   String   @id @default("default")
   timezone             String   @default("Europe/Istanbul")
-  dailyLimitMicroUsd  BigInt   @map("daily_limit_micro_usd")
-  monthlyLimitMicroUsd BigInt  @map("monthly_limit_micro_usd")
+  dailyLimitMicroUsd   BigInt   @map("daily_limit_micro_usd")
+  monthlyLimitMicroUsd BigInt   @map("monthly_limit_micro_usd")
   warningPercent       Int      @default(80) @map("warning_percent")
   criticalPercent      Int      @default(100) @map("critical_percent")
   hardLimitEnabled     Boolean  @default(false) @map("hard_limit_enabled")
@@ -1370,17 +1568,17 @@ model LlmBudget {
 }
 
 model LlmBudgetReservation {
-  id              String                    @id @default(uuid()) @db.Uuid
-  budgetId        String                    @map("budget_id")
-  operationId     String                    @unique @map("operation_id")
-  dayBucket       String                    @map("day_bucket")
-  monthBucket     String                    @map("month_bucket")
-  estimatedMicroUsd BigInt                  @map("estimated_micro_usd")
-  actualMicroUsd  BigInt?                   @map("actual_micro_usd")
-  status          LlmBudgetReservationStatus @default(RESERVED)
-  expiresAt       DateTime                  @map("expires_at")
-  settledAt       DateTime?                 @map("settled_at")
-  createdAt       DateTime                  @default(now()) @map("created_at")
+  id                String                     @id @default(uuid()) @db.Uuid
+  budgetId          String                     @map("budget_id")
+  operationId       String                     @unique @map("operation_id")
+  dayBucket         String                     @map("day_bucket")
+  monthBucket       String                     @map("month_bucket")
+  estimatedMicroUsd BigInt                     @map("estimated_micro_usd")
+  actualMicroUsd    BigInt?                    @map("actual_micro_usd")
+  status            LlmBudgetReservationStatus @default(RESERVED)
+  expiresAt         DateTime                   @map("expires_at")
+  settledAt         DateTime?                  @map("settled_at")
+  createdAt         DateTime                   @default(now()) @map("created_at")
 
   budget LlmBudget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
 
@@ -1391,20 +1589,20 @@ model LlmBudgetReservation {
 }
 
 model AgentContextRead {
-  id                    String   @id @default(uuid()) @db.Uuid
-  studentId             String   @map("student_id") @db.Uuid
-  sourceMessageId       String?  @map("source_message_id") @db.Uuid
-  answerReference       String?  @map("answer_reference")
-  sections              Json
-  range                 String
-  asOf                  DateTime @map("as_of")
-  projectionSchemaVersion String @map("projection_schema_version")
-  recordHashes          Json     @map("record_hashes")
-  rowCount              Int      @map("row_count")
-  pageCount             Int      @default(1) @map("page_count")
-  latencyMs             Int      @map("latency_ms")
-  policyResult          String   @map("policy_result")
-  createdAt             DateTime @default(now()) @map("created_at")
+  id                      String   @id @default(uuid()) @db.Uuid
+  studentId               String   @map("student_id") @db.Uuid
+  sourceMessageId         String?  @map("source_message_id") @db.Uuid
+  answerReference         String?  @map("answer_reference")
+  sections                Json
+  range                   String
+  asOf                    DateTime @map("as_of")
+  projectionSchemaVersion String   @map("projection_schema_version")
+  recordHashes            Json     @map("record_hashes")
+  rowCount                Int      @map("row_count")
+  pageCount               Int      @default(1) @map("page_count")
+  latencyMs               Int      @map("latency_ms")
+  policyResult            String   @map("policy_result")
+  createdAt               DateTime @default(now()) @map("created_at")
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
 
@@ -1436,8 +1634,8 @@ model KnowledgeDocument {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  knowledgeBase KnowledgeBase            @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
-  versions     KnowledgeDocumentVersion[]
+  knowledgeBase KnowledgeBase              @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  versions      KnowledgeDocumentVersion[]
 
   @@unique([knowledgeBaseId, logicalName])
   @@index([knowledgeBaseId, active])
@@ -1463,7 +1661,7 @@ model KnowledgeDocumentVersion {
   createdAt     DateTime                       @default(now()) @map("created_at")
   updatedAt     DateTime                       @updatedAt @map("updated_at")
 
-  document         KnowledgeDocument             @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  document         KnowledgeDocument                  @relation(fields: [documentId], references: [id], onDelete: Cascade)
   stageAssignments KnowledgeDocumentStageAssignment[]
   chunks           KnowledgeChunk[]
 
@@ -1507,15 +1705,15 @@ model KnowledgeChunk {
 }
 
 model KnowledgeEmbedding {
-  id              String                   @id @default(uuid()) @db.Uuid
-  chunkId         String                   @map("chunk_id") @db.Uuid
-  modelRef        String                   @map("model_ref")
-  modelVersion    String                   @map("model_version")
+  id              String                      @id @default(uuid()) @db.Uuid
+  chunkId         String                      @map("chunk_id") @db.Uuid
+  modelRef        String                      @map("model_ref")
+  modelVersion    String                      @map("model_version")
   dimension       Int
   embeddingVector Unsupported("vector(768)")? @map("embedding_vector")
-  contentHash     String                   @map("content_hash")
-  status          KnowledgeEmbeddingStatus @default(PENDING)
-  createdAt       DateTime                 @default(now()) @map("created_at")
+  contentHash     String                      @map("content_hash")
+  status          KnowledgeEmbeddingStatus    @default(PENDING)
+  createdAt       DateTime                    @default(now()) @map("created_at")
 
   chunk KnowledgeChunk @relation(fields: [chunkId], references: [id], onDelete: Cascade)
 
@@ -1562,16 +1760,16 @@ model RagQueryLog {
 }
 
 model Handoff {
-  id                String       @id @default(uuid()) @db.Uuid
-  studentId         String       @map("student_id") @db.Uuid
-  sourceMessageId   String?      @map("source_message_id") @db.Uuid
+  id                String        @id @default(uuid()) @db.Uuid
+  studentId         String        @map("student_id") @db.Uuid
+  sourceMessageId   String?       @map("source_message_id") @db.Uuid
   reason            String
   status            HandoffStatus @default(OPEN)
-  responseOwnerId   String?      @map("response_owner_id") @db.Uuid
-  resolvedByAdminId String?      @map("resolved_by_admin_id") @db.Uuid
-  resolvedAt        DateTime?    @map("resolved_at")
-  createdAt         DateTime     @default(now()) @map("created_at")
-  updatedAt         DateTime     @updatedAt @map("updated_at")
+  responseOwnerId   String?       @map("response_owner_id") @db.Uuid
+  resolvedByAdminId String?       @map("resolved_by_admin_id") @db.Uuid
+  resolvedAt        DateTime?     @map("resolved_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
 

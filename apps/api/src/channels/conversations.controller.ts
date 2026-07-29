@@ -97,6 +97,106 @@ export class ConversationsController {
       })),
     };
   }
+  @Get('inbox')
+  async inbox(@Req() request: FastifyRequest) {
+    const events = await this.prisma.inboxEvent.findMany({
+      where: { eventType: 'MESSAGE_RECEIVED' },
+      select: {
+        id: true,
+        studentId: true,
+        channel: true,
+        dedupeKey: true,
+        normalizedData: true,
+        createdAt: true,
+        student: {
+          select: {
+            fullNameEncrypted: true,
+            fullNameKeyId: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 250,
+    });
+    const threads = new Map<
+      string,
+      {
+        id: string;
+        studentId?: string;
+        fullName?: string;
+        channel: string;
+        contact?: string;
+        content?: string;
+        occurredAt: string;
+        inboundCount: number;
+        readingInquiry: boolean;
+      }
+    >();
+
+    for (const event of events) {
+      const normalized = event.normalizedData as Record<string, unknown>;
+      if (
+        typeof normalized.senderHmac !== 'string' ||
+        typeof normalized.accountExternalId !== 'string'
+      )
+        continue;
+      const threadKey = `${event.channel}:${normalized.accountExternalId}:${normalized.senderHmac}`;
+      const content = this.decryptInboxField(event.dedupeKey, normalized, 'content');
+      const existing = threads.get(threadKey);
+      const readingInquiry =
+        content?.toLocaleLowerCase('tr-TR').includes('birebir meditasyon dersleri hakkında') ??
+        false;
+      if (existing) {
+        existing.inboundCount += 1;
+        existing.readingInquiry ||= readingInquiry;
+        continue;
+      }
+      const contact = this.decryptInboxField(event.dedupeKey, normalized, 'sender');
+      const normalizedOccurredAt =
+        typeof normalized.occurredAt === 'string' ? new Date(normalized.occurredAt) : undefined;
+      threads.set(threadKey, {
+        id: event.id,
+        studentId: event.studentId ?? undefined,
+        fullName:
+          event.studentId && event.student
+            ? this.decryptStudentName(
+                event.studentId,
+                event.student.fullNameEncrypted,
+                event.student.fullNameKeyId,
+              )
+            : undefined,
+        channel: event.channel,
+        contact,
+        content,
+        occurredAt:
+          normalizedOccurredAt && !Number.isNaN(normalizedOccurredAt.getTime())
+            ? normalizedOccurredAt.toISOString()
+            : event.createdAt.toISOString(),
+        inboundCount: 1,
+        readingInquiry,
+      });
+    }
+
+    try {
+      await this.prisma.auditLog.create({
+        data: {
+          actorType: 'ADMIN',
+          actorId: request.admin!.id,
+          action: 'INBOUND_MESSAGE_INBOX_READ',
+          entityType: 'AdminUser',
+          entityId: request.admin!.id,
+          safeDiff: { fields: ['messagePreview', 'senderIdentity'], threadCount: threads.size },
+          reason: 'Inbound message inbox read in admin portal',
+          requestId: randomUUID(),
+          correlationId: randomUUID(),
+        },
+      });
+    } catch {
+      // Audit failure should not hide an otherwise authorized inbox view.
+    }
+
+    return { items: [...threads.values()] };
+  }
   @Get(':studentId')
   async detail(@Param('studentId') studentId: string, @Req() request: FastifyRequest) {
     const student = await this.prisma.student.findUniqueOrThrow({
@@ -282,6 +382,23 @@ export class ConversationsController {
       return this.encryption.decrypt(
         { ciphertext: Buffer.from(encrypted), keyId },
         `student:${studentId}:name`,
+      );
+    } catch {
+      return undefined;
+    }
+  }
+  private decryptInboxField(
+    dedupeKey: string,
+    normalized: Record<string, unknown>,
+    field: 'content' | 'sender',
+  ) {
+    const encrypted = normalized[`${field}Encrypted`];
+    const keyId = normalized[`${field}KeyId`];
+    if (typeof encrypted !== 'string' || typeof keyId !== 'string') return undefined;
+    try {
+      return this.encryption.decrypt(
+        { ciphertext: Buffer.from(encrypted, 'base64'), keyId },
+        dedupeKey,
       );
     } catch {
       return undefined;

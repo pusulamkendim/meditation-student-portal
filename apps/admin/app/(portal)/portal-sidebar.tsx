@@ -6,6 +6,7 @@ import {
   Activity,
   BookOpen,
   BrainCircuit,
+  BookMarked,
   CalendarDays,
   CreditCard,
   FileText,
@@ -40,6 +41,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
     items: [
       { href: '/standard-messages', label: 'Mesaj şablonları', icon: FileText },
       { href: '/knowledge', label: 'Bilgi bankası', icon: BookOpen },
+      { href: '/readings', label: 'Okumalar', icon: BookMarked },
       { href: '/drawings', label: 'Çizimler', icon: PencilRuler },
       { href: '/llm', label: 'LLM platformu', icon: BrainCircuit },
     ],

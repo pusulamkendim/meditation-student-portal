@@ -170,6 +170,26 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
     content:
       '{{startsAtText}} tarihindeki görüşmemizde buluşamadık. Her şey yolundaysa bana kısaca haber verebilirsin. Uygun olduğunda yeni görüşme zamanını birlikte belirleyebiliriz.',
   },
+  {
+    eventKey: 'READING_ASSIGNED',
+    content:
+      'Merhaba{{studentDisplayName}}, seninle “{{readingTitle}}” başlıklı bir okuma paylaşıyorum. Metni {{sectionCountText}} kısa bölüme ayırdım; yaklaşık {{estimatedMinutesText}} içinde, sana uygun zamanda okuyabilirsin. Her bölümün sonunda sende kalan düşünceyi paylaşabileceğin bir alan bulunuyor.\n\nOkumaya başla: {{readingUrl}}',
+  },
+  {
+    eventKey: 'READING_REMINDER',
+    content:
+      'Merhaba{{studentDisplayName}}, “{{readingTitle}}” okumasına kaldığın yerden devam edebilirsin.\n\nOkumayı aç: {{readingUrl}}',
+  },
+  {
+    eventKey: 'READING_COMPLETED_ACK',
+    content:
+      'Eline sağlık{{studentDisplayName}}, “{{readingTitle}}” okumasını tamamladın. Sende kalan düşünceyi görüşmemizde birlikte değerlendirebiliriz.',
+  },
+  {
+    eventKey: 'DRAWING_SHARED',
+    content:
+      'Merhaba{{studentDisplayName}}, seninle “{{drawingTitle}}” başlıklı çizimi paylaşıyorum. Çizimi yakınlaştırarak ve ekranda hareket ettirerek inceleyebilirsin.\n\nÇizimi aç: {{drawingUrl}}',
+  },
 ] as const;
 
 export function getDefaultRegistrationMessage(eventKey: SystemEventKey): string | undefined {

@@ -13,6 +13,7 @@ import { MeetingsModule } from './meetings/meetings.module.js';
 import { LlmModule } from './llm/llm.module.js';
 import { KnowledgeModule } from './knowledge/knowledge.module.js';
 import { DrawingModule } from './drawings/drawing.module.js';
+import { ReadingModule } from './readings/reading.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { DrawingModule } from './drawings/drawing.module.js';
     LlmModule,
     KnowledgeModule,
     DrawingModule,
+    ReadingModule,
   ],
   controllers: [HealthController],
 })

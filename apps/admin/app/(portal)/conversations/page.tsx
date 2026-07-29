@@ -1,7 +1,14 @@
 'use client';
-import { ArrowRight, MessageSquareText, RefreshCw } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpen,
+  ExternalLink,
+  Inbox,
+  MessageSquareText,
+  RefreshCw,
+} from 'lucide-react';
 import { Alert, Badge, Button, EmptyState, PageHeader, Skeleton } from '@meditation/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 type Conversation = {
   id: string;
@@ -11,15 +18,46 @@ type Conversation = {
   messageIntents: Array<{ createdAt: string; category: string; status: string }>;
   channel?: { type: string; status: string };
 };
+type InboxThread = {
+  id: string;
+  studentId?: string;
+  fullName?: string;
+  channel: string;
+  contact?: string;
+  content?: string;
+  occurredAt: string;
+  inboundCount: number;
+  readingInquiry: boolean;
+};
+type View = 'conversations' | 'inbox';
+type InboxFilter = 'all' | 'reading' | 'unregistered';
+
+function whatsappHref(contact: string) {
+  const normalized = contact.replace(/\D/gu, '');
+  return normalized ? `https://wa.me/${normalized}` : undefined;
+}
+
 export default function ConversationsPage() {
   const [items, setItems] = useState<Conversation[]>();
+  const [inboxItems, setInboxItems] = useState<InboxThread[]>();
   const [error, setError] = useState<string>();
+  const [view, setView] = useState<View>('inbox');
+  const [filter, setFilter] = useState<InboxFilter>('all');
   async function load() {
     setError(undefined);
     try {
-      const response = await fetch(`${api}/v1/admin/conversations`, { credentials: 'include' });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      setItems(((await response.json()) as { items: Conversation[] }).items);
+      const [conversationsResponse, inboxResponse] = await Promise.all([
+        fetch(`${api}/v1/admin/conversations`, { credentials: 'include' }),
+        fetch(`${api}/v1/admin/conversations/inbox`, { credentials: 'include' }),
+      ]);
+      if (!conversationsResponse.ok || !inboxResponse.ok)
+        throw new Error(`HTTP ${conversationsResponse.status}/${inboxResponse.status}`);
+      const [conversationsPayload, inboxPayload] = (await Promise.all([
+        conversationsResponse.json(),
+        inboxResponse.json(),
+      ])) as [{ items: Conversation[] }, { items: InboxThread[] }];
+      setItems(conversationsPayload.items);
+      setInboxItems(inboxPayload.items);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Konuşmalar yüklenemedi.');
     }
@@ -27,6 +65,12 @@ export default function ConversationsPage() {
   useEffect(() => {
     void load();
   }, []);
+  const filteredInbox = useMemo(() => {
+    if (!inboxItems) return undefined;
+    if (filter === 'reading') return inboxItems.filter((item) => item.readingInquiry);
+    if (filter === 'unregistered') return inboxItems.filter((item) => !item.studentId);
+    return inboxItems;
+  }, [filter, inboxItems]);
   return (
     <main className="content">
       <PageHeader
@@ -39,16 +83,125 @@ export default function ConversationsPage() {
           </Button>
         }
       />
-      <section className="section">
+      <div className="conversation-view-tabs" role="tablist" aria-label="Konuşma görünümleri">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'inbox'}
+          className={view === 'inbox' ? 'is-active' : undefined}
+          onClick={() => setView('inbox')}
+        >
+          <Inbox aria-hidden="true" />
+          Gelen kutusu
+          <span>{inboxItems?.length ?? 0}</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'conversations'}
+          className={view === 'conversations' ? 'is-active' : undefined}
+          onClick={() => setView('conversations')}
+        >
+          <MessageSquareText aria-hidden="true" />
+          Öğrenci konuşmaları
+          <span>{items?.length ?? 0}</span>
+        </button>
+      </div>
+      <section className="section conversation-inbox-section">
         {error ? (
           <Alert tone="danger" title="Konuşmalar yüklenemedi">
             {error}
           </Alert>
-        ) : !items ? (
+        ) : !items || !inboxItems ? (
           <div className="preview-stack">
             <Skeleton />
             <Skeleton />
           </div>
+        ) : view === 'inbox' ? (
+          <>
+            <div className="conversation-inbox-toolbar">
+              <div>
+                <button
+                  type="button"
+                  className={filter === 'all' ? 'is-active' : undefined}
+                  onClick={() => setFilter('all')}
+                >
+                  Tümü
+                </button>
+                <button
+                  type="button"
+                  className={filter === 'reading' ? 'is-active' : undefined}
+                  onClick={() => setFilter('reading')}
+                >
+                  <BookOpen aria-hidden="true" />
+                  Okumadan gelenler
+                </button>
+                <button
+                  type="button"
+                  className={filter === 'unregistered' ? 'is-active' : undefined}
+                  onClick={() => setFilter('unregistered')}
+                >
+                  Kayıtlı olmayanlar
+                </button>
+              </div>
+              <small>Gönderici başına en son gelen mesaj gösterilir.</small>
+            </div>
+            {filteredInbox?.length === 0 ? (
+              <EmptyState
+                icon={Inbox}
+                title="Bu filtrede mesaj yok"
+                description="Yeni mesajlar geldiğinde burada görünecek."
+              />
+            ) : (
+              <div className="conversation-inbox-list">
+                {filteredInbox?.map((item) => {
+                  const directWhatsapp =
+                    item.channel === 'WHATSAPP' && item.contact
+                      ? whatsappHref(item.contact)
+                      : undefined;
+                  const href = item.studentId ? `/conversations/${item.studentId}` : directWhatsapp;
+                  const content = (
+                    <>
+                      <div className="conversation-inbox-avatar" aria-hidden="true">
+                        {item.fullName?.slice(0, 1).toLocaleUpperCase('tr-TR') ?? '?'}
+                      </div>
+                      <div>
+                        <div>
+                          <strong>
+                            {item.fullName ??
+                              (item.contact ? `Kayıtlı değil · ${item.contact}` : 'Kayıtlı değil')}
+                          </strong>
+                          {item.readingInquiry ? <Badge tone="success">Okuma ilgisi</Badge> : null}
+                        </div>
+                        <p>{item.content ?? 'Metin içermeyen mesaj'}</p>
+                        <small>
+                          {item.channel} · {new Date(item.occurredAt).toLocaleString('tr-TR')} ·{' '}
+                          {item.inboundCount} gelen mesaj
+                        </small>
+                      </div>
+                      {item.studentId ? (
+                        <ArrowRight aria-hidden="true" />
+                      ) : directWhatsapp ? (
+                        <ExternalLink aria-hidden="true" />
+                      ) : null}
+                    </>
+                  );
+                  return href ? (
+                    <a
+                      key={item.id}
+                      href={href}
+                      target={item.studentId ? undefined : '_blank'}
+                      rel={item.studentId ? undefined : 'noopener noreferrer'}
+                    >
+                      {content}
+                    </a>
+                  ) : (
+                    <article key={item.id}>{content}</article>
+                  );
+                })}
+              </div>
+            )}
+          </>
         ) : items.length === 0 ? (
           <EmptyState
             icon={MessageSquareText}

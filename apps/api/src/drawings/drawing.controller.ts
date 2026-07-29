@@ -11,6 +11,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { DrawingStatus } from '@meditation/database';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
@@ -28,7 +29,12 @@ const updateSchema = z.object({
   title: z.string().trim().min(1).max(160).optional(),
   description: z.string().max(1_000).nullable().optional(),
   scene: z.unknown().optional(),
+  status: z.nativeEnum(DrawingStatus).optional(),
 });
+const assignmentSchema = z.object({
+  studentIds: z.array(z.string().uuid()).min(1).max(200),
+});
+const accessSchema = z.object({ token: z.string().min(32).max(100) });
 
 @Controller('v1/admin/drawings')
 @UseGuards(AdminSessionGuard)
@@ -83,9 +89,39 @@ export class DrawingController {
     return this.drawings.update(id, parsed.data, request.admin!.id);
   }
 
+  @Post(':id/assignments')
+  @UseGuards(AdminCsrfGuard)
+  assign(@Param('id') id: string, @Body() body: unknown, @Req() request: FastifyRequest) {
+    const parsed = assignmentSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('En az bir öğrenci seçin.');
+    return this.drawings.assign(id, parsed.data.studentIds, request.admin!.id);
+  }
+
+  @Delete(':id/assignments/:assignmentId')
+  @UseGuards(AdminCsrfGuard)
+  revoke(
+    @Param('id') id: string,
+    @Param('assignmentId') assignmentId: string,
+    @Req() request: FastifyRequest,
+  ) {
+    return this.drawings.revoke(id, assignmentId, request.admin!.id);
+  }
+
   @Delete(':id')
   @UseGuards(AdminCsrfGuard)
   remove(@Param('id') id: string, @Req() request: FastifyRequest) {
     return this.drawings.remove(id, request.admin!.id);
+  }
+}
+
+@Controller('v1/drawings')
+export class PublicDrawingController {
+  constructor(@Inject(DrawingService) private readonly drawings: DrawingService) {}
+
+  @Post('access')
+  access(@Body() body: unknown) {
+    const parsed = accessSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Geçersiz çizim bağlantısı.');
+    return this.drawings.access(parsed.data.token);
   }
 }
