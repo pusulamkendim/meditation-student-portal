@@ -284,6 +284,25 @@ export function PublicReadingClient({ slug }: { slug: string }) {
             </ReactMarkdown>
           </article>
 
+          <footer className="public-reader-navigation">
+            <button
+              type="button"
+              onClick={() => void goTo(sectionIndex - 1)}
+              disabled={sectionIndex === 0}
+              aria-label="Önceki bölüm"
+            >
+              <ChevronLeft aria-hidden="true" /> Önceki
+            </button>
+            <span>{section.wordCount} kelime</span>
+            <button
+              type="button"
+              onClick={() => void goTo(sectionIndex + 1)}
+              disabled={sectionIndex === reading.sections.length - 1}
+            >
+              Sonraki <ChevronRight aria-hidden="true" />
+            </button>
+          </footer>
+
           <aside className="public-reading-private-lesson">
             <div>
               <span>Birebir meditasyon</span>
@@ -343,25 +362,6 @@ export function PublicReadingClient({ slug }: { slug: string }) {
               </a>
             </section>
           ) : null}
-
-          <footer className="public-reader-navigation">
-            <button
-              type="button"
-              onClick={() => void goTo(sectionIndex - 1)}
-              disabled={sectionIndex === 0}
-              aria-label="Önceki bölüm"
-            >
-              <ChevronLeft aria-hidden="true" /> Önceki
-            </button>
-            <span>{section.wordCount} kelime</span>
-            <button
-              type="button"
-              onClick={() => void goTo(sectionIndex + 1)}
-              disabled={sectionIndex === reading.sections.length - 1}
-            >
-              Sonraki <ChevronRight aria-hidden="true" />
-            </button>
-          </footer>
         </section>
       </div>
     </main>

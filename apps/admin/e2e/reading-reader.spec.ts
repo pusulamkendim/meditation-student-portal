@@ -69,6 +69,22 @@ test('opens and completes an anonymous social reading with attribution', async (
   await expect(lessonLink).toBeVisible();
   const firstLessonUrl = new URL((await lessonLink.getAttribute('href'))!);
   expect(firstLessonUrl.searchParams.get('text')).toContain('1. Bölüm');
+  const sectionEndLayout = await page.evaluate(() => {
+    const navigation = document.querySelector('.public-reader-navigation');
+    const lesson = document.querySelector('.public-reading-private-lesson');
+    if (!navigation || !lesson) return undefined;
+    return {
+      navigationTop: navigation.getBoundingClientRect().top + window.scrollY,
+      lessonTop: lesson.getBoundingClientRect().top + window.scrollY,
+      lessonHeight: lesson.getBoundingClientRect().height,
+    };
+  });
+  if ((page.viewportSize()?.width ?? 1_000) <= 760) {
+    expect(sectionEndLayout?.navigationTop).toBeLessThan(sectionEndLayout?.lessonTop ?? 0);
+    expect(sectionEndLayout?.lessonHeight).toBeLessThan(240);
+  } else {
+    expect(sectionEndLayout?.lessonTop).toBeLessThan(sectionEndLayout?.navigationTop ?? 0);
+  }
   await expect.poll(() => accessPayload?.source).toBe('instagram');
   expect(accessPayload?.medium).toBe('social');
   expect(accessPayload?.visitorId).toMatch(
