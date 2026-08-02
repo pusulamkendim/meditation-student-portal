@@ -57,6 +57,24 @@ describe('ConversationsController inbox', () => {
         createdAt: new Date('2026-07-29T12:00:00.000Z'),
         student: null,
       },
+      {
+        id: '10000000-0000-4000-8000-000000000003',
+        studentId: null,
+        channel: 'WHATSAPP',
+        dedupeKey: 'message-meditation',
+        normalizedData: {
+          senderHmac,
+          accountExternalId,
+          occurredAt: '2026-07-29T11:50:00.000Z',
+          ...sender('905551112233', 'message-meditation'),
+          ...encrypted(
+            'Merhaba Necip, “Anapanasati” meditasyonunu tamamladım. Birebir meditasyon hakkında bilgi almak istiyorum.',
+            'message-meditation',
+          ),
+        },
+        createdAt: new Date('2026-07-29T11:50:00.000Z'),
+        student: null,
+      },
     ];
     const findMany = vi.fn().mockResolvedValue(events);
     const auditCreate = vi.fn().mockResolvedValue({});
@@ -81,8 +99,9 @@ describe('ConversationsController inbox', () => {
         channel: 'WHATSAPP',
         contact: '905551112233',
         content: 'Program hangi günlerde yapılıyor?',
-        inboundCount: 2,
+        inboundCount: 3,
         readingInquiry: true,
+        meditationInquiry: true,
       }),
     ]);
     expect(auditCreate).toHaveBeenCalledOnce();

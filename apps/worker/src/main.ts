@@ -20,6 +20,7 @@ import { WeeklySummaryAiProcessor } from './weekly-summary-ai.js';
 import { RegistrationInboundProcessor } from './registration-inbound.js';
 import { InboundIntentRouter } from './inbound-intent-router.js';
 import { AdminPanelNotificationProcessor } from './admin-panel-notification.js';
+import { MeditationAudioRenderProcessor } from './meditation-audio-render.js';
 
 async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
@@ -34,10 +35,19 @@ async function bootstrap(): Promise<void> {
   const registrationInbound = new RegistrationInboundProcessor(prisma, config, systemClock);
   const inboundIntentRouter = new InboundIntentRouter(llmAgent, prisma, systemClock, config);
   const adminPanelNotifications = new AdminPanelNotificationProcessor(prisma);
+  const meditationAudioRender = new MeditationAudioRenderProcessor(prisma, config);
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
   await syncSystemEventRegistry(prisma);
   await syncDefaultRegistrationMessages(prisma);
   await boss.start();
+  const recoveredMeditationRenders = await meditationAudioRender.recoverInterrupted(
+    systemClock.now(),
+  );
+  if (recoveredMeditationRenders)
+    logger.warn(
+      { recoveredMeditationRenders },
+      'Interrupted meditation audio renders returned to the queue',
+    );
   await registerSmokeQueue(boss, systemClock, logger, config.QUEUE_SMOKE_JOB);
   const dispatcher = new MessageDispatcher(
     prisma,
@@ -70,6 +80,7 @@ async function bootstrap(): Promise<void> {
               'knowledge.document-parse',
               'llm.weekly-summary',
               'admin.notifications',
+              'meditation.audio-render',
             ],
           },
         },
@@ -94,6 +105,7 @@ async function bootstrap(): Promise<void> {
           retryOperationId?: string;
           versionId?: string;
           outboxEventId?: string;
+          renderId?: string;
         };
         let queueName: string;
         let data: Record<string, string | undefined>;
@@ -125,6 +137,10 @@ async function bootstrap(): Promise<void> {
           case 'admin.notifications':
             queueName = 'admin.notification';
             data = { outboxEventId: event.id };
+            break;
+          case 'meditation.audio-render':
+            queueName = 'meditation.audio-render';
+            data = { renderId: payload.renderId };
             break;
           case 'channel.inbound':
             queueName = 'channel.inbound';
@@ -224,6 +240,11 @@ async function bootstrap(): Promise<void> {
   await boss.work<{ outboxEventId: string }>('admin.notification', async (jobs) => {
     for (const job of jobs)
       if (job.data.outboxEventId) await adminPanelNotifications.process(job.data.outboxEventId);
+  });
+  await boss.createQueue('meditation.audio-render');
+  await boss.work<{ renderId: string }>('meditation.audio-render', async (jobs) => {
+    for (const job of jobs)
+      if (job.data.renderId) await meditationAudioRender.process(job.data.renderId);
   });
   await boss.createQueue('meeting.reminder-24h');
   await boss.work('meeting.reminder-24h', async () => {

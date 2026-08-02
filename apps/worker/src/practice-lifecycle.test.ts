@@ -14,6 +14,7 @@ function fixture() {
     LOOKUP_HMAC_KEY: randomBytes(32).toString('base64'),
     DATA_ENCRYPTION_KEYS_JSON: JSON.stringify({ [activeKeyId]: dataKey.toString('base64') }),
     ACTIVE_DATA_KEY_ID: activeKeyId,
+    ADMIN_ORIGIN: 'https://portal.example.test',
   };
   const session = {
     id: '10000000-0000-4000-8000-000000000001',
@@ -48,6 +49,7 @@ function fixture() {
     ...data,
   }));
   const outboxCreate = vi.fn(async ({ data }) => data);
+  const accessLinkUpsert = vi.fn(async ({ create, update }) => ({ ...create, ...update }));
   const tx = {
     practiceSession: {
       findUniqueOrThrow: vi.fn(async () => session),
@@ -57,6 +59,7 @@ function fixture() {
         return { count: 1 };
       }),
     },
+    practiceAccessLink: { upsert: accessLinkUpsert },
     standardMessageVersion: {
       findMany: vi.fn(async () => [
         {
@@ -86,7 +89,16 @@ function fixture() {
   const prisma = {
     $transaction: async (callback: (value: typeof tx) => unknown) => callback(tx),
   } as unknown as PrismaClient;
-  return { prisma, session, config, tx, occurrenceCreate, intentCreate, outboxCreate };
+  return {
+    prisma,
+    session,
+    config,
+    tx,
+    occurrenceCreate,
+    intentCreate,
+    outboxCreate,
+    accessLinkUpsert,
+  };
 }
 
 describe('practice lifecycle', () => {
@@ -106,6 +118,18 @@ describe('practice lifecycle', () => {
     ).resolves.toBe(true);
     expect(value.session.status).toBe(PracticeSessionStatus.REMINDED);
     expect(value.occurrenceCreate).toHaveBeenCalledOnce();
+    expect(value.occurrenceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          variables: expect.objectContaining({
+            practiceUrl: expect.stringMatching(
+              /^https:\/\/portal\.example\.test\/m#[A-Za-z0-9_-]{22}$/u,
+            ),
+          }),
+        }),
+      }),
+    );
+    expect(value.accessLinkUpsert).toHaveBeenCalledOnce();
     expect(value.intentCreate).toHaveBeenCalledOnce();
     expect(value.outboxCreate).toHaveBeenCalledOnce();
     expect(value.intentCreate).toHaveBeenCalledWith(

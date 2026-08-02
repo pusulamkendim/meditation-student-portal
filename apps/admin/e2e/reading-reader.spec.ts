@@ -164,7 +164,9 @@ test('opens, advances and completes a reading without horizontal overflow', asyn
   expect(dimensions.contentPaddingLeft).toBeGreaterThanOrEqual(20);
 });
 
-test('shows the reading library and section preview in the admin portal', async ({ page }) => {
+test('shows the reading library and section preview in the admin portal', async ({
+  page,
+}, testInfo) => {
   const summary = {
     id: 'reading-1',
     title: reading.title,
@@ -206,6 +208,22 @@ test('shows the reading library and section preview in the admin portal', async 
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify([summary]),
+    }),
+  );
+  await page.route('**/v1/admin/students', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [
+          {
+            id: 'student-1',
+            fullName: 'Ayşe Yılmaz',
+            status: 'ACTIVE',
+            channel: { type: 'TELEGRAM' },
+          },
+        ],
+      }),
     }),
   );
   await page.route('**/v1/admin/readings/reading-1/public-share', async (route) => {
@@ -277,4 +295,31 @@ test('shows the reading library and section preview in the admin portal', async 
     clientWidth: document.documentElement.clientWidth,
   }));
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+
+  async function expectDialogActions(dialogName: string, screenshotName: string) {
+    const dialog = page.getByRole('dialog', { name: dialogName });
+    const footer = dialog.locator('footer');
+    const buttons = footer.getByRole('button');
+    await expect(buttons).toHaveCount(2);
+    const [firstButtonBox, lastButtonBox] = await Promise.all([
+      buttons.first().boundingBox(),
+      buttons.last().boundingBox(),
+    ]);
+    expect(
+      (lastButtonBox?.x ?? 0) - ((firstButtonBox?.x ?? 0) + (firstButtonBox?.width ?? 0)),
+    ).toBeGreaterThanOrEqual(12);
+    await dialog.screenshot({ path: testInfo.outputPath(screenshotName) });
+  }
+
+  await page.getByRole('dialog').getByRole('button', { name: 'Pencereyi kapat' }).click();
+  await page.getByRole('button', { name: 'Yeni okuma' }).click();
+  await expectDialogActions('Yeni okuma yükle', 'new-reading-dialog.png');
+  await page.getByRole('button', { name: 'Vazgeç' }).click();
+
+  await page.getByRole('button', { name: 'Öğrenciye ata' }).click();
+  await expectDialogActions('Öğrencilere ata', 'assign-reading-dialog.png');
+  await page.getByRole('button', { name: 'Vazgeç' }).click();
+
+  await page.getByRole('button', { name: 'Sil' }).click();
+  await expectDialogActions('Okumayı sil', 'delete-reading-dialog.png');
 });

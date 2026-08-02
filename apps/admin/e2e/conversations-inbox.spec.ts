@@ -23,6 +23,18 @@ test.beforeEach(async ({ page }) => {
             occurredAt: '2026-07-29T12:30:00.000Z',
             inboundCount: 1,
             readingInquiry: true,
+            meditationInquiry: false,
+          },
+          {
+            id: 'inbox-meditation',
+            channel: 'WHATSAPP',
+            contact: '905554445566',
+            content:
+              'Merhaba Necip, “Anapanasati” meditasyonunu tamamladım. Birebir meditasyon hakkında bilgi almak istiyorum.',
+            occurredAt: '2026-07-29T12:20:00.000Z',
+            inboundCount: 1,
+            readingInquiry: false,
+            meditationInquiry: true,
           },
           {
             id: 'inbox-student',
@@ -34,6 +46,7 @@ test.beforeEach(async ({ page }) => {
             occurredAt: '2026-07-29T12:00:00.000Z',
             inboundCount: 4,
             readingInquiry: false,
+            meditationInquiry: false,
           },
         ],
       }),
@@ -74,14 +87,19 @@ test('shows reading inquiries and unregistered inbound contacts in the inbox', a
   );
   await expect(page.getByText('Kayıtlı değil · 905551112233')).toBeVisible();
   await expect(page.getByText('Okuma ilgisi')).toBeVisible();
+  await expect(page.getByText('Meditasyon ilgisi')).toBeVisible();
   await expect(page.getByText('Ayşe Yılmaz')).toBeVisible();
 
   await page.getByRole('button', { name: 'Okumadan gelenler' }).click();
   await expect(page.getByText('Kayıtlı değil · 905551112233')).toBeVisible();
   await expect(page.getByText('Ayşe Yılmaz')).toBeHidden();
 
+  await page.getByRole('button', { name: 'Meditasyondan gelenler' }).click();
+  await expect(page.getByText('Kayıtlı değil · 905554445566')).toBeVisible();
+  await expect(page.getByText('Kayıtlı değil · 905551112233')).toBeHidden();
+
   const whatsappLink = page.locator('.conversation-inbox-list > a');
-  await expect(whatsappLink).toHaveAttribute('href', 'https://wa.me/905551112233');
+  await expect(whatsappLink).toHaveAttribute('href', 'https://wa.me/905554445566');
   const dimensions = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,

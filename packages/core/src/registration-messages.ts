@@ -88,7 +88,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PRACTICE_REMINDER',
     content:
-      'Merhaba{{studentDisplayName}}, {{startsAtText}} saatindeki {{durationText}} pratiğine 10 dakika kaldı. Hazır olduğunda kendine sakin bir alan açabilirsin.',
+      'Merhaba{{studentDisplayName}}, {{startsAtText}} saatindeki {{durationText}} pratiğine 10 dakika kaldı. Hazır olduğunda pratiğini buradan başlatabilirsin: {{practiceUrl}}',
   },
   {
     eventKey: 'PRACTICE_CHECKIN',

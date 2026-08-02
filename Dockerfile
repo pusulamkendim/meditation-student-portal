@@ -31,9 +31,13 @@ EXPOSE 3001
 CMD ["pnpm", "--filter", "@meditation/admin", "start"]
 
 FROM base AS worker
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends ffmpeg \
+  && rm -rf /var/lib/apt/lists/*
 RUN pnpm --filter @meditation/core build \
   && pnpm --filter @meditation/database build \
   && pnpm --filter @meditation/worker build
 RUN pnpm install --prod --offline --frozen-lockfile
 ENV NODE_ENV=production
+USER node
 CMD ["pnpm", "--filter", "@meditation/worker", "start"]

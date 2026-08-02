@@ -28,9 +28,10 @@ type InboxThread = {
   occurredAt: string;
   inboundCount: number;
   readingInquiry: boolean;
+  meditationInquiry: boolean;
 };
 type View = 'conversations' | 'inbox';
-type InboxFilter = 'all' | 'reading' | 'unregistered';
+type InboxFilter = 'all' | 'meditation' | 'reading' | 'unregistered';
 
 function whatsappHref(contact: string) {
   const normalized = contact.replace(/\D/gu, '');
@@ -67,6 +68,7 @@ export default function ConversationsPage() {
   }, []);
   const filteredInbox = useMemo(() => {
     if (!inboxItems) return undefined;
+    if (filter === 'meditation') return inboxItems.filter((item) => item.meditationInquiry);
     if (filter === 'reading') return inboxItems.filter((item) => item.readingInquiry);
     if (filter === 'unregistered') return inboxItems.filter((item) => !item.studentId);
     return inboxItems;
@@ -130,6 +132,13 @@ export default function ConversationsPage() {
                 </button>
                 <button
                   type="button"
+                  className={filter === 'meditation' ? 'is-active' : undefined}
+                  onClick={() => setFilter('meditation')}
+                >
+                  Meditasyondan gelenler
+                </button>
+                <button
+                  type="button"
                   className={filter === 'reading' ? 'is-active' : undefined}
                   onClick={() => setFilter('reading')}
                 >
@@ -172,6 +181,9 @@ export default function ConversationsPage() {
                               (item.contact ? `Kayıtlı değil · ${item.contact}` : 'Kayıtlı değil')}
                           </strong>
                           {item.readingInquiry ? <Badge tone="success">Okuma ilgisi</Badge> : null}
+                          {item.meditationInquiry ? (
+                            <Badge tone="success">Meditasyon ilgisi</Badge>
+                          ) : null}
                         </div>
                         <p>{item.content ?? 'Metin içermeyen mesaj'}</p>
                         <small>

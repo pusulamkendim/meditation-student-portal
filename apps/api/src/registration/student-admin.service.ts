@@ -189,13 +189,25 @@ export class StudentAdminService {
           where: { status: { in: [...planStatuses] } },
           orderBy: { revision: 'desc' },
           take: 1,
-          include: { slots: { orderBy: { slotKey: 'asc' } } },
+          include: {
+            slots: {
+              orderBy: { slotKey: 'asc' },
+              include: { meditationType: { select: { id: true, title: true, status: true } } },
+            },
+          },
         },
         practiceSessions: {
           where: { status: { not: PracticeSessionStatus.SUPPRESSED } },
           orderBy: { startAt: 'desc' },
           take: 500,
-          include: { practiceSlot: true, reflection: { include: { tags: true } } },
+          include: {
+            practiceSlot: true,
+            meditationType: { select: { id: true, title: true } },
+            meditationRender: {
+              select: { id: true, status: true, durationMinutes: true, sourceVersion: true },
+            },
+            reflection: { include: { tags: true } },
+          },
         },
         meetingSeries: {
           orderBy: { createdAt: 'desc' },
@@ -298,6 +310,7 @@ export class StudentAdminService {
               localTime: slot.localTime,
               durationMinutes: slot.durationMinutes,
               active: slot.active,
+              meditationType: slot.meditationType,
             })),
           }
         : undefined,
@@ -315,6 +328,8 @@ export class StudentAdminService {
           slot: session.practiceSlot?.slotKey,
           localTime: formatLocalTime(session.startAt, student.timezone),
           cancellationReason: session.cancellationReason,
+          meditationType: session.meditationType,
+          meditationRender: session.meditationRender,
           reflection: session.reflection
             ? {
                 content: this.decryptReflection(

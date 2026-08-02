@@ -171,7 +171,15 @@ const variableSchemas = {
   ),
   PRACTICE_PLAN_UPDATED: textVariables('scheduleSummary'),
   PRACTICE_RESCHEDULED: textVariables('previousStartsAtText', 'startsAtText', 'durationText'),
-  PRACTICE_REMINDER: personalizedTextVariables('startsAtText', 'durationText'),
+  PRACTICE_REMINDER: objectSchema(
+    {
+      startsAtText: 'string',
+      durationText: 'string',
+      studentDisplayName: 'string',
+      practiceUrl: 'string',
+    },
+    ['startsAtText', 'durationText'],
+  ),
   PRACTICE_CHECKIN: textVariables('durationText'),
   PRACTICE_REFLECTION_REQUEST: noVariables(),
   PRACTICE_REFLECTION_RECEIVED: noVariables(),

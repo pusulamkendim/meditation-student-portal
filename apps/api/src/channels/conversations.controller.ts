@@ -130,6 +130,7 @@ export class ConversationsController {
         occurredAt: string;
         inboundCount: number;
         readingInquiry: boolean;
+        meditationInquiry: boolean;
       }
     >();
 
@@ -146,9 +147,14 @@ export class ConversationsController {
       const readingInquiry =
         content?.toLocaleLowerCase('tr-TR').includes('birebir meditasyon dersleri hakkında') ??
         false;
+      const normalizedContent = content?.toLocaleLowerCase('tr-TR') ?? '';
+      const meditationInquiry =
+        normalizedContent.includes('meditasyonunu tamamladım') &&
+        normalizedContent.includes('birebir meditasyon hakkında');
       if (existing) {
         existing.inboundCount += 1;
         existing.readingInquiry ||= readingInquiry;
+        existing.meditationInquiry ||= meditationInquiry;
         continue;
       }
       const contact = this.decryptInboxField(event.dedupeKey, normalized, 'sender');
@@ -174,6 +180,7 @@ export class ConversationsController {
             : event.createdAt.toISOString(),
         inboundCount: 1,
         readingInquiry,
+        meditationInquiry,
       });
     }
 

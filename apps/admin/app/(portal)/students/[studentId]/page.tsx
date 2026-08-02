@@ -61,6 +61,13 @@ type PracticeSession = {
   slot?: string;
   localTime?: string;
   cancellationReason?: string;
+  meditationType?: { id: string; title: string };
+  meditationRender?: {
+    id: string;
+    status: string;
+    durationMinutes: number;
+    sourceVersion: number;
+  };
   reflection?: {
     content?: string;
     createdAt: string;
@@ -134,6 +141,7 @@ type Detail = {
       localTime: string;
       durationMinutes: number;
       active: boolean;
+      meditationType?: { id: string; title: string; status: string };
     }>;
   };
   practice: {
@@ -151,6 +159,23 @@ type Detail = {
   completedMeetingCount: number;
   openHandoffCount: number;
   noteCount: number;
+};
+
+type MeditationOption = {
+  id: string;
+  title: string;
+  status: string;
+  targetDurations: number[];
+};
+
+type PracticePlanForm = {
+  morning: string;
+  evening: string;
+  morningActive: boolean;
+  eveningActive: boolean;
+  morningMeditationTypeId: string;
+  eveningMeditationTypeId: string;
+  duration: string;
 };
 
 type Channel = {
@@ -338,13 +363,16 @@ export default function StudentDetailPage() {
   const [activeTab, setActiveTab] = useState('overview');
   const [busy, setBusy] = useState(false);
   const [planEditing, setPlanEditing] = useState(false);
-  const [planForm, setPlanForm] = useState({
+  const [planForm, setPlanForm] = useState<PracticePlanForm>({
     morning: '08:00',
     evening: '21:00',
     morningActive: true,
     eveningActive: true,
+    morningMeditationTypeId: '',
+    eveningMeditationTypeId: '',
     duration: '30',
   });
+  const [meditationOptions, setMeditationOptions] = useState<MeditationOption[]>([]);
   const [practiceAction, setPracticeAction] = useState<'pause' | 'restore'>();
   const [practiceReason, setPracticeReason] = useState('');
   const [practiceTab, setPracticeTab] = useState<'history' | 'planned' | 'cancelled'>('history');
@@ -380,6 +408,10 @@ export default function StudentDetailPage() {
         evening: slots.find((slot) => slot.slotKey === 'EVENING')?.localTime ?? '21:00',
         morningActive: slots.find((slot) => slot.slotKey === 'MORNING')?.active ?? true,
         eveningActive: slots.find((slot) => slot.slotKey === 'EVENING')?.active ?? true,
+        morningMeditationTypeId:
+          slots.find((slot) => slot.slotKey === 'MORNING')?.meditationType?.id ?? '',
+        eveningMeditationTypeId:
+          slots.find((slot) => slot.slotKey === 'EVENING')?.meditationType?.id ?? '',
         duration: String(slots.find((slot) => slot.active)?.durationMinutes ?? 30),
       });
     } catch (reason) {
@@ -390,6 +422,12 @@ export default function StudentDetailPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    void requestJson<MeditationOption[]>('/v1/admin/meditations')
+      .then((items) => setMeditationOptions(items.filter((item) => item.status === 'PUBLISHED')))
+      .catch(() => setMeditationOptions([]));
+  }, []);
 
   const loadConversation = useCallback(async () => {
     try {
@@ -460,8 +498,18 @@ export default function StudentDetailPage() {
         body: JSON.stringify({
           subscriptionId: subscription.id,
           slots: [
-            { slotKey: 'MORNING', localTime: planForm.morning, active: planForm.morningActive },
-            { slotKey: 'EVENING', localTime: planForm.evening, active: planForm.eveningActive },
+            {
+              slotKey: 'MORNING',
+              localTime: planForm.morning,
+              active: planForm.morningActive,
+              meditationTypeId: planForm.morningMeditationTypeId || null,
+            },
+            {
+              slotKey: 'EVENING',
+              localTime: planForm.evening,
+              active: planForm.eveningActive,
+              meditationTypeId: planForm.eveningMeditationTypeId || null,
+            },
           ],
           durationOverride: Number(planForm.duration),
         }),
@@ -832,6 +880,7 @@ export default function StudentDetailPage() {
           data={data}
           planEditing={planEditing}
           planForm={planForm}
+          meditationOptions={meditationOptions}
           setPlanEditing={setPlanEditing}
           setPlanForm={setPlanForm}
           savePlan={savePlan}
@@ -1322,6 +1371,7 @@ function PracticesTab({
   data,
   planEditing,
   planForm,
+  meditationOptions,
   setPlanEditing,
   setPlanForm,
   savePlan,
@@ -1335,21 +1385,10 @@ function PracticesTab({
 }: {
   data: Detail;
   planEditing: boolean;
-  planForm: {
-    morning: string;
-    evening: string;
-    morningActive: boolean;
-    eveningActive: boolean;
-    duration: string;
-  };
+  planForm: PracticePlanForm;
+  meditationOptions: MeditationOption[];
   setPlanEditing: (value: boolean) => void;
-  setPlanForm: (value: {
-    morning: string;
-    evening: string;
-    morningActive: boolean;
-    eveningActive: boolean;
-    duration: string;
-  }) => void;
+  setPlanForm: (value: PracticePlanForm) => void;
   savePlan: (event: FormEvent<HTMLFormElement>) => Promise<void>;
   busy: boolean;
   setPracticeAction: (value: 'pause' | 'restore') => void;
@@ -1422,6 +1461,21 @@ function PracticesTab({
               value={planForm.morning}
               onChange={(event) => setPlanForm({ ...planForm, morning: event.target.value })}
             />
+            <select
+              aria-label="Sabah meditasyonu"
+              disabled={!planForm.morningActive}
+              value={planForm.morningMeditationTypeId}
+              onChange={(event) =>
+                setPlanForm({ ...planForm, morningMeditationTypeId: event.target.value })
+              }
+            >
+              <option value="">Yönlendirmesiz</option>
+              {meditationOptions.map((meditation) => (
+                <option key={meditation.id} value={meditation.id}>
+                  {meditation.title}
+                </option>
+              ))}
+            </select>
             <span className="student-check-label">
               <input
                 type="checkbox"
@@ -1442,6 +1496,21 @@ function PracticesTab({
               value={planForm.evening}
               onChange={(event) => setPlanForm({ ...planForm, evening: event.target.value })}
             />
+            <select
+              aria-label="Akşam meditasyonu"
+              disabled={!planForm.eveningActive}
+              value={planForm.eveningMeditationTypeId}
+              onChange={(event) =>
+                setPlanForm({ ...planForm, eveningMeditationTypeId: event.target.value })
+              }
+            >
+              <option value="">Yönlendirmesiz</option>
+              {meditationOptions.map((meditation) => (
+                <option key={meditation.id} value={meditation.id}>
+                  {meditation.title}
+                </option>
+              ))}
+            </select>
             <span className="student-check-label">
               <input
                 type="checkbox"
@@ -1475,7 +1544,9 @@ function PracticesTab({
             <div key={slot.id}>
               <span>{slot.slotKey === 'MORNING' ? 'Sabah' : 'Akşam'}</span>
               <strong>{slot.active ? slot.localTime : 'Kapalı'}</strong>
-              <small>{slot.durationMinutes} dakika</small>
+              <small>
+                {slot.durationMinutes} dakika · {slot.meditationType?.title ?? 'Yönlendirmesiz'}
+              </small>
             </div>
           ))}
           <div>
@@ -1586,7 +1657,10 @@ function PracticeRow({
       </div>
       <div className="student-session-time">
         <strong>{formatTime(session.startAt)}</strong>
-        <small>{session.durationMinutes} dk</small>
+        <small>
+          {session.durationMinutes} dk
+          {session.meditationType ? ` · ${session.meditationType.title}` : ''}
+        </small>
       </div>
       <Badge tone={statusTone[session.status] ?? 'neutral'}>{label(session.status)}</Badge>
       {!compact &&

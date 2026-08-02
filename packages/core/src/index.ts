@@ -8,6 +8,7 @@ export * from './message-template.js';
 export * from './message-resolver.js';
 export * from './provider-adapters.js';
 export * from './practice-schedule.js';
+export * from './practice-player.js';
 export * from './meeting-schedule.js';
 export * from './google-calendar.js';
 export * from './registration-state.js';

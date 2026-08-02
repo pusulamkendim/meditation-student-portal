@@ -244,6 +244,40 @@ enum DrawingAssignmentStatus {
   REVOKED
 }
 
+enum MeditationLevel {
+  INTRODUCTION
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum MeditationTypeStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MeditationGuidanceMode {
+  SILENT
+  GUIDED
+}
+
+enum MeditationPublicShareStatus {
+  ACTIVE
+  PAUSED
+}
+
+enum MeditationAudioKind {
+  OPENING
+  CLOSING
+}
+
+enum MeditationRenderStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
 enum ResponseOwner {
   SYSTEM_STANDARD_MESSAGE
   AGENT_CONTEXTUAL
@@ -592,16 +626,18 @@ model PracticePlan {
 }
 
 model PracticeSlot {
-  id              String   @id @default(uuid()) @db.Uuid
-  practicePlanId  String   @map("practice_plan_id") @db.Uuid
-  slotKey         String   @map("slot_key")
-  localTime       String   @map("local_time")
-  durationMinutes Int      @map("duration_minutes")
-  active          Boolean  @default(true)
-  createdAt       DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid()) @db.Uuid
+  practicePlanId   String   @map("practice_plan_id") @db.Uuid
+  meditationTypeId String?  @map("meditation_type_id") @db.Uuid
+  slotKey          String   @map("slot_key")
+  localTime        String   @map("local_time")
+  durationMinutes  Int      @map("duration_minutes")
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now()) @map("created_at")
 
-  practicePlan PracticePlan      @relation(fields: [practicePlanId], references: [id], onDelete: Cascade)
-  sessions     PracticeSession[]
+  practicePlan   PracticePlan      @relation(fields: [practicePlanId], references: [id], onDelete: Cascade)
+  meditationType MeditationType?   @relation(fields: [meditationTypeId], references: [id], onDelete: SetNull)
+  sessions       PracticeSession[]
 
   @@unique([practicePlanId, slotKey])
   @@map("practice_slots")
@@ -612,6 +648,8 @@ model PracticeSession {
   studentId          String                @map("student_id") @db.Uuid
   practicePlanId     String                @map("practice_plan_id") @db.Uuid
   practiceSlotId     String?               @map("practice_slot_id") @db.Uuid
+  meditationTypeId   String?               @map("meditation_type_id") @db.Uuid
+  meditationRenderId String?               @map("meditation_render_id") @db.Uuid
   serviceDate        DateTime              @map("service_date") @db.Date
   startAt            DateTime              @map("start_at")
   durationMinutes    Int                   @map("duration_minutes")
@@ -623,15 +661,35 @@ model PracticeSession {
   createdAt          DateTime              @default(now()) @map("created_at")
   updatedAt          DateTime              @updatedAt @map("updated_at")
 
-  student      Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  practicePlan PracticePlan        @relation(fields: [practicePlanId], references: [id], onDelete: Restrict)
-  practiceSlot PracticeSlot?       @relation(fields: [practiceSlotId], references: [id], onDelete: SetNull)
-  reflection   PracticeReflection?
+  student          Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  practicePlan     PracticePlan           @relation(fields: [practicePlanId], references: [id], onDelete: Restrict)
+  practiceSlot     PracticeSlot?          @relation(fields: [practiceSlotId], references: [id], onDelete: SetNull)
+  meditationType   MeditationType?        @relation(fields: [meditationTypeId], references: [id], onDelete: SetNull)
+  meditationRender MeditationAudioRender? @relation(fields: [meditationRenderId], references: [id], onDelete: SetNull)
+  reflection       PracticeReflection?
+  accessLink       PracticeAccessLink?
 
   @@unique([practicePlanId, serviceDate, practiceSlotId])
   @@index([studentId, startAt])
   @@index([status, startAt])
   @@map("practice_sessions")
+}
+
+model PracticeAccessLink {
+  id                String    @id @default(uuid()) @db.Uuid
+  practiceSessionId String    @unique @map("practice_session_id") @db.Uuid
+  codeHmac          String    @unique @map("code_hmac")
+  startAt           DateTime  @map("start_at")
+  expiresAt         DateTime  @map("expires_at")
+  invalidatedAt     DateTime? @map("invalidated_at")
+  version           Int       @default(1)
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  practiceSession PracticeSession @relation(fields: [practiceSessionId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt, invalidatedAt])
+  @@map("practice_access_links")
 }
 
 model PracticeReflection {
@@ -1114,22 +1172,27 @@ model AdminUser {
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
 
-  sessions              AdminSession[]
-  recoveryCodes         TotpRecoveryCode[]
-  approvedPayments      Payment[]
-  meetingScheduleEvents MeetingScheduleEvent[]
-  coachNoteVersions     CoachNoteVersion[]
-  googleOAuthStates     GoogleOAuthState[]
-  createdStudentNotes   StudentNote[]          @relation("StudentNoteCreatedBy")
-  updatedStudentNotes   StudentNote[]          @relation("StudentNoteUpdatedBy")
-  createdDrawings       Drawing[]              @relation("DrawingCreatedBy")
-  updatedDrawings       Drawing[]              @relation("DrawingUpdatedBy")
-  assignedDrawings      DrawingAssignment[]    @relation("DrawingAssignedBy")
-  createdReadings       Reading[]              @relation("ReadingCreatedBy")
-  updatedReadings       Reading[]              @relation("ReadingUpdatedBy")
-  assignedReadings      ReadingAssignment[]    @relation("ReadingAssignedBy")
-  createdReadingShares  ReadingPublicShare[]   @relation("ReadingPublicShareCreatedBy")
-  updatedReadingShares  ReadingPublicShare[]   @relation("ReadingPublicShareUpdatedBy")
+  sessions                AdminSession[]
+  recoveryCodes           TotpRecoveryCode[]
+  approvedPayments        Payment[]
+  meetingScheduleEvents   MeetingScheduleEvent[]
+  coachNoteVersions       CoachNoteVersion[]
+  googleOAuthStates       GoogleOAuthState[]
+  createdStudentNotes     StudentNote[]           @relation("StudentNoteCreatedBy")
+  updatedStudentNotes     StudentNote[]           @relation("StudentNoteUpdatedBy")
+  createdDrawings         Drawing[]               @relation("DrawingCreatedBy")
+  updatedDrawings         Drawing[]               @relation("DrawingUpdatedBy")
+  assignedDrawings        DrawingAssignment[]     @relation("DrawingAssignedBy")
+  createdReadings         Reading[]               @relation("ReadingCreatedBy")
+  updatedReadings         Reading[]               @relation("ReadingUpdatedBy")
+  assignedReadings        ReadingAssignment[]     @relation("ReadingAssignedBy")
+  createdReadingShares    ReadingPublicShare[]    @relation("ReadingPublicShareCreatedBy")
+  updatedReadingShares    ReadingPublicShare[]    @relation("ReadingPublicShareUpdatedBy")
+  createdMeditationTypes  MeditationType[]        @relation("MeditationTypeCreatedBy")
+  updatedMeditationTypes  MeditationType[]        @relation("MeditationTypeUpdatedBy")
+  uploadedMeditationAudio MeditationAudioAsset[]  @relation("MeditationAudioCreatedBy")
+  createdMeditationShares MeditationPublicShare[] @relation("MeditationPublicShareCreatedBy")
+  updatedMeditationShares MeditationPublicShare[] @relation("MeditationPublicShareUpdatedBy")
 
   @@map("admin_users")
 }
@@ -1310,6 +1373,147 @@ model ReadingPublicVisit {
   @@index([shareId, lastSeenAt])
   @@index([shareId, completedAt])
   @@map("reading_public_visits")
+}
+
+model MeditationType {
+  id                  String                 @id @default(uuid()) @db.Uuid
+  title               String
+  description         String?
+  level               MeditationLevel        @default(INTRODUCTION)
+  status              MeditationTypeStatus   @default(DRAFT)
+  guidanceMode        MeditationGuidanceMode @default(SILENT) @map("guidance_mode")
+  targetDurations     Int[]                  @default([15, 20, 25, 30]) @map("target_durations")
+  openingAudioAssetId String?                @map("opening_audio_asset_id") @db.Uuid
+  closingAudioAssetId String?                @map("closing_audio_asset_id") @db.Uuid
+  audioRevision       Int                    @default(1) @map("audio_revision")
+  version             Int                    @default(1)
+  createdByAdminId    String                 @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId    String                 @map("updated_by_admin_id") @db.Uuid
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+
+  createdByAdmin   AdminUser               @relation("MeditationTypeCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  updatedByAdmin   AdminUser               @relation("MeditationTypeUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: Restrict)
+  openingAudio     MeditationAudioAsset?   @relation("MeditationTypeOpening", fields: [openingAudioAssetId], references: [id], onDelete: SetNull)
+  closingAudio     MeditationAudioAsset?   @relation("MeditationTypeClosing", fields: [closingAudioAssetId], references: [id], onDelete: SetNull)
+  audioAssets      MeditationAudioAsset[]  @relation("MeditationTypeAssets")
+  renders          MeditationAudioRender[]
+  practiceSlots    PracticeSlot[]
+  practiceSessions PracticeSession[]
+  publicShare      MeditationPublicShare?
+
+  @@index([status, level, updatedAt])
+  @@map("meditation_types")
+}
+
+model MeditationPublicShare {
+  id                     String                      @id @default(uuid()) @db.Uuid
+  meditationTypeId       String                      @unique @map("meditation_type_id") @db.Uuid
+  slug                   String                      @unique
+  status                 MeditationPublicShareStatus @default(ACTIVE)
+  allowedDurations       Int[]                       @map("allowed_durations")
+  defaultDurationMinutes Int                         @map("default_duration_minutes")
+  allowDurationSelection Boolean                     @default(true) @map("allow_duration_selection")
+  allowIndexing          Boolean                     @default(false) @map("allow_indexing")
+  expiresAt              DateTime?                   @map("expires_at")
+  version                Int                         @default(1)
+  createdByAdminId       String                      @map("created_by_admin_id") @db.Uuid
+  updatedByAdminId       String                      @map("updated_by_admin_id") @db.Uuid
+  createdAt              DateTime                    @default(now()) @map("created_at")
+  updatedAt              DateTime                    @updatedAt @map("updated_at")
+
+  meditationType MeditationType          @relation(fields: [meditationTypeId], references: [id], onDelete: Cascade)
+  createdByAdmin AdminUser               @relation("MeditationPublicShareCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  updatedByAdmin AdminUser               @relation("MeditationPublicShareUpdatedBy", fields: [updatedByAdminId], references: [id], onDelete: Restrict)
+  visits         MeditationPublicVisit[]
+
+  @@index([status, updatedAt])
+  @@map("meditation_public_shares")
+}
+
+model MeditationPublicVisit {
+  id               String    @id @default(uuid()) @db.Uuid
+  shareId          String    @map("share_id") @db.Uuid
+  visitorHmac      String    @map("visitor_hmac")
+  durationMinutes  Int       @map("duration_minutes")
+  viewCount        Int       @default(1) @map("view_count")
+  startCount       Int       @default(0) @map("start_count")
+  completionCount  Int       @default(0) @map("completion_count")
+  ctaViewCount     Int       @default(0) @map("cta_view_count")
+  ctaClickCount    Int       @default(0) @map("cta_click_count")
+  source           String?
+  medium           String?
+  campaign         String?
+  firstOpenedAt    DateTime  @default(now()) @map("first_opened_at")
+  lastSeenAt       DateTime  @default(now()) @map("last_seen_at")
+  lastStartedAt    DateTime? @map("last_started_at")
+  lastCompletedAt  DateTime? @map("last_completed_at")
+  lastCtaViewedAt  DateTime? @map("last_cta_viewed_at")
+  lastCtaClickedAt DateTime? @map("last_cta_clicked_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  share MeditationPublicShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
+
+  @@unique([shareId, visitorHmac, durationMinutes], map: "meditation_public_visits_share_visitor_duration_key")
+  @@index([shareId, lastSeenAt])
+  @@index([shareId, durationMinutes])
+  @@map("meditation_public_visits")
+}
+
+model MeditationAudioAsset {
+  id               String              @id @default(uuid()) @db.Uuid
+  meditationTypeId String              @map("meditation_type_id") @db.Uuid
+  kind             MeditationAudioKind
+  version          Int
+  filename         String
+  contentType      String              @map("content_type")
+  byteSize         Int                 @map("byte_size")
+  contentHash      String              @map("content_hash")
+  storageKey       String              @map("storage_key")
+  durationSeconds  Float?              @map("duration_seconds")
+  createdByAdminId String              @map("created_by_admin_id") @db.Uuid
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  meditationType    MeditationType          @relation("MeditationTypeAssets", fields: [meditationTypeId], references: [id], onDelete: Cascade)
+  createdByAdmin    AdminUser               @relation("MeditationAudioCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  selectedAsOpening MeditationType[]        @relation("MeditationTypeOpening")
+  selectedAsClosing MeditationType[]        @relation("MeditationTypeClosing")
+  openingRenders    MeditationAudioRender[] @relation("MeditationRenderOpening")
+  closingRenders    MeditationAudioRender[] @relation("MeditationRenderClosing")
+
+  @@unique([meditationTypeId, kind, version])
+  @@index([meditationTypeId, kind, createdAt])
+  @@map("meditation_audio_assets")
+}
+
+model MeditationAudioRender {
+  id                    String                 @id @default(uuid()) @db.Uuid
+  meditationTypeId      String                 @map("meditation_type_id") @db.Uuid
+  sourceVersion         Int                    @map("source_version")
+  durationMinutes       Int                    @map("duration_minutes")
+  status                MeditationRenderStatus @default(PENDING)
+  openingAudioAssetId   String                 @map("opening_audio_asset_id") @db.Uuid
+  closingAudioAssetId   String?                @map("closing_audio_asset_id") @db.Uuid
+  storageKey            String?                @map("storage_key")
+  contentType           String?                @map("content_type")
+  byteSize              Int?                   @map("byte_size")
+  contentHash           String?                @map("content_hash")
+  actualDurationSeconds Float?                 @map("actual_duration_seconds")
+  attempts              Int                    @default(0)
+  errorCode             String?                @map("error_code")
+  renderedAt            DateTime?              @map("rendered_at")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+
+  meditationType   MeditationType        @relation(fields: [meditationTypeId], references: [id], onDelete: Cascade)
+  openingAudio     MeditationAudioAsset  @relation("MeditationRenderOpening", fields: [openingAudioAssetId], references: [id], onDelete: Restrict)
+  closingAudio     MeditationAudioAsset? @relation("MeditationRenderClosing", fields: [closingAudioAssetId], references: [id], onDelete: Restrict)
+  practiceSessions PracticeSession[]
+
+  @@unique([meditationTypeId, sourceVersion, durationMinutes], map: "meditation_audio_renders_meditation_type_id_source_version_dura")
+  @@index([status, createdAt])
+  @@index([meditationTypeId, durationMinutes, status], map: "meditation_audio_renders_meditation_type_id_duration_minutes_st")
+  @@map("meditation_audio_renders")
 }
 
 model StudentNote {

@@ -15,6 +15,7 @@ const slots = z
       slotKey: z.enum(['MORNING', 'EVENING']),
       localTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
       active: z.boolean(),
+      meditationTypeId: z.string().uuid().nullable().optional(),
     }),
   )
   .min(1);
@@ -48,6 +49,7 @@ export class PracticeController {
         },
         practiceSlot: true,
         practicePlan: true,
+        meditationType: { select: { id: true, title: true } },
         reflection: { include: { tags: true } },
       },
     });
@@ -72,6 +74,7 @@ export class PracticeController {
           hourCycle: 'h23',
         }).format(item.startAt),
         planRevision: item.practicePlan.revision,
+        meditationType: item.meditationType,
         cancellationReason: item.cancellationReason,
         reflectionTags:
           item.reflection?.tags.map((tag) => ({
@@ -104,7 +107,19 @@ export class PracticeController {
     const plan = await this.prisma.practicePlan.findFirst({
       where: { studentId: id, status: { in: ['ACTIVE', 'PAUSED', 'DRAFT'] } },
       orderBy: { revision: 'desc' },
-      include: { slots: true, sessions: { take: 120, orderBy: { startAt: 'asc' } } },
+      include: {
+        slots: { include: { meditationType: { select: { id: true, title: true } } } },
+        sessions: {
+          take: 120,
+          orderBy: { startAt: 'asc' },
+          include: {
+            meditationType: { select: { id: true, title: true } },
+            meditationRender: {
+              select: { id: true, status: true, durationMinutes: true, sourceVersion: true },
+            },
+          },
+        },
+      },
     });
     const subscriptions = await this.prisma.subscriptionPeriod.findMany({
       where: { studentId: id, status: { in: ['ACTIVE', 'SCHEDULED'] } },

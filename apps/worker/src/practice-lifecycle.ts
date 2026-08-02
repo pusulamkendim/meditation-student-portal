@@ -24,7 +24,7 @@ import {
 type LifecycleEvent = 'PRACTICE_REMINDER' | 'PRACTICE_CHECKIN';
 type PracticeLifecycleConfig = Pick<
   ApplicationConfig,
-  'LOOKUP_HMAC_KEY' | 'DATA_ENCRYPTION_KEYS_JSON' | 'ACTIVE_DATA_KEY_ID'
+  'LOOKUP_HMAC_KEY' | 'DATA_ENCRYPTION_KEYS_JSON' | 'ACTIVE_DATA_KEY_ID' | 'ADMIN_ORIGIN'
 >;
 
 function timingVariables(
@@ -112,11 +112,18 @@ export async function createPracticeLifecycleIntent(
     );
     if (!variant) return false;
 
+    if (!config.LOOKUP_HMAC_KEY) throw new Error('LOOKUP_HMAC_KEY is required.');
+    const lookup = new LookupHmac(Buffer.from(config.LOOKUP_HMAC_KEY, 'base64'));
+    const playerCode =
+      eventKey === 'PRACTICE_REMINDER' ? randomBytes(16).toString('base64url') : undefined;
+    const playerExpiresAt = new Date(session.startAt.getTime() + 24 * 60 * 60_000);
+    const portalOrigin = (config.ADMIN_ORIGIN ?? 'http://localhost:3001').replace(/\/+$/u, '');
     const variables: Record<string, string> = {
       ...timingVariables(eventKey, session, session.student.timezone),
       ...(eventKey === 'PRACTICE_REMINDER' && studentDisplayName
         ? { studentDisplayName: ` ${studentDisplayName.trim().split(/\s+/)[0]}` }
         : {}),
+      ...(playerCode ? { practiceUrl: `${portalOrigin}/m#${playerCode}` } : {}),
     };
     const rendered = renderMessageTemplate(eventKey as SystemEventKey, variant.content, variables);
     const timing = practiceTiming(session.startAt, session.durationMinutes);
@@ -126,8 +133,7 @@ export async function createPracticeLifecycleIntent(
         ? session.startAt
         : endOfLocalServiceDate(session.serviceDate, session.student.timezone);
     const nonce = randomBytes(24).toString('base64url');
-    if (!config.LOOKUP_HMAC_KEY) throw new Error('LOOKUP_HMAC_KEY is required.');
-    const nonceHmac = new LookupHmac(Buffer.from(config.LOOKUP_HMAC_KEY, 'base64')).digest(nonce);
+    const nonceHmac = lookup.digest(nonce);
     const nextVersion = session.version + 1;
     const changed = await tx.practiceSession.updateMany({
       where: { id: session.id, status: expectedStatus, version: expectedVersion },
@@ -141,6 +147,24 @@ export async function createPracticeLifecycleIntent(
       },
     });
     if (changed.count !== 1) return false;
+    if (playerCode) {
+      await tx.practiceAccessLink.upsert({
+        where: { practiceSessionId: session.id },
+        create: {
+          practiceSessionId: session.id,
+          codeHmac: lookup.digest(playerCode),
+          startAt: session.startAt,
+          expiresAt: playerExpiresAt,
+        },
+        update: {
+          codeHmac: lookup.digest(playerCode),
+          startAt: session.startAt,
+          expiresAt: playerExpiresAt,
+          invalidatedAt: null,
+          version: { increment: 1 },
+        },
+      });
+    }
 
     const suffix = eventKey === 'PRACTICE_REMINDER' ? 'reminder' : 'checkin';
     const eventIdempotencyKey = `practice:${session.id}:${suffix}:v${nextVersion}`;

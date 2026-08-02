@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import {
   CLOCK_TOKEN,
   endOfLocalServiceDate,
@@ -15,6 +15,9 @@ import {
   ConsentStatus,
   PracticePlanStatus,
   PracticeSessionStatus,
+  MeditationGuidanceMode,
+  MeditationRenderStatus,
+  MeditationTypeStatus,
   SubscriptionStatus,
   type Prisma,
 } from '@meditation/database';
@@ -22,8 +25,32 @@ import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { SystemMessageOrchestrator } from '../message-catalog/system-message-orchestrator.js';
 
-type SlotInput = { slotKey: 'MORNING' | 'EVENING'; localTime: string; active: boolean };
+type SlotInput = {
+  slotKey: 'MORNING' | 'EVENING';
+  localTime: string;
+  active: boolean;
+  meditationTypeId?: string | null;
+};
 type Transaction = Prisma.TransactionClient;
+
+export function currentMeditationRenderMap(
+  meditationTypes: Array<{ id: string; audioRevision: number }>,
+  renders: Array<{
+    id: string;
+    meditationTypeId: string;
+    sourceVersion: number;
+    durationMinutes: number;
+  }>,
+) {
+  const revisionByType = new Map(
+    meditationTypes.map((meditation) => [meditation.id, meditation.audioRevision]),
+  );
+  return new Map(
+    renders
+      .filter((render) => revisionByType.get(render.meditationTypeId) === render.sourceVersion)
+      .map((render) => [`${render.meditationTypeId}:${render.durationMinutes}`, render]),
+  );
+}
 
 @Injectable()
 export class PracticeService {
@@ -109,6 +136,24 @@ export class PracticeService {
     const now = this.clock.now();
     const start = effectiveFrom && effectiveFrom > now ? effectiveFrom : now;
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${studentId}))`;
+    const assignedTypeIds = [
+      ...new Set(
+        slots.filter((slot) => slot.meditationTypeId).map((slot) => slot.meditationTypeId!),
+      ),
+    ];
+    const meditationTypes = assignedTypeIds.length
+      ? await tx.meditationType.findMany({
+          where: {
+            id: { in: assignedTypeIds },
+            status: MeditationTypeStatus.PUBLISHED,
+          },
+          select: { id: true, title: true, audioRevision: true, guidanceMode: true },
+        })
+      : [];
+    if (meditationTypes.length !== assignedTypeIds.length)
+      throw new BadRequestException(
+        'Seçilen meditasyon yayınlanmış değil veya artık kullanılamıyor.',
+      );
     const revision =
       (await tx.practicePlan.aggregate({ where: { studentId }, _max: { revision: true } }))._max
         .revision ?? 0;
@@ -185,16 +230,58 @@ export class PracticeService {
       durationOverride,
     });
     const slotIds = new Map<string, string>(plan.slots.map((slot) => [slot.slotKey, slot.id]));
-    const sessions = days
-      .filter((item) => item.startAt >= start)
-      .map((item) => ({
+    const slotAssignments = new Map(
+      plan.slots.map((slot) => [
+        slot.slotKey,
+        { id: slot.id, meditationTypeId: slot.meditationTypeId },
+      ]),
+    );
+    const scheduledDays = days.filter((item) => item.startAt >= start);
+    const requiredDurations = [...new Set(scheduledDays.map((item) => item.durationMinutes))];
+    const readyRenders = assignedTypeIds.length
+      ? await tx.meditationAudioRender.findMany({
+          where: {
+            meditationTypeId: { in: assignedTypeIds },
+            durationMinutes: { in: requiredDurations },
+            status: MeditationRenderStatus.READY,
+          },
+          select: {
+            id: true,
+            meditationTypeId: true,
+            sourceVersion: true,
+            durationMinutes: true,
+          },
+        })
+      : [];
+    const typeById = new Map(meditationTypes.map((item) => [item.id, item]));
+    const renderByTypeAndDuration = currentMeditationRenderMap(meditationTypes, readyRenders);
+    const sessions = scheduledDays.map((item) => {
+      const slot = slotAssignments.get(item.slotKey);
+      const meditationTypeId = slot?.meditationTypeId;
+      const render = meditationTypeId
+        ? renderByTypeAndDuration.get(`${meditationTypeId}:${item.durationMinutes}`)
+        : undefined;
+      const meditation = meditationTypeId ? typeById.get(meditationTypeId) : undefined;
+      if (
+        meditationTypeId &&
+        meditation?.guidanceMode === MeditationGuidanceMode.GUIDED &&
+        !render
+      ) {
+        throw new BadRequestException(
+          `${meditation?.title ?? 'Seçilen meditasyon'} için ${item.durationMinutes} dakikalık ses hazır değil.`,
+        );
+      }
+      return {
         studentId,
         practicePlanId: plan.id,
-        practiceSlotId: slotIds.get(item.slotKey),
+        practiceSlotId: slot?.id ?? slotIds.get(item.slotKey),
+        meditationTypeId,
+        meditationRenderId: render?.id,
         serviceDate: item.serviceDate,
         startAt: item.startAt,
         durationMinutes: item.durationMinutes,
-      }));
+      };
+    });
     if (sessions.length) await tx.practiceSession.createMany({ data: sessions });
     await tx.auditLog.create({
       data: {

@@ -837,8 +837,23 @@ export default function ReadingsPage() {
           onClose={() => setUploadOpen(false)}
           title="Yeni okuma yükle"
           description="Markdown veya PDF yükleyin. PDF tek başına yüklenirse metin otomatik çıkarılır."
+          actions={
+            <>
+              <Button type="button" variant="secondary" onClick={() => setUploadOpen(false)}>
+                Vazgeç
+              </Button>
+              <Button type="submit" form="reading-upload-form" disabled={busy}>
+                <Upload aria-hidden="true" /> {busy ? 'Yükleniyor...' : 'Taslak oluştur'}
+              </Button>
+            </>
+          }
         >
-          <form ref={uploadForm} className="reading-upload-form" onSubmit={uploadReading}>
+          <form
+            id="reading-upload-form"
+            ref={uploadForm}
+            className="reading-upload-form"
+            onSubmit={uploadReading}
+          >
             <TextField label="Başlık (isteğe bağlı)" name="title" maxLength={200} />
             <TextField label="Yazar" name="author" defaultValue="Necip Sülbü" maxLength={160} />
             <label className="ui-field">
@@ -880,14 +895,6 @@ export default function ReadingsPage() {
                 max={600}
               />
             </div>
-            <div className="modal-actions">
-              <Button type="button" variant="secondary" onClick={() => setUploadOpen(false)}>
-                Vazgeç
-              </Button>
-              <Button type="submit" disabled={busy}>
-                <Upload aria-hidden="true" /> {busy ? 'Yükleniyor...' : 'Taslak oluştur'}
-              </Button>
-            </div>
           </form>
         </Modal>
       ) : null}
@@ -897,6 +904,20 @@ export default function ReadingsPage() {
           onClose={() => setAssignOpen(false)}
           title="Öğrencilere ata"
           description="Bağlantı öğrencinin varsayılan mesaj kanalına gönderilir."
+          actions={
+            <>
+              <Button type="button" variant="secondary" onClick={() => setAssignOpen(false)}>
+                Vazgeç
+              </Button>
+              <Button
+                type="button"
+                disabled={busy || selectedStudents.length === 0}
+                onClick={() => void assignReading()}
+              >
+                <Send aria-hidden="true" /> {selectedStudents.length} öğrenciye gönder
+              </Button>
+            </>
+          }
         >
           <div className="reading-student-picker">
             <label className="readings-search">
@@ -927,18 +948,6 @@ export default function ReadingsPage() {
                   </span>
                 </label>
               ))}
-            </div>
-            <div className="modal-actions">
-              <Button type="button" variant="secondary" onClick={() => setAssignOpen(false)}>
-                Vazgeç
-              </Button>
-              <Button
-                type="button"
-                disabled={busy || selectedStudents.length === 0}
-                onClick={() => void assignReading()}
-              >
-                <Send aria-hidden="true" /> {selectedStudents.length} öğrenciye gönder
-              </Button>
             </div>
           </div>
         </Modal>
@@ -1159,21 +1168,8 @@ export default function ReadingsPage() {
               ? 'Atama, ilerleme ve paylaşım istatistiklerini korumak için bu okuma silinemez.'
               : 'Bu işlem okuma içeriğini ve yüklenen dosyaları kalıcı olarak siler.'
           }
-        >
-          <div className="reading-delete-confirmation">
-            <strong>{detail.title}</strong>
-            {detail.assignments.length > 0 || detail.publicShare ? (
-              <Alert tone="warning">
-                {detail.assignments.length > 0
-                  ? `Bu okuma ${detail.assignments.length} öğrenciye atanmış. `
-                  : ''}
-                {detail.publicShare ? 'Okumanın herkese açık bağlantısı bulunuyor. ' : ''}
-                Kalıcı silme yerine okumayı arşivleyin.
-              </Alert>
-            ) : (
-              <p>Bu işlemi geri alamazsınız. Okumayı kalıcı olarak silmek istiyor musunuz?</p>
-            )}
-            <div className="modal-actions">
+          actions={
+            <>
               <Button type="button" variant="secondary" onClick={() => setDeleteOpen(false)}>
                 Vazgeç
               </Button>
@@ -1200,7 +1196,22 @@ export default function ReadingsPage() {
                   <Trash2 aria-hidden="true" /> Kalıcı olarak sil
                 </Button>
               )}
-            </div>
+            </>
+          }
+        >
+          <div className="reading-delete-confirmation">
+            <strong>{detail.title}</strong>
+            {detail.assignments.length > 0 || detail.publicShare ? (
+              <Alert tone="warning">
+                {detail.assignments.length > 0
+                  ? `Bu okuma ${detail.assignments.length} öğrenciye atanmış. `
+                  : ''}
+                {detail.publicShare ? 'Okumanın herkese açık bağlantısı bulunuyor. ' : ''}
+                Kalıcı silme yerine okumayı arşivleyin.
+              </Alert>
+            ) : (
+              <p>Bu işlemi geri alamazsınız. Okumayı kalıcı olarak silmek istiyor musunuz?</p>
+            )}
           </div>
         </Modal>
       ) : null}

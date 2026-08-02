@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Activity,
+  AudioLines,
   BookOpen,
   BrainCircuit,
   BookMarked,
@@ -40,6 +41,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
     label: 'İçerik ve AI',
     items: [
       { href: '/standard-messages', label: 'Mesaj şablonları', icon: FileText },
+      { href: '/meditations', label: 'Meditasyonlar', icon: AudioLines },
       { href: '/knowledge', label: 'Bilgi bankası', icon: BookOpen },
       { href: '/readings', label: 'Okumalar', icon: BookMarked },
       { href: '/drawings', label: 'Çizimler', icon: PencilRuler },

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PracticeSessionStatus } from '@meditation/database';
-import { PracticeService } from './practice.service.js';
+import { currentMeditationRenderMap, PracticeService } from './practice.service.js';
 
 const now = new Date('2026-07-13T07:00:00.000Z');
 const session = {
@@ -93,5 +93,30 @@ describe('PracticeService.reschedule', () => {
         'admin-1',
       ),
     ).rejects.toThrow('state conflict');
+  });
+});
+
+describe('currentMeditationRenderMap', () => {
+  it('only exposes the current audio revision for each duration', () => {
+    const current = currentMeditationRenderMap(
+      [{ id: 'breath', audioRevision: 3 }],
+      [
+        {
+          id: 'old-15',
+          meditationTypeId: 'breath',
+          sourceVersion: 2,
+          durationMinutes: 15,
+        },
+        {
+          id: 'current-15',
+          meditationTypeId: 'breath',
+          sourceVersion: 3,
+          durationMinutes: 15,
+        },
+      ],
+    );
+
+    expect(current.get('breath:15')?.id).toBe('current-15');
+    expect(current.has('breath:20')).toBe(false);
   });
 });

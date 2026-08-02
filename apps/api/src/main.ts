@@ -11,7 +11,12 @@ async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
-    new FastifyAdapter({ logger: false, bodyLimit: 100 * 1024 * 1024 }),
+    new FastifyAdapter({
+      logger: false,
+      bodyLimit: 100 * 1024 * 1024,
+      // Signed practice and meditation audio tokens are intentionally bounded at 512 characters.
+      maxParamLength: 512,
+    }),
     { bufferLogs: true, rawBody: true },
   );
   await app.register(cookie);
