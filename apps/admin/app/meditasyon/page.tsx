@@ -2,12 +2,14 @@
 
 import {
   CheckCircle2,
+  Flower2,
   LoaderCircle,
   MessageCircle,
   Pause,
   Play,
   RotateCcw,
   Timer,
+  UsersRound,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -336,7 +338,10 @@ export default function PracticePlayerPage({ publicSlug }: PracticePlayerPagePro
       </div>
 
       <header className="practice-player-brand">
-        <strong>SAKİN ZİHİN</strong>
+        <strong>
+          <Flower2 aria-hidden="true" />
+          SAKİN ZİHİN
+        </strong>
         <span>MEDİTASYON / {practice.durationMinutes} DK</span>
       </header>
 
@@ -396,7 +401,9 @@ export default function PracticePlayerPage({ publicSlug }: PracticePlayerPagePro
         {completed ? (
           <>
             <div className="practice-player-complete">
-              <CheckCircle2 aria-hidden="true" />
+              <span className="practice-player-complete-icon">
+                <CheckCircle2 aria-hidden="true" />
+              </span>
               <div>
                 <strong>Pratik süren tamamlandı</strong>
                 <p>
@@ -408,13 +415,18 @@ export default function PracticePlayerPage({ publicSlug }: PracticePlayerPagePro
             </div>
             {publicSlug ? (
               <aside className="practice-player-cta">
-                <div>
-                  <span>BİREBİR MEDİTASYON</span>
-                  <strong>Bu pratiği sana uygun bir düzene dönüştürmek ister misin?</strong>
-                  <p>
-                    Haftalık birebir görüşmeler, kişisel pratik planı ve düzenli takip ile süreci
-                    birlikte sürdürebiliriz.
-                  </p>
+                <div className="practice-player-cta-copy">
+                  <span className="practice-player-cta-icon">
+                    <UsersRound aria-hidden="true" />
+                  </span>
+                  <div>
+                    <span>BİREBİR MEDİTASYON</span>
+                    <strong>Bu pratiği sana uygun bir düzene dönüştürmek ister misin?</strong>
+                    <p>
+                      Haftalık birebir görüşmeler, kişisel pratik planı ve düzenli takip ile süreci
+                      birlikte sürdürebiliriz.
+                    </p>
+                  </div>
                 </div>
                 <a
                   href={whatsappUrl}
@@ -475,6 +487,13 @@ export default function PracticePlayerPage({ publicSlug }: PracticePlayerPagePro
             </button>
           )}
         </div>
+
+        {completed ? (
+          <div className="practice-player-completion-note">
+            <Flower2 aria-hidden="true" />
+            <span>Farkındalıkla devam et</span>
+          </div>
+        ) : null}
       </section>
     </main>
   );

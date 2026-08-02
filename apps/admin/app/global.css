@@ -1403,11 +1403,17 @@ a {
   color: #d9cdba;
 }
 .practice-player {
+  --meditation-ivory: #f3eadb;
+  --meditation-muted: #cbbfac;
+  --meditation-gold: #c99551;
+  --meditation-gold-light: #e5bb76;
+  --meditation-control-ink: #0b1a18;
   position: relative;
   isolation: isolate;
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
+  font-family: Inter, 'SF Pro Text', 'Segoe UI', sans-serif;
   padding: max(32px, env(safe-area-inset-top)) max(46px, env(safe-area-inset-right))
     max(30px, env(safe-area-inset-bottom)) max(46px, env(safe-area-inset-left));
 }
@@ -1473,6 +1479,7 @@ a {
   z-index: 3;
   inset: 20px;
   border: 1px solid rgb(241 233 219 / 13%);
+  border-radius: 34px;
 }
 .practice-player-brand {
   position: relative;
@@ -1481,16 +1488,24 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-4);
-  color: #f1e9db;
-  font-size: 0.66rem;
+  color: var(--meditation-ivory);
+  font-size: 0.74rem;
   font-weight: 760;
   letter-spacing: 0;
 }
 .practice-player-brand strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
   font-size: inherit;
 }
+.practice-player-brand strong svg {
+  width: 19px;
+  height: 19px;
+  color: var(--meditation-gold);
+}
 .practice-player-brand span {
-  color: rgb(241 233 219 / 70%);
+  color: var(--meditation-muted);
   text-align: right;
 }
 .practice-player-stage {
@@ -1511,17 +1526,17 @@ a {
   text-wrap: balance;
 }
 .practice-player-heading > span {
-  color: #d6a25e;
+  color: var(--meditation-gold);
   font-size: 0.62rem;
   font-weight: 750;
   letter-spacing: 0;
 }
 .practice-player-heading h1 {
   margin: 0;
-  color: #f1e9db;
+  color: var(--meditation-ivory);
   font-family: 'Didot', 'Bodoni 72', Georgia, serif;
-  font-size: clamp(1.8rem, 4vw, 3.25rem);
-  font-style: italic;
+  font-size: clamp(2.2rem, 5vw, 4rem);
+  font-style: normal;
   font-weight: 400;
   line-height: 1.06;
   letter-spacing: 0;
@@ -1529,8 +1544,8 @@ a {
 .practice-player-heading p {
   max-width: 540px;
   margin: 0;
-  color: #d9cdba;
-  font-size: clamp(0.72rem, 1.4vw, 0.86rem);
+  color: var(--meditation-muted);
+  font-size: clamp(0.78rem, 1.4vw, 0.94rem);
   line-height: 1.5;
 }
 .practice-player-durations {
@@ -1615,11 +1630,11 @@ a {
   display: grid;
   justify-items: center;
   gap: 8px;
-  color: #f1e9db;
+  color: var(--meditation-ivory);
   text-align: center;
 }
 .practice-player-clock > span {
-  color: #d6a25e;
+  color: var(--meditation-gold);
   font-size: 0.62rem;
   font-weight: 760;
 }
@@ -1631,7 +1646,7 @@ a {
   letter-spacing: 0;
 }
 .practice-player-clock small {
-  color: #d9cdba;
+  color: var(--meditation-muted);
   font-family: 'Didot', 'Bodoni 72', Georgia, serif;
   font-size: 0.9rem;
   font-style: italic;
@@ -1661,9 +1676,12 @@ a {
 .practice-player-primary {
   order: 1;
   width: 100%;
-  border: 1px solid #d6a25e;
-  background: #d6a25e;
-  color: #061819;
+  border: 1px solid #bd8847;
+  background: linear-gradient(105deg, #ad7b3d, var(--meditation-gold-light) 52%, #d29b53);
+  color: var(--meditation-control-ink);
+  box-shadow:
+    inset 0 1px rgb(255 255 255 / 28%),
+    0 12px 28px rgb(0 0 0 / 18%);
 }
 .practice-player-secondary {
   order: 2;
@@ -1676,73 +1694,113 @@ a {
 }
 .practice-player-complete {
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  width: min(100%, 440px);
-  padding: 13px 15px;
-  border-left: 3px solid #d6a25e;
-  background: rgb(6 24 25 / 68%);
-  color: #f1e9db;
+  align-items: center;
+  gap: 20px;
+  width: min(100%, 620px);
+  box-sizing: border-box;
+  padding: 22px 24px;
+  border: 1px solid rgb(214 162 94 / 38%);
+  border-left: 4px solid #d6a25e;
+  border-radius: 24px;
+  background: linear-gradient(120deg, rgb(7 24 24 / 92%), rgb(13 28 27 / 82%));
+  box-shadow: 0 18px 50px rgb(0 0 0 / 22%);
+  color: var(--meditation-ivory);
 }
-.practice-player-complete > svg {
+.practice-player-complete-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
   flex: 0 0 auto;
-  color: #d6a25e;
+  border: 3px solid #d6a25e;
+  border-radius: 50%;
+  color: var(--meditation-gold);
+  box-shadow:
+    0 0 0 10px rgb(214 162 94 / 7%),
+    0 0 30px rgb(214 162 94 / 18%);
+}
+.practice-player-complete-icon svg {
+  width: 28px;
+  height: 28px;
 }
 .practice-player-complete > div {
   display: grid;
-  gap: 3px;
+  gap: 6px;
+}
+.practice-player-complete strong {
+  font-size: 1rem;
 }
 .practice-player-complete p {
   margin: 0;
-  color: #d9cdba;
-  font-size: 0.78rem;
+  color: var(--meditation-muted);
+  font-size: 0.82rem;
 }
 .practice-player-cta {
-  width: min(100%, 560px);
+  width: min(100%, 620px);
   box-sizing: border-box;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 20px;
-  padding: 17px 18px;
+  gap: 18px;
+  padding: 24px;
   border: 1px solid rgb(214 162 94 / 34%);
-  border-left: 3px solid #d6a25e;
-  background: rgb(6 24 25 / 78%);
-  color: #f1e9db;
+  border-radius: 26px;
+  background: linear-gradient(145deg, rgb(8 25 25 / 92%), rgb(16 31 29 / 88%));
+  box-shadow: 0 18px 50px rgb(0 0 0 / 22%);
+  color: var(--meditation-ivory);
 }
-.practice-player-cta > div {
+.practice-player-cta-copy {
   display: grid;
-  gap: 5px;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
 }
-.practice-player-cta span {
-  color: #d6a25e;
-  font-size: 0.62rem;
+.practice-player-cta-copy > div {
+  display: grid;
+  gap: 7px;
+}
+.practice-player-cta-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(214 162 94 / 48%);
+  border-radius: 50%;
+  background: rgb(214 162 94 / 10%);
+  color: var(--meditation-gold);
+}
+.practice-player-cta-icon svg {
+  width: 23px;
+}
+.practice-player-cta-copy > div > span {
+  color: var(--meditation-gold);
+  font-size: 0.68rem;
   font-weight: 760;
 }
 .practice-player-cta strong {
-  font-size: 0.9rem;
-  line-height: 1.35;
+  font-size: 1rem;
+  line-height: 1.4;
 }
 .practice-player-cta p {
   margin: 0;
-  color: #d9cdba;
-  font-size: 0.72rem;
-  line-height: 1.45;
+  color: var(--meditation-muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
 }
 .practice-player-cta > a {
-  min-height: 42px;
+  min-height: 56px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: 0 0 auto;
   gap: 8px;
-  padding: 0 16px;
+  padding: 0 22px;
+  border-top: 1px solid rgb(214 162 94 / 14%);
   border-radius: 999px;
-  background: #d6a25e;
-  color: #061819;
-  font-size: 0.75rem;
+  background: linear-gradient(105deg, #ad7b3d, #e8bd78 52%, #d29b53);
+  color: var(--meditation-control-ink);
+  font-size: 0.88rem;
   font-weight: 750;
   text-decoration: none;
+  box-shadow: inset 0 1px rgb(255 255 255 / 32%);
 }
 .practice-player-cta > a svg {
   width: 18px;
@@ -1751,6 +1809,36 @@ a {
 .practice-player.is-completed .practice-player-durations {
   display: none;
 }
+.practice-player.is-completed .practice-player-stage {
+  width: min(100%, 680px);
+  gap: clamp(14px, 2vh, 22px);
+}
+.practice-player.is-completed .practice-player-controls {
+  width: min(100%, 520px);
+}
+.practice-player.is-completed .practice-player-primary {
+  min-height: 58px;
+  border-color: rgb(246 234 211 / 72%);
+  background: linear-gradient(100deg, #f4ead7, #fff8e9 54%, #ead9bc);
+  color: #5d472c;
+  font-size: 0.9rem;
+  box-shadow: 0 12px 28px rgb(0 0 0 / 18%);
+}
+.practice-player.is-completed .practice-player-secondary {
+  display: none;
+}
+.practice-player-completion-note {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: rgb(214 162 94 / 74%);
+  font-family: 'Didot', 'Bodoni 72', Georgia, serif;
+  font-size: 0.72rem;
+}
+.practice-player-completion-note svg {
+  width: 22px;
+  height: 22px;
+}
 @media (max-width: 600px) {
   .practice-player {
     padding: max(28px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
@@ -1758,16 +1846,17 @@ a {
   }
   .practice-player-frame {
     inset: 12px;
+    border-radius: 24px;
   }
   .practice-player-brand {
-    font-size: 0.57rem;
+    font-size: 0.68rem;
   }
   .practice-player-stage {
     gap: clamp(11px, 2vh, 19px);
   }
   .practice-player-heading h1 {
-    max-width: 330px;
-    font-size: clamp(1.65rem, 8vw, 2.2rem);
+    max-width: 350px;
+    font-size: clamp(2.15rem, 10vw, 3rem);
   }
   .practice-player-heading p {
     max-width: 330px;
@@ -1780,13 +1869,28 @@ a {
     width: min(100%, 310px);
   }
   .practice-player-cta {
-    grid-template-columns: 1fr;
-    gap: 12px;
-    padding: 15px;
+    gap: 16px;
+    padding: 20px;
   }
   .practice-player-cta > a {
     width: 100%;
     box-sizing: border-box;
+  }
+  .practice-player-complete {
+    gap: 16px;
+    padding: 19px 18px;
+  }
+  .practice-player-complete-icon {
+    width: 50px;
+    height: 50px;
+  }
+  .practice-player-cta-copy {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 13px;
+  }
+  .practice-player-cta-icon {
+    width: 42px;
+    height: 42px;
   }
 }
 
