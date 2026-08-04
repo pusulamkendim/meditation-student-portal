@@ -35,7 +35,9 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-test('opens and completes an anonymous social reading with attribution', async ({ page }) => {
+test('opens and completes an anonymous social reading with attribution', async ({
+  page,
+}, testInfo) => {
   let accessPayload: Record<string, unknown> | undefined;
   await page.route(`**/v1/readings/public/${publicSlug}/access`, async (route) => {
     accessPayload = (await route.request().postDataJSON()) as Record<string, unknown>;
@@ -65,6 +67,7 @@ test('opens and completes an anonymous social reading with attribution', async (
   await page.goto(`/oku/${publicSlug}?utm_source=instagram&utm_medium=social`);
   await expect(page.getByRole('heading', { name: reading.title })).toBeVisible();
   await expect(page.getByText('Okumana hoş geldin')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('public-reading-theme.png') });
   const lessonLink = page.getByRole('link', { name: 'Bilgi al' });
   await expect(lessonLink).toBeVisible();
   const firstLessonUrl = new URL((await lessonLink.getAttribute('href'))!);

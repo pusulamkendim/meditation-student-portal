@@ -86,6 +86,27 @@ function normalizeDurations(values: number[]): number[] {
   return unique;
 }
 
+export function reconcilePublicShareDurations(
+  targetDurations: number[],
+  allowedDurations: number[],
+  defaultDurationMinutes: number,
+) {
+  const availableDurations = normalizeDurations(targetDurations);
+  const availableSet = new Set(availableDurations);
+  const retainedDurations = [...new Set(allowedDurations)]
+    .filter((duration) => availableSet.has(duration))
+    .sort((left, right) => left - right);
+  const nextAllowedDurations = retainedDurations.length
+    ? retainedDurations
+    : [availableDurations[0]!];
+  return {
+    allowedDurations: nextAllowedDurations,
+    defaultDurationMinutes: nextAllowedDurations.includes(defaultDurationMinutes)
+      ? defaultDurationMinutes
+      : nextAllowedDurations[0]!,
+  };
+}
+
 @Injectable()
 export class MeditationService {
   constructor(
@@ -173,7 +194,7 @@ export class MeditationService {
   ) {
     const current = await this.prisma.meditationType.findUnique({
       where: { id },
-      include: { openingAudio: true, closingAudio: true },
+      include: { openingAudio: true, closingAudio: true, publicShare: true },
     });
     if (!current) throw new NotFoundException('Meditasyon türü bulunamadı.');
     if (current.version !== input.expectedVersion)
@@ -236,6 +257,24 @@ export class MeditationService {
       const next = await tx.meditationType.findUniqueOrThrow({ where: { id } });
       if (durationsChanged && current.openingAudio)
         await this.createRenderJobs(tx, next, current.openingAudio.id, current.closingAudio?.id);
+      if (durationsChanged && current.publicShare) {
+        const reconciledShare = reconcilePublicShareDurations(
+          targetDurations,
+          current.publicShare.allowedDurations,
+          current.publicShare.defaultDurationMinutes,
+        );
+        const changedShare = await tx.meditationPublicShare.updateMany({
+          where: { id: current.publicShare.id, version: current.publicShare.version },
+          data: {
+            allowedDurations: reconciledShare.allowedDurations,
+            defaultDurationMinutes: reconciledShare.defaultDurationMinutes,
+            updatedByAdminId: adminId,
+            version: { increment: 1 },
+          },
+        });
+        if (changedShare.count !== 1)
+          throw new ConflictException('Paylaşım başka bir oturumda güncellendi.');
+      }
       await this.audit(tx, adminId, 'MEDITATION_TYPE_UPDATED', id, {
         title: input.title,
         level: input.level,
@@ -382,11 +421,25 @@ export class MeditationService {
     });
     if (!current) throw new NotFoundException('Herkese açık paylaşım bulunamadı.');
     const meditation = await this.publicShareMeditation(meditationTypeId);
+    const currentDurations = reconcilePublicShareDurations(
+      meditation.targetDurations,
+      current.allowedDurations,
+      current.defaultDurationMinutes,
+    );
+    const requestedDurations = input.allowedDurations ?? currentDurations.allowedDurations;
+    const requestedDefaultDuration =
+      input.defaultDurationMinutes ??
+      (requestedDurations.includes(currentDurations.defaultDurationMinutes)
+        ? currentDurations.defaultDurationMinutes
+        : requestedDurations[0]!);
     const allowedDurations = this.validatePublicDurations(
       meditation,
-      input.allowedDurations ?? current.allowedDurations,
-      input.defaultDurationMinutes ?? current.defaultDurationMinutes,
+      requestedDurations,
+      requestedDefaultDuration,
     );
+    const durationsRepaired =
+      allowedDurations.join(',') !== current.allowedDurations.join(',') ||
+      requestedDefaultDuration !== current.defaultDurationMinutes;
     const expiresAt = input.expiresAt === undefined ? current.expiresAt : input.expiresAt;
     if (
       input.status === MeditationPublicShareStatus.ACTIVE &&
@@ -401,9 +454,11 @@ export class MeditationService {
           data: {
             ...(input.slug !== undefined ? { slug: input.slug } : {}),
             ...(input.status !== undefined ? { status: input.status } : {}),
-            ...(input.allowedDurations !== undefined ? { allowedDurations } : {}),
-            ...(input.defaultDurationMinutes !== undefined
-              ? { defaultDurationMinutes: input.defaultDurationMinutes }
+            ...(input.allowedDurations !== undefined || durationsRepaired
+              ? { allowedDurations }
+              : {}),
+            ...(input.defaultDurationMinutes !== undefined || durationsRepaired
+              ? { defaultDurationMinutes: requestedDefaultDuration }
               : {}),
             ...(input.allowDurationSelection !== undefined
               ? { allowDurationSelection: input.allowDurationSelection }
@@ -419,7 +474,8 @@ export class MeditationService {
         await this.audit(tx, adminId, 'MEDITATION_PUBLIC_SHARE_UPDATED', meditationTypeId, {
           slug: input.slug,
           status: input.status,
-          allowedDurations: input.allowedDurations,
+          allowedDurations,
+          defaultDurationMinutes: requestedDefaultDuration,
         });
       });
     } catch (error) {

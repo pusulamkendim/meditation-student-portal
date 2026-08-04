@@ -191,19 +191,14 @@ kullanıcı işlemi haline getirilir.
 ## 6. Günlük Pratik Programı
 
 Varsayılan günlük program sabah ve akşam olmak üzere iki pratikten oluşur. Öğlen
-pratiği bulunmaz. Süre paket haftasına göre kademeli olarak artar:
-
-| Paket dönemi | Sabah | Akşam |
-| --- | ---: | ---: |
-| 1. hafta, gün 1-7 | 15 dakika | 15 dakika |
-| 2. hafta, gün 8-14 | 20 dakika | 20 dakika |
-| 3. hafta, gün 15-21 | 25 dakika | 25 dakika |
-| 4. hafta, gün 22-paket sonu | 30 dakika | 30 dakika |
+pratiği bulunmaz. Yeni planda her iki slot 15 dakika ve haftanın yedi günü aktif
+başlar. Admin sabah ve akşam sürelerini birbirinden bağımsız belirleyebilir,
+slotlardan birini kapatabilir ve pratiğin uygulanacağı hafta günlerini seçebilir.
+Paket haftası veya yenileme süreyi otomatik değiştirmez.
 
 Öğrenci sabah ve akşam için birer başlangıç saati seçer. Sistem saatleri
-öğrenciye tekrar göstererek açık onay alır. Paket günü başlangıç tarihine göre
-hesaplanır; 28 günden uzun aylık dönemlerin kalan günlerinde 30 dakikalık süre
-devam eder.
+öğrenciye tekrar göstererek açık onay alır. Plan kaydında her slot kendi saat ve
+süre snapshot'ını, plan ise ISO hafta günlerini (`1=Pazartesi`, `7=Pazar`) tutar.
 
 İlk program kurulurken öğrenci başlangıç saatlerini varsayılan kanalından seçer ve
 sistem doğrulama mesajından sonra ilk planı kaydeder. Daha sonraki değişiklikte
@@ -220,14 +215,9 @@ doğrudan değiştiremez. Yeni plan yalnızca admin portalındaki işlemle oluş
 | Değerlendirme isteği | 08:25 |
 
 Değerlendirme başlangıçtan değil, planlanan bitişten 10 dakika sonra istenir.
-Planlanan bitiş, ilgili paket haftasının 15/20/25/30 dakikalık süresine göre
-dinamik hesaplanır.
-
-Kademeli 15/20/25/30 dakika planı yalnızca öğrencinin ilk paketinde uygulanır.
-İkinci ve sonraki paketler, üyelik dönemleri arasında boşluk olsa bile sabah ve
-akşam 30 dakika ile başlar ve devam eder. Admin öğrenci ihtiyacına göre başlangıç
-tarihi belirlenmiş özel bir süre planı tanımlayabilir. Özel plan değişiklikleri
-sürümlenir ve audit log'a yazılır.
+Planlanan bitiş ilgili slotun admin tarafından kaydedilmiş sabit süresine göre
+hesaplanır. Plan süreleri ve aktif gün değişiklikleri sürümlenir ve audit log'a
+yazılır.
 
 Varsayılan program hafta sonu dahil her gün sabah ve akşam uygulanır. Admin her
 zaman öğrenciye özel yeni bir plan sürümü oluşturabilir; belirli günleri

@@ -1089,6 +1089,164 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     );
   });
 
+  it('PRACTICE-PLAN-06 keeps independent slot durations on selected weekdays', async () => {
+    clock.set('2026-07-15T09:00:00.000Z');
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    const subscription = await activateStudent(studentId, { withPractice: false });
+    const plan = await practice.createPlan(
+      studentId,
+      subscription.id,
+      [
+        { slotKey: 'MORNING', localTime: '12:20', active: true, durationMinutes: 15 },
+        { slotKey: 'EVENING', localTime: '21:00', active: true, durationMinutes: 25 },
+      ],
+      undefined,
+      undefined,
+      e2eAdminId,
+      [1, 3, 5],
+    );
+    expect(plan.activeWeekdays).toEqual([1, 3, 5]);
+
+    const sessions = await prisma.practiceSession.findMany({
+      where: { practicePlanId: plan.id },
+      include: { practiceSlot: true },
+      orderBy: { startAt: 'asc' },
+    });
+    expect(sessions.length).toBeGreaterThan(20);
+    expect(
+      sessions.every((session) => [1, 3, 5].includes(session.serviceDate.getUTCDay() || 7)),
+    ).toBe(true);
+    expect(
+      new Set(
+        sessions
+          .filter((session) => session.practiceSlot?.slotKey === 'MORNING')
+          .map((session) => session.durationMinutes),
+      ),
+    ).toEqual(new Set([15]));
+    expect(
+      new Set(
+        sessions
+          .filter((session) => session.practiceSlot?.slotKey === 'EVENING')
+          .map((session) => session.durationMinutes),
+      ),
+    ).toEqual(new Set([25]));
+  });
+
+  it('SUBSCRIPTION-ADMIN-01 extends the existing practice plan without duplicating history', async () => {
+    const current = await createTwoSlotPracticePlan();
+    const subscription = await prisma.subscriptionPeriod.findUniqueOrThrow({
+      where: { id: current.subscriptionId },
+    });
+    const beforeCount = await prisma.practiceSession.count({
+      where: { practicePlanId: current.planId },
+    });
+
+    const result = await practice.updateSubscriptionEnd(
+      subscription.id,
+      new Date('2026-08-22T00:00:00.000Z'),
+      subscription.version,
+      'E2E üyelik uzatma',
+      e2eAdminId,
+    );
+
+    expect(result).toMatchObject({
+      endExclusive: new Date('2026-08-22T00:00:00.000Z'),
+      addedSessionCount: 14,
+      suppressedSessionCount: 0,
+    });
+    expect(await prisma.practiceSession.count({ where: { practicePlanId: current.planId } })).toBe(
+      beforeCount + 14,
+    );
+    expect(
+      await prisma.practiceSession.count({
+        where: {
+          practicePlanId: current.planId,
+          serviceDate: {
+            gte: new Date('2026-08-15T00:00:00.000Z'),
+            lt: new Date('2026-08-22T00:00:00.000Z'),
+          },
+          durationMinutes: 15,
+        },
+      }),
+    ).toBe(14);
+  });
+
+  it('SUBSCRIPTION-ADMIN-02 shortens only future non-terminal practices', async () => {
+    const current = await createTwoSlotPracticePlan();
+    const subscription = await prisma.subscriptionPeriod.findUniqueOrThrow({
+      where: { id: current.subscriptionId },
+    });
+    const terminal = await prisma.practiceSession.findFirstOrThrow({
+      where: {
+        practicePlanId: current.planId,
+        serviceDate: { gte: new Date('2026-08-01T00:00:00.000Z') },
+      },
+      orderBy: { startAt: 'asc' },
+    });
+    await prisma.practiceSession.update({
+      where: { id: terminal.id },
+      data: { status: 'COMPLETED' },
+    });
+
+    const result = await practice.updateSubscriptionEnd(
+      subscription.id,
+      new Date('2026-08-01T00:00:00.000Z'),
+      subscription.version,
+      'E2E üyelik kısaltma',
+      e2eAdminId,
+    );
+    expect(result.suppressedSessionCount).toBeGreaterThan(0);
+    expect(
+      await prisma.practiceSession.findUniqueOrThrow({ where: { id: terminal.id } }),
+    ).toMatchObject({ status: 'COMPLETED' });
+    expect(
+      await prisma.practiceSession.count({
+        where: {
+          practicePlanId: current.planId,
+          serviceDate: { gte: new Date('2026-08-01T00:00:00.000Z') },
+          status: { in: ['SCHEDULED', 'REMINDED'] },
+        },
+      }),
+    ).toBe(0);
+  });
+
+  it('SUBSCRIPTION-ADMIN-03 refuses to strand a scheduled meeting', async () => {
+    clock.set('2026-07-15T09:00:00.000Z');
+    const current = scenario();
+    const { studentId } = await complete(current.senderId);
+    const subscription = await activateStudent(studentId, { withPractice: false });
+    await prisma.meetingSeries.create({
+      data: {
+        studentId,
+        subscriptionPeriodId: subscription.id,
+        timezone: 'Europe/Istanbul',
+        recurrenceRule: 'FREQ=WEEKLY;COUNT=1',
+        meetings: {
+          create: {
+            occurrenceNumber: 1,
+            startsAt: new Date('2026-08-10T10:00:00.000Z'),
+            endsAt: new Date('2026-08-10T11:00:00.000Z'),
+            originalStartsAt: new Date('2026-08-10T10:00:00.000Z'),
+          },
+        },
+      },
+    });
+
+    await expect(
+      practice.updateSubscriptionEnd(
+        subscription.id,
+        new Date('2026-08-01T00:00:00.000Z'),
+        subscription.version,
+        'E2E görüşme sınırı',
+        e2eAdminId,
+      ),
+    ).rejects.toThrow('görüşmeleri önce yeniden planlayın');
+    expect(
+      await prisma.subscriptionPeriod.findUniqueOrThrow({ where: { id: subscription.id } }),
+    ).toMatchObject({ endExclusive: subscription.endExclusive, version: subscription.version });
+  });
+
   it('MEETING-ADMIN-01 observes series creation and initial schedule-message delivery', async () => {
     const current = await createMeetingStage();
     expect(await prisma.weeklyMeeting.count({ where: { meetingSeriesId: current.seriesId } })).toBe(
@@ -1696,8 +1854,9 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     const planConfirmation =
       collector.sent.find((message) => message.intentId === planConfirmationIntent.id)?.content ??
       '';
-    expect(planConfirmation).toContain('her pratik 15 dakika');
-    expect(planConfirmation).not.toContain('her pratik 30 dakika');
+    expect(planConfirmation).toContain('Sabah 12:20 (15 dakika)');
+    expect(planConfirmation).toContain('Pazartesi');
+    expect(planConfirmation).not.toContain('30 dakika');
     const planReply = await sendPracticeResponse(current.senderId, 'ONAYLIYORUM');
     const planReplyRoute = await prisma.outboxEvent.findFirstOrThrow({
       where: { aggregateId: planReply.inboxId, eventType: 'MESSAGE_RECEIVED' },

@@ -1412,7 +1412,7 @@ rolleri ayrıca tanımlanır.
 
 - Tüm durum makineleri
 - Paket tarih ve çakışma kuralları
-- 15/20/25/30 dakika hesaplama
+- Slot bazli sabit pratik suresi ve secili hafta gunleri
 - Yerel gün sonu ve saat dilimi hesapları
 - BCP 47 locale resolution, ana dil/`tr-TR` fallback ve eksik protected çeviri
 - Deterministik feature flag hashing, precedence, expiry ve güvenli default
@@ -1821,13 +1821,14 @@ onayıyla aktive olur; AI kapalıyken de temel akış tamamlanır.
 
 ### M5 - Pratik Programı
 
-**Durum:** Tamamlandı - 11 Temmuz 2026. Sürümlü planlar, 15/20/25/30 dakika
-kuralı, tek/çift slot, admin override, paket aktivasyonunda session üretimi,
-reminder/check-in/day-close lifecycle işleri, pause/cancel/restore ve yönetim
-ekranı uygulandı. Zaman kararları core `FakeClock` testleriyle doğrulandı.
+**Durum:** Tamamlandı - 4 Ağustos 2026. Sürümlü planlar, sabah ve akşam için
+bağımsız sabit süreler, seçilebilir hafta günleri, tek/çift slot, paket
+aktivasyonunda session üretimi, reminder/check-in lifecycle işleri,
+pause/cancel/restore ve yönetim ekranı uygulandı. Paket haftasına bağlı otomatik
+süre artışı kaldırıldı. Zaman kararları core `FakeClock` testleriyle doğrulandı.
 
 - Sürümlü plan
-- 15/20/25/30 kuralları, admin özel süresi ve tek/çift günlük pratik
+- Slot bazlı süreler, seçilebilir hafta günleri ve tek/çift günlük pratik
 - Kesin timestamp'li reminder/check-in/day-close işleri
 - Completed/skipped/missed/cancelled/suppressed ve reply-context correlation
 - Pause/resume/program change

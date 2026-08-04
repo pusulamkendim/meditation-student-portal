@@ -345,6 +345,7 @@
   background: var(--color-surface);
   box-shadow: var(--shadow-md);
   font-size: 0.875rem;
+  pointer-events: none;
 }
 .ui-toast--success {
   border-color: #b8d8c9;
@@ -359,6 +360,9 @@
   color: var(--color-ink-muted);
   font-size: 1.25rem;
   cursor: pointer;
+}
+.ui-toast button {
+  pointer-events: auto;
 }
 .ui-modal-backdrop {
   position: fixed;

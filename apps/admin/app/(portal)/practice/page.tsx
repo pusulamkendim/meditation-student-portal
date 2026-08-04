@@ -26,6 +26,10 @@ import {
   XCircle,
 } from 'lucide-react';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  allPracticeWeekdays,
+  PracticeWeekdaySelector,
+} from '../../_components/practice-weekday-selector';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -48,7 +52,14 @@ type Plan = {
   subscriptionPeriodId: string;
   status: string;
   revision: number;
-  slots: Array<{ slotKey: string; localTime: string; active: boolean }>;
+  activeWeekdays: number[];
+  slots: Array<{
+    slotKey: string;
+    localTime: string;
+    active: boolean;
+    durationMinutes: number;
+    meditationType?: { id: string; title: string };
+  }>;
 };
 type StudentOption = { id: string; fullName?: string; status: string };
 
@@ -99,6 +110,7 @@ export default function PracticePage() {
   const [practiceDialog, setPracticeDialog] = useState<'reschedule' | 'cancel' | 'restore'>();
   const [practiceDate, setPracticeDate] = useState('');
   const [practiceReason, setPracticeReason] = useState('');
+  const [activeWeekdays, setActiveWeekdays] = useState<number[]>([...allPracticeWeekdays]);
 
   const load = useCallback(async () => {
     setError(undefined);
@@ -206,6 +218,7 @@ export default function PracticePage() {
       };
       setStudentId(id);
       setPlan(value.plan ?? undefined);
+      setActiveWeekdays(value.plan?.activeWeekdays ?? [...allPracticeWeekdays]);
       setSubscriptionId(value.plan?.subscriptionPeriodId ?? value.subscriptions[0]?.id ?? '');
       if (!value.plan) setNotice('Bu öğrenci için aktif pratik planı bulunmuyor.');
     } catch (reason) {
@@ -262,14 +275,20 @@ export default function PracticePage() {
           slotKey: 'MORNING',
           localTime: form.get('morning'),
           active: form.get('morningActive') === 'on',
+          durationMinutes: Number(form.get('morningDuration')),
+          meditationTypeId:
+            plan?.slots.find((slot) => slot.slotKey === 'MORNING')?.meditationType?.id ?? null,
         },
         {
           slotKey: 'EVENING',
           localTime: form.get('evening'),
           active: form.get('eveningActive') === 'on',
+          durationMinutes: Number(form.get('eveningDuration')),
+          meditationTypeId:
+            plan?.slots.find((slot) => slot.slotKey === 'EVENING')?.meditationType?.id ?? null,
         },
       ],
-      durationOverride: form.get('duration') ? Number(form.get('duration')) : undefined,
+      activeWeekdays,
     });
     await loadPlanFor(studentId);
   }
@@ -504,6 +523,18 @@ export default function PracticePage() {
                         plan?.slots.find((slot) => slot.slotKey === 'MORNING')?.localTime ?? '08:00'
                       }
                     />
+                    <TextField
+                      name="morningDuration"
+                      label="Sabah süresi (dk)"
+                      type="number"
+                      min="1"
+                      max="180"
+                      required
+                      defaultValue={
+                        plan?.slots.find((slot) => slot.slotKey === 'MORNING')?.durationMinutes ??
+                        15
+                      }
+                    />
                     <label className="check-field">
                       <input
                         type="checkbox"
@@ -524,12 +555,21 @@ export default function PracticePage() {
                       }
                     />
                     <TextField
-                      name="duration"
-                      label="Özel süre (dk)"
+                      name="eveningDuration"
+                      label="Akşam süresi (dk)"
                       type="number"
                       min="1"
                       max="180"
-                      placeholder="Kademeli plan"
+                      required
+                      defaultValue={
+                        plan?.slots.find((slot) => slot.slotKey === 'EVENING')?.durationMinutes ??
+                        15
+                      }
+                    />
+                    <PracticeWeekdaySelector
+                      value={activeWeekdays}
+                      onChange={setActiveWeekdays}
+                      disabled={busy}
                     />
                     <Button type="submit" loading={busy}>
                       <CheckCircle2 aria-hidden="true" /> Yeni sürümü kaydet

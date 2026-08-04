@@ -15,6 +15,7 @@ const slots = z
       slotKey: z.enum(['MORNING', 'EVENING']),
       localTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
       active: z.boolean(),
+      durationMinutes: z.number().int().min(1).max(180).optional(),
       meditationTypeId: z.string().uuid().nullable().optional(),
     }),
   )
@@ -140,6 +141,7 @@ export class PracticeController {
       .object({
         subscriptionId: z.string().uuid(),
         slots,
+        activeWeekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
         effectiveFrom: z.coerce.date().optional(),
         durationOverride: z.number().int().min(1).max(180).optional(),
       })
@@ -151,6 +153,7 @@ export class PracticeController {
       value.effectiveFrom,
       value.durationOverride,
       request.admin!.id,
+      value.activeWeekdays,
     );
   }
   @Post('practice/students/:id/program')
@@ -160,6 +163,7 @@ export class PracticeController {
       .object({
         subscriptionId: z.string().uuid(),
         slots,
+        activeWeekdays: z.array(z.number().int().min(1).max(7)).min(1).max(7).optional(),
         durationOverride: z.number().int().min(1).max(180).optional(),
       })
       .parse(body);
@@ -169,6 +173,30 @@ export class PracticeController {
       value.slots,
       undefined,
       value.durationOverride,
+      undefined,
+      value.activeWeekdays,
+    );
+  }
+  @Patch('admin/subscriptions/:id/end-date')
+  @UseGuards(AdminSessionGuard, AdminCsrfGuard)
+  updateSubscriptionEnd(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const value = z
+      .object({
+        endExclusive: z.coerce.date(),
+        expectedVersion: z.number().int().positive(),
+        reason: z.string().trim().min(1).max(500),
+      })
+      .parse(body);
+    return this.practice.updateSubscriptionEnd(
+      id,
+      value.endExclusive,
+      value.expectedVersion,
+      value.reason,
+      request.admin!.id,
     );
   }
   @Post('admin/students/:id/practice/pause') @UseGuards(AdminSessionGuard, AdminCsrfGuard) pause(

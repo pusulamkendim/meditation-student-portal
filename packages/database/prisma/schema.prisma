@@ -611,6 +611,7 @@ model PracticePlan {
   revision             Int
   effectiveFrom        DateTime           @map("effective_from")
   effectiveUntil       DateTime?          @map("effective_until")
+  activeWeekdays       Int[]              @default([1, 2, 3, 4, 5, 6, 7]) @map("active_weekdays")
   version              Int                @default(1)
   createdAt            DateTime           @default(now()) @map("created_at")
   updatedAt            DateTime           @updatedAt @map("updated_at")

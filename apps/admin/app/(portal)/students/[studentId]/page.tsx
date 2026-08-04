@@ -38,6 +38,11 @@ import {
 import { useParams } from 'next/navigation';
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  allPracticeWeekdays,
+  formatPracticeWeekdays,
+  PracticeWeekdaySelector,
+} from '../../../_components/practice-weekday-selector';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -49,6 +54,7 @@ type Subscription = {
   priceMinor: string;
   currency: string;
   credits: number;
+  version: number;
 };
 
 type PracticeSession = {
@@ -135,6 +141,7 @@ type Detail = {
     revision: number;
     effectiveFrom: string;
     effectiveUntil?: string;
+    activeWeekdays: number[];
     slots: Array<{
       id: string;
       slotKey: string;
@@ -175,7 +182,9 @@ type PracticePlanForm = {
   eveningActive: boolean;
   morningMeditationTypeId: string;
   eveningMeditationTypeId: string;
-  duration: string;
+  morningDuration: string;
+  eveningDuration: string;
+  activeWeekdays: number[];
 };
 
 type Channel = {
@@ -355,6 +364,26 @@ function channelLabel(channel?: Channel) {
   return `${channel.type === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}${channel.identifier ? ` · ${channel.identifier}` : ''}`;
 }
 
+function preferredSubscription(subscriptions: Subscription[]) {
+  return (
+    subscriptions.find((subscription) => subscription.status === 'ACTIVE') ??
+    subscriptions.find((subscription) => subscription.status === 'SCHEDULED') ??
+    subscriptions[0]
+  );
+}
+
+function addUtcDays(value: string, days: number) {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function minimumSubscriptionEnd(subscription: Subscription) {
+  const afterStart = addUtcDays(subscription.startDate, 1);
+  const tomorrow = addUtcDays(new Date().toISOString(), 1);
+  return afterStart > tomorrow ? afterStart : tomorrow;
+}
+
 export default function StudentDetailPage() {
   const { studentId } = useParams<{ studentId: string }>();
   const [data, setData] = useState<Detail>();
@@ -370,7 +399,9 @@ export default function StudentDetailPage() {
     eveningActive: true,
     morningMeditationTypeId: '',
     eveningMeditationTypeId: '',
-    duration: '30',
+    morningDuration: '15',
+    eveningDuration: '15',
+    activeWeekdays: [...allPracticeWeekdays],
   });
   const [meditationOptions, setMeditationOptions] = useState<MeditationOption[]>([]);
   const [practiceAction, setPracticeAction] = useState<'pause' | 'restore'>();
@@ -396,6 +427,11 @@ export default function StudentDetailPage() {
   const [noteDialog, setNoteDialog] = useState<'create' | 'edit' | 'delete'>();
   const [selectedNote, setSelectedNote] = useState<StudentNote>();
   const [noteContent, setNoteContent] = useState('');
+  const [subscriptionDialog, setSubscriptionDialog] = useState(false);
+  const [subscriptionEndDate, setSubscriptionEndDate] = useState('');
+  const [subscriptionReason, setSubscriptionReason] = useState(
+    'Üyelik dönemi admin tarafından güncellendi.',
+  );
 
   const load = useCallback(async () => {
     try {
@@ -412,7 +448,13 @@ export default function StudentDetailPage() {
           slots.find((slot) => slot.slotKey === 'MORNING')?.meditationType?.id ?? '',
         eveningMeditationTypeId:
           slots.find((slot) => slot.slotKey === 'EVENING')?.meditationType?.id ?? '',
-        duration: String(slots.find((slot) => slot.active)?.durationMinutes ?? 30),
+        morningDuration: String(
+          slots.find((slot) => slot.slotKey === 'MORNING')?.durationMinutes ?? 15,
+        ),
+        eveningDuration: String(
+          slots.find((slot) => slot.slotKey === 'EVENING')?.durationMinutes ?? 15,
+        ),
+        activeWeekdays: value.practicePlan?.activeWeekdays ?? [...allPracticeWeekdays],
       });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Öğrenci yüklenemedi');
@@ -483,9 +525,7 @@ export default function StudentDetailPage() {
 
   async function savePlan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const subscription = data?.subscriptions.find(
-      (item) => item.status === 'ACTIVE' || item.status === 'SCHEDULED',
-    );
+    const subscription = data ? preferredSubscription(data.subscriptions) : undefined;
     if (!subscription) {
       setNotice('Pratik planı için aktif veya planlanmış bir üyelik gerekiyor.');
       return;
@@ -502,21 +542,56 @@ export default function StudentDetailPage() {
               slotKey: 'MORNING',
               localTime: planForm.morning,
               active: planForm.morningActive,
+              durationMinutes: Number(planForm.morningDuration),
               meditationTypeId: planForm.morningMeditationTypeId || null,
             },
             {
               slotKey: 'EVENING',
               localTime: planForm.evening,
               active: planForm.eveningActive,
+              durationMinutes: Number(planForm.eveningDuration),
               meditationTypeId: planForm.eveningMeditationTypeId || null,
             },
           ],
-          durationOverride: Number(planForm.duration),
+          activeWeekdays: planForm.activeWeekdays,
         }),
       },
       'Pratik planı güncellendi.',
     );
     setPlanEditing(false);
+  }
+
+  function openSubscriptionDialog() {
+    const subscription = data ? preferredSubscription(data.subscriptions) : undefined;
+    if (!subscription) return;
+    setSubscriptionEndDate(subscription.endExclusive.slice(0, 10));
+    setSubscriptionReason('Üyelik dönemi admin tarafından güncellendi.');
+    setSubscriptionDialog(true);
+  }
+
+  async function submitSubscriptionEnd(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const subscription = data ? preferredSubscription(data.subscriptions) : undefined;
+    if (!subscription || !subscriptionEndDate || !subscriptionReason.trim()) return;
+    try {
+      setBusy(true);
+      await requestJson(`/v1/admin/subscriptions/${subscription.id}/end-date`, {
+        method: 'PATCH',
+        headers: csrfHeaders(),
+        body: JSON.stringify({
+          endExclusive: subscriptionEndDate,
+          expectedVersion: subscription.version,
+          reason: subscriptionReason.trim(),
+        }),
+      });
+      setNotice('Üyelik bitiş tarihi güncellendi.');
+      setSubscriptionDialog(false);
+      await load();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Üyelik güncellenemedi.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitPracticeAction(event: FormEvent<HTMLFormElement>) {
@@ -594,9 +669,7 @@ export default function StudentDetailPage() {
   async function submitMeeting(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (meetingDialog === 'create') {
-      const subscription = data?.subscriptions.find(
-        (item) => item.status === 'ACTIVE' || item.status === 'SCHEDULED',
-      );
+      const subscription = data ? preferredSubscription(data.subscriptions) : undefined;
       if (!subscription || !meetingDate) return;
       await runMutation(
         `/v1/admin/subscriptions/${subscription.id}/meeting-series`,
@@ -816,6 +889,8 @@ export default function StudentDetailPage() {
       </main>
     );
 
+  const currentSubscription = preferredSubscription(data.subscriptions);
+
   return (
     <main className="content">
       <a className="back-link" href="/students">
@@ -838,9 +913,7 @@ export default function StudentDetailPage() {
         </div>
         <div>
           <span>Paket</span>
-          <strong>
-            {data.subscriptions[0] ? label(data.subscriptions[0].status) : 'Paket yok'}
-          </strong>
+          <strong>{currentSubscription ? label(currentSubscription.status) : 'Paket yok'}</strong>
         </div>
         <div>
           <span>Sonraki görüşme</span>
@@ -873,7 +946,11 @@ export default function StudentDetailPage() {
       </nav>
 
       {activeTab === 'overview' ? (
-        <Overview data={data} onOpenHandoffs={() => setActiveTab('handoffs')} />
+        <Overview
+          data={data}
+          onOpenHandoffs={() => setActiveTab('handoffs')}
+          onEditSubscription={openSubscriptionDialog}
+        />
       ) : null}
       {activeTab === 'practices' ? (
         <PracticesTab
@@ -954,6 +1031,50 @@ export default function StudentDetailPage() {
         <Toast tone="info" onDismiss={() => setNotice(undefined)}>
           {notice}
         </Toast>
+      ) : null}
+
+      {subscriptionDialog && currentSubscription ? (
+        <Modal
+          title="Üyelik bitiş tarihini değiştir"
+          description="Yeni tarih gelecek pratik takvimini günceller. Geçmiş kayıtlar korunur."
+          onClose={() => setSubscriptionDialog(false)}
+          actions={
+            <>
+              <Button variant="ghost" onClick={() => setSubscriptionDialog(false)}>
+                Vazgeç
+              </Button>
+              <Button form="subscription-end-form" type="submit" loading={busy}>
+                Tarihi güncelle
+              </Button>
+            </>
+          }
+        >
+          <form
+            id="subscription-end-form"
+            className="student-modal-form"
+            onSubmit={submitSubscriptionEnd}
+          >
+            <label>
+              <span>Üyelik bitiş tarihi</span>
+              <input
+                required
+                type="date"
+                min={minimumSubscriptionEnd(currentSubscription)}
+                value={subscriptionEndDate}
+                onChange={(event) => setSubscriptionEndDate(event.target.value)}
+              />
+            </label>
+            <label>
+              <span>Değişiklik nedeni</span>
+              <textarea
+                required
+                maxLength={500}
+                value={subscriptionReason}
+                onChange={(event) => setSubscriptionReason(event.target.value)}
+              />
+            </label>
+          </form>
+        </Modal>
       ) : null}
 
       {practiceAction ? (
@@ -1208,8 +1329,16 @@ export default function StudentDetailPage() {
   );
 }
 
-function Overview({ data, onOpenHandoffs }: { data: Detail; onOpenHandoffs: () => void }) {
-  const latestSubscription = data.subscriptions[0];
+function Overview({
+  data,
+  onOpenHandoffs,
+  onEditSubscription,
+}: {
+  data: Detail;
+  onOpenHandoffs: () => void;
+  onEditSubscription: () => void;
+}) {
+  const latestSubscription = preferredSubscription(data.subscriptions);
   const historySessions = data.practice.sessions
     .filter((session) => ['COMPLETED', 'MISSED', 'SKIPPED'].includes(session.status))
     .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
@@ -1257,9 +1386,16 @@ function Overview({ data, onOpenHandoffs }: { data: Detail; onOpenHandoffs: () =
               <h2>Aktif paket</h2>
             </div>
             {latestSubscription ? (
-              <Badge tone={statusTone[latestSubscription.status] ?? 'neutral'}>
-                {label(latestSubscription.status)}
-              </Badge>
+              <div className="student-action-row">
+                <Badge tone={statusTone[latestSubscription.status] ?? 'neutral'}>
+                  {label(latestSubscription.status)}
+                </Badge>
+                {['ACTIVE', 'SCHEDULED'].includes(latestSubscription.status) ? (
+                  <Button variant="ghost" size="sm" onClick={onEditSubscription}>
+                    <Pencil aria-hidden="true" /> Bitiş tarihini değiştir
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
           </div>
           {latestSubscription ? (
@@ -1422,7 +1558,7 @@ function PracticesTab({
         <div>
           <span className="eyebrow">GÜNLÜK PROGRAM</span>
           <h2>Pratik planı</h2>
-          <p>Sabah ve akşam saatlerini, süreyi ve planın durumunu buradan güncelleyin.</p>
+          <p>Sabah ve akşam saatlerini, sürelerini ve planın durumunu buradan güncelleyin.</p>
         </div>
         <div className="student-action-row">
           {plan ? (
@@ -1461,6 +1597,18 @@ function PracticesTab({
               value={planForm.morning}
               onChange={(event) => setPlanForm({ ...planForm, morning: event.target.value })}
             />
+            <input
+              aria-label="Sabah süresi"
+              type="number"
+              min="1"
+              max="180"
+              required={planForm.morningActive}
+              disabled={!planForm.morningActive}
+              value={planForm.morningDuration}
+              onChange={(event) =>
+                setPlanForm({ ...planForm, morningDuration: event.target.value })
+              }
+            />
             <select
               aria-label="Sabah meditasyonu"
               disabled={!planForm.morningActive}
@@ -1496,6 +1644,18 @@ function PracticesTab({
               value={planForm.evening}
               onChange={(event) => setPlanForm({ ...planForm, evening: event.target.value })}
             />
+            <input
+              aria-label="Akşam süresi"
+              type="number"
+              min="1"
+              max="180"
+              required={planForm.eveningActive}
+              disabled={!planForm.eveningActive}
+              value={planForm.eveningDuration}
+              onChange={(event) =>
+                setPlanForm({ ...planForm, eveningDuration: event.target.value })
+              }
+            />
             <select
               aria-label="Akşam meditasyonu"
               disabled={!planForm.eveningActive}
@@ -1522,17 +1682,10 @@ function PracticesTab({
               Aktif
             </span>
           </label>
-          <label>
-            <span>Süre (dk)</span>
-            <input
-              type="number"
-              min="1"
-              max="180"
-              required
-              value={planForm.duration}
-              onChange={(event) => setPlanForm({ ...planForm, duration: event.target.value })}
-            />
-          </label>
+          <PracticeWeekdaySelector
+            value={planForm.activeWeekdays}
+            onChange={(activeWeekdays) => setPlanForm({ ...planForm, activeWeekdays })}
+          />
           <Button type="submit" loading={busy}>
             <Check aria-hidden="true" />
             Değişiklikleri yayınla
@@ -1549,6 +1702,11 @@ function PracticesTab({
               </small>
             </div>
           ))}
+          <div>
+            <span>Aktif günler</span>
+            <strong>{formatPracticeWeekdays(plan.activeWeekdays)}</strong>
+            <small>{plan.activeWeekdays.length} gün</small>
+          </div>
           <div>
             <span>Revizyon</span>
             <strong>v{plan.revision}</strong>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sakin Zihin · Hub Prototipi</title>
+<meta name="robots" content="noindex" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;750&family=Lora:ital,wght@0,400;0,500;1,400;1,500&display=swap');
+
+  :root{
+    --ink:#0b1a18;
+    --scene:#061819;
+    --ivory:#f3eadb;
+    --ivory-soft:#f1e9db;
+    --muted:#cbbfac;
+    --gold:#c99551;
+    --gold-2:#d6a25e;
+    --gold-light:#e5bb76;
+    --frame:rgb(241 233 219 / 13%);
+    --line:rgb(241 233 219 / 22%);
+    --card-1:rgb(7 24 24 / 92%);
+    --card-2:rgb(13 28 27 / 82%);
+    --serif:'Lora','Didot','Bodoni 72',Georgia,'Times New Roman',serif;
+    --sans:'Inter','SF Pro Text',system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--ink);color:var(--ivory);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+
+  /* ---- immersive stage ---- */
+  .stage{position:relative;min-height:100svh;overflow:hidden;display:grid;grid-template-rows:auto 1fr auto;isolation:isolate}
+  .ambient{position:absolute;inset:0;z-index:-2}
+  .ambient .glow1{position:absolute;inset:auto;top:-22vh;left:-18vw;width:60vw;height:62vh;border-radius:50%;
+    background:radial-gradient(closest-side,rgb(133 101 50 / 34%),transparent);filter:blur(20px)}
+  .ambient .glow2{position:absolute;bottom:-28vh;right:-16vw;width:58vw;height:60vh;border-radius:50%;
+    background:radial-gradient(closest-side,rgb(214 162 94 / 12%),transparent);filter:blur(18px)}
+  .ambient .base{position:absolute;inset:0;
+    background:radial-gradient(120% 90% at 50% 0%,rgb(12 38 39 / 55%) 0%,var(--ink) 62%)}
+  .amber{position:absolute;z-index:1;top:-30vh;left:-30vw;width:min(340px,40vw);height:170vh;pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgb(214 162 94 / 16%) 30%,rgb(214 162 94 / 52%) 50%,rgb(214 162 94 / 16%) 70%,transparent);
+    filter:blur(46px);mix-blend-mode:screen;opacity:.5;animation:amberFlow 19s ease-in-out infinite}
+  .grain{position:absolute;inset:0;z-index:2;pointer-events:none;opacity:.05;mix-blend-mode:screen;animation:grain .9s steps(2) infinite;
+    background-image:radial-gradient(rgb(255 255 255 / 45%) .6px,transparent .8px);background-size:8px 8px}
+  @keyframes amberFlow{0%,100%{transform:translateX(-6%) rotate(.5deg)}50%{transform:translateX(6%) rotate(-.5deg)}}
+  @keyframes grain{0%{transform:translate(0,0)}50%{transform:translate(-1px,1px)}100%{transform:translate(1px,-1px)}}
+
+  .frame{position:absolute;inset:18px;z-index:3;pointer-events:none;border:1px solid var(--frame);border-radius:34px}
+
+  /* ---- header ---- */
+  .head{position:relative;z-index:4;display:flex;align-items:center;justify-content:space-between;gap:16px;
+    padding:26px 42px 0}
+  .brand{display:inline-flex;align-items:center;gap:9px;color:var(--ivory);font-size:.74rem;font-weight:760;letter-spacing:0;text-decoration:none;cursor:pointer}
+  .brand svg{width:19px;height:19px;color:var(--gold-2)}
+  nav.nav{display:flex;gap:6px;font-size:.7rem;font-weight:700}
+  nav.nav a{color:var(--muted);text-decoration:none;padding:8px 12px;border-radius:999px;border:1px solid transparent;transition:color .2s,border-color .2s,background .2s;cursor:pointer}
+  nav.nav a:hover{color:var(--ivory);border-color:var(--line);background:rgb(241 233 219 / 5%)}
+  nav.nav a.is-active{color:var(--gold-2);border-color:rgb(214 162 94 / 38%);background:rgb(214 162 94 / 10%)}
+
+  /* ---- main ---- */
+  main{position:relative;z-index:4;width:min(1080px,calc(100% - 84px));margin:0 auto;padding:clamp(28px,6vh,64px) 0 clamp(30px,5vh,54px)}
+
+  .hero{text-align:center;display:grid;justify-items:center;gap:clamp(12px,2.4vh,22px);padding-bottom:clamp(30px,6vh,56px)}
+  .kicker{color:var(--gold-2);font-size:.62rem;font-weight:760;letter-spacing:.04em;text-transform:uppercase;display:inline-flex;align-items:center;gap:8px}
+  .kicker::before,.kicker::after{content:"";width:26px;height:1px;background:linear-gradient(90deg,transparent,var(--gold-2))}
+  .kicker::after{background:linear-gradient(270deg,transparent,var(--gold-2))}
+  .hero h1{margin:0;font-family:var(--serif);font-weight:400;line-height:1.06;letter-spacing:0;
+    font-size:clamp(2.2rem,6vw,4.1rem);max-width:18ch;text-wrap:balance}
+  .hero p{margin:0;max-width:560px;color:var(--muted);font-size:clamp(.8rem,1.5vw,.96rem);line-height:1.6}
+  .hero-cta{display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:6px}
+
+  button,.btn{font-family:var(--sans);font-weight:700;cursor:pointer;border-radius:999px;transition:transform .2s,filter .2s,opacity .2s}
+  button:hover,.btn:hover{filter:brightness(1.06)}
+.btn-gold{display:inline-flex;align-items:center;gap:8px;min-height:52px;padding:0 24px;border-radius:999px;
+    border:1px solid #bd8847;background:linear-gradient(105deg,#ad7b3d,var(--gold-light, #e5bb76) 50%,#d29b53);color:var(--ink);
+    font-size:.86rem;font-weight:750;box-shadow:inset 0 1px rgb(255 255 255 / 30%),0 12px 28px rgb(0 0 0 / 22%);text-decoration:none}
+  .btn-gold svg{width:16px;height:16px}
+  .btn-ghost{display:inline-flex;align-items:center;gap:8px;min-height:46px;padding:0 20px;border-radius:999px;
+    border:1px solid var(--line);background:rgb(6 24 25 / 40%);color:var(--ivory);font-size:.8rem}
+  .btn-ghost svg{width:15px}
+
+  /* ---- program card ---- */
+  .program{width:min(100%,640px);margin:0 auto;box-sizing:border-box;display:grid;gap:18px;padding:22px;
+    border:1px solid rgb(214 162 94 / 30%);border-left:4px solid var(--gold-2);border-radius:24px;
+    background:linear-gradient(120deg,var(--card-1),var(--card-2));box-shadow:0 18px 50px rgb(0 0 0 / 22%)}
+  .program .head2{display:grid;gap:6px}
+  .program .kicker-tag{color:var(--gold-2);font-size:.62rem;font-weight:760;text-transform:uppercase;letter-spacing:.04em}
+  .program h2{margin:0;font-family:var(--serif);font-weight:500;font-size:1.35rem;letter-spacing:0}
+  .program .sub{margin:0;color:var(--muted);font-size:.78rem;line-height:1.5}
+  .dots{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .dot{width:10px;height:10px;border-radius:50%;background:rgb(241 233 219 / 18%);transition:all .3s}
+  .dot.on{background:var(--gold-2);box-shadow:0 0 10px rgb(214 162 94 / 60%)}
+  .dot.today{box-shadow:0 0 0 5px rgb(214 162 94 / 14%),0 0 12px rgb(214 162 94 / 70%)}
+  .program .row{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+  .now{color:var(--muted);font-size:.68rem;font-weight:700}
+  .now b{color:var(--gold-2);font-weight:760;font-family:var(--serif)}
+
+  /* ---- section helper ---- */
+  .section{margin-top:clamp(30px,5vh,48px)}
+  .sec-head{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+  .sec-head h3{margin:0;font-family:var(--serif);font-weight:500;font-size:1.14rem;letter-spacing:0}
+  .sec-head a{color:var(--gold-2);font-size:.68rem;font-weight:750;text-decoration:none;display:inline-flex;align-items:center;gap:6px}
+  .sec-head a:hover{text-decoration:underline}
+
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(215px,1fr))}
+
+  .card{position:relative;box-sizing:border-box;display:grid;gap:12px;padding:18px;border-radius:22px;
+    border:1px solid var(--frame);background:linear-gradient(145deg,var(--card-1),var(--card-2));
+    transition:border-color .22s,transform .22s,box-shadow .22s;text-decoration:none;color:inherit}
+  .card:hover{border-color:rgb(214 162 94 / 34%);box-shadow:0 16px 40px rgb(0 0 0 / 28%);transform:translateY(-2px)}
+  .card .meta{display:flex;align-items:center;gap:8px;font-size:.62rem;font-weight:760;text-transform:uppercase;letter-spacing:.04em;color:var(--gold-2);min-height:14px}
+  .card .title{margin:0;font-family:var(--serif);font-weight:500;font-size:1.02rem;line-height:1.28;letter-spacing:0}
+  .card .det{display:flex;align-items:center;gap:8px;color:var(--muted);font-size:.7rem}
+  .card .det svg{width:13px;height:13px;color:var(--gold-2)}
+  .track{height:3px;border-radius:999px;background:rgb(241 233 219 / 14%);overflow:hidden}
+  .track i{display:block;height:100%;background:linear-gradient(90deg,var(--gold-2),var(--gold-light,var(--gold-2)));border-radius:999px}
+  .card-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .chip{font-size:.62rem;font-weight:760;padding:5px 10px;border-radius:999px;border:1px solid var(--line);color:var(--ivory)}
+  .chip.guided{border-color:rgb(214 162 94 / 40%);color:var(--gold-2);background:rgb(214 162 94 / 10%)}
+  .go{width:34px;height:34px;display:grid;place-items:center;border-radius:50%;background:var(--gold-2);color:var(--ink);transition:transform .2s}
+  .card:hover .go{transform:scale(1.08)}
+  .play-num{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;
+    border:1px solid rgb(214 162 94 / 48%);background:rgb(214 162 94 / 10%);color:var(--gold-2)}
+  .play-num.on{border-color:var(--gold-2);background:linear-gradient(105deg,#ad7b3d,var(--gold-light) 52%,#d29b53);color:var(--ink);box-shadow:0 0 18px rgb(214 162 94 / 35%)}
+
+  /* ---- testimonial ---- */
+  .quote{width:min(100%,640px);margin:clamp(30px,5vh,48px) auto 0;text-align:center;display:grid;gap:12px;justify-items:center;padding:26px;
+    border:1px solid var(--frame);border-radius:24px;background:linear-gradient(145deg,var(--card-1),var(--card-2))}
+  .quote svg{width:26px;height:26px;color:var(--gold-2);opacity:.9}
+  .quote p{margin:0;font-family:var(--serif);font-style:italic;font-weight:400;font-size:1.04rem;line-height:1.5;color:var(--ivory)}
+  .quote span{color:var(--muted);font-size:.7rem;font-weight:700}
+
+  /* ---- final CTA ---- */
+  .final{width:min(100%,640px);margin:30px auto 0;box-sizing:border-box;display:grid;gap:18px;padding:24px;
+    border:1px solid rgb(214 162 94 / 34%);border-radius:26px;background:linear-gradient(145deg,rgb(8 25 25 / 92%),rgb(16 31 29 / 88%));
+    box-shadow:0 18px 50px rgb(0 0 0 / 22%)}
+  .final .copy{display:grid;grid-template-columns:54px 1fr;align-items:start;gap:16px}
+  .final .ic{width:48px;height:48px;display:grid;place-items:center;border:1px solid rgb(214 162 94 / 48%);border-radius:50%;
+    background:rgb(214 162 94 / 10%);color:var(--gold-2)}
+  .final .ic svg{width:23px;height:23px}
+  .final .copy>div{display:grid;gap:7px}
+  .final .copy span{color:var(--gold-2);font-size:.68rem;font-weight:760;text-transform:uppercase;letter-spacing:.04em}
+  .final strong{font-size:1rem;line-height:1.4}
+  .final p{margin:0;color:var(--muted);font-size:.8rem;line-height:1.55}
+  .final .btn-gold{width:100%;min-height:56px}
+
+  footer{position:relative;z-index:4;text-align:center;padding:0 20px 30px;color:var(--muted);
+    font-family:var(--serif);font-style:italic;font-size:.7rem;opacity:.85}
+
+  @media (max-width:600px){
+    .frame{inset:10px;border-radius:24px}
+    .head{padding:20px 24px 0}
+    main{width:calc(100% - 44px);padding-top:22px}
+    .amber{display:none}
+    .grid{grid-template-columns:1fr}
+    .hero h1{font-size:clamp(2rem,10vw,2.9rem)}
+    nav.nav{display:none}
+    .btn-gold{width:100%}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    .amber,.grain,button,.card,.go{animation:none !important;transition:none !important}
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="ambient">
+    <div class="base"></div>
+    <div class="glow1"></div>
+    <div class="glow2"></div>
+  </div>
+  <div class="amber"></div>
+  <div class="grain"></div>
+  <div class="frame"></div>
+
+  <header class="head">
+    <a class="brand" href="#" aria-label="Sakin Zihin ana sayfa">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 3-1 5-4 6-1 3 0 5 2 6 1 3 4 5 6 5-1-3 1-5 3-6 1-3 0-5-2-6-1-2-3-4-5-5z"/></svg>
+      Sakin&nbsp;Zihin
+    </a>
+    <nav class="nav">
+      <a class="is-active" href="#">Okumalar</a>
+      <a href="#">Meditasyonlar</a>
+      <a href="#">Program</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <span class="kicker">Meditasyon pratiği</span>
+      <h1>Her gün on dakika,<br>kendine dön.</h1>
+      <p>Kısa okumalar ve meditasyonlarla başla. Nereye gittiğini bilmeden, yargısız, kendi hızında ilerle.</p>
+      <div class="hero-cta">
+        <a class="btn-gold" href="#">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3l14 9-14 9V3z"/></svg>
+          14 günde başla
+        </a>
+        <button class="btn-ghost" type="button">Okuma kütüphanesi</button>
+      </div>
+    </section>
+
+    <section class="program" aria-label="Önerilen program">
+      <div class="head2">
+        <span class="kicker-tag">Önerilen Program</span>
+        <h2>14 Günde Başlangıç Meditasyonu</h2>
+        <p class="sub">Her gün bir kısa pratik. Yalnız yürümek istemezsen adım adım birlikte gidelim.</p>
+      </div>
+      <div class="dots" role="img" aria-label="Gün 4 / 14 tamamlandı">
+        <span class="dot on"></span><span class="dot on"></span><span class="dot on"></span><span class="dot on today"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        <span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+      </div>
+      <div class="row">
+        <span class="now"><b>Gün 4</b>&nbsp;·&nbsp;Nefese dönüş</span>
+        <button class="btn-gold" type="button" style="min-height:44px;padding:0 20px;font-size:.76rem">
+          Devam et<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </button>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="sec-head">
+        <h2>Okumalar</h2>
+        <a href="#">Tümünü gör<span aria-hidden="true">→</span></a>
+      </div>
+      <div class="grid">
+        <a class="card" href="#">
+          <span class="meta">Okuma · 5 dk</span>
+          <h3 class="title">Stres ve nefes: beden ne yapıyor</h3>
+          <span class="det"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>4 dakika · Bölüm 1/3</span>
+          <div class="track"><i style="width:33%"></i></div>
+          <div class="card-foot"><span class="chip">Devam et</span><span class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>
+        </a>
+        <a class="card" href="#">
+          <div class="meta">Okuma · 7 dk</div>
+          <h3 class="title">Sabah ritüeli kurmak</h3>
+          <span class="det"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>7 dk · Bölüm 2/3</span>
+          <div class="track"><i style="width:66%"></i></div>
+          <div class="card-foot"><span class="chip">Devam et</span><span class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>
+        </a>
+        <a class="card" href="#">
+          <div class="meta">Okuma · 6 dk</div>
+          <h3 class="title">Uykuya dalmak, zihni sakinleştirmek</h3>
+          <span class="det"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>6 dk · Yeni</span>
+          <div class="card-foot"><span class="chip guided">Yeni</span><span class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></div>
+        </a>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="sec-head">
+        <h2>Meditasyonlar</h2>
+        <a href="#">Tümünü görür<span aria-hidden="true">→</span></a>
+      </div>
+      <div class="grid">
+        <a class="card" href="#">
+          <div class="meta">Rehberli · 5 dk</div>
+          <h3 class="title">Nefes farkındalığı</h3>
+          <span class="det"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l2-6 4 12 2-6h4"/></svg>Rehber ses</span>
+          <div class="card-foot"><span class="chip guided">Rehberli</span><span class="play-num"><svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M8 5v14l11-7z"/></svg></span></div>
+        </a>
+        <a class="card" href="#">
+          <div class="meta">Rehberli · 10 dk</div>
+          <h3 class="title">Beden taraması</h3>
+          <span class="det"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l2-6 4 12 2-6h4"/></svg>Rehber ses</span>
+          <div class="card-foot"><span class="chip guided">Rehberli</span><span class="play-num"><svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M8 5v14l11-7z"/></svg></span></div>
+        </a>
+        <a class="card" href="#">
+          <div class="meta">Rehberli · 3 dk</div>
+          <h3 class="title">Acil sakinleşme</h3>
+          <span class="det"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h4l2-6 4 12 2-6h4"/></svg>Rehber ses</span>
+          <div class="card-foot"><span class="chip guided">Rehberli</span><span class="play-num on"><svg viewBox="0 0 24 24" fill="currentColor" style="width:16px;height:16px"><path d="M8 5v14l11-7z"/></svg></span></div>
+        </a>
+      </div>
+    </section>
+
+    <figure class="quote">
+      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h4l-2 9H5l2-9zm8 0h4l-2 9h-4l2-9z" opacity=".85"/></svg>
+      <blockquote><p>"Küçük bir şeyle başladım, her gün on dakikayla. Bugün hâlâ on dakika."</p></blockquote>
+      <span>— yeni başlayan bir öğrenci</span>
+    </figure>
+
+    <section class="cta">
+      <div class="copy">
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20l11-2-9-9-2 11zm3-3l10-1 4-11-13 4z"/></svg></span>
+        <div>
+          <span class="tag">Birebir dersler</span>
+          <strong>Sana uygun düzeni birlikte kuralım.</strong>
+          <p>Buraya gelen kısa pratiklerden fazlasını istersen; kişiye özel program, haftalık görüşme ve birebir destek.</p>
+        </div>
+      </div>
+      <a class="btn-gold" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-8.5 8.5 8.5 8.5 0 01-3.7-.86L3 21l1.9-5.7a8.5 8.5 0 1116.1-3.8z"/></svg>
+        WhatsApp'tan birebir bilgi
+      </a>
+    </section>
+  </main>
+
+  <footer>Sakin Zihin · mum ışığında kısa bir mola</footer>
+</div>
+</body>
+</html>

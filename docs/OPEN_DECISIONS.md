@@ -215,26 +215,22 @@ Canlıya geçiş ön koşulu:
 
 ### D-006: Pratik Programının Esnekliği
 
-**Karar:** MVP için kabul edildi - 10 Temmuz 2026.
+**Karar:** Revize edilerek uygulandı - 4 Ağustos 2026.
 
 Kabul edilenler:
 
 - Günlük program yalnızca sabah ve akşam pratiklerinden oluşacak.
 - Öğlen pratiği olmayacak.
-- Her iki pratik de 1. hafta 15 dakika olacak.
-- Her iki pratik de 2. hafta 20 dakika olacak.
-- Her iki pratik de 3. hafta 25 dakika olacak.
-- Her iki pratik de 4. hafta 30 dakika olacak.
-- Paket 28 günden uzunsa kalan günlerde 30 dakika devam edecek.
+- Yeni planlarda sabah ve akşam varsayılan olarak 15 dakika olacak.
+- Sabah ve akşam süreleri admin tarafından birbirinden bağımsız belirlenecek.
+- Paket haftası, üyelik yenilemesi veya üyelikler arasındaki boşluk süreyi
+  otomatik olarak değiştirmeyecek.
 - Öğrenci sabah ve akşam başlangıç saatlerini ayrı ayrı seçecek.
-- Değerlendirme zamanı haftanın güncel süresine göre hesaplanacak.
-- 15/20/25/30 dakika ilerlemesi yalnızca öğrencinin ilk paketinde uygulanacak.
-- İkinci ve sonraki paketlerde sabah ve akşam 30 dakika devam edecek.
-- Üyelik dönemleri arasındaki boşluk süreyi otomatik olarak 15 dakikaya sıfırlamayacak.
+- Değerlendirme zamanı ilgili slotun kayıtlı süresine göre hesaplanacak.
 - Admin öğrenciye özel süre planı tanımlayabilecek.
 - Özel süre planı değişiklikleri sürümlenecek ve audit log'a yazılacak.
 - Varsayılan sabah/akşam programı hafta sonu dahil her gün uygulanacak.
-- Admin öğrenciye özel belirli günleri kapatabilecek.
+- Admin pratik planında haftanın aktif günlerini seçebilecek.
 - Admin her zaman özel süre planı uygulayabilecek.
 - Admin programı günde iki pratikten tek pratiğe düşürebilecek.
 - Plan değişikliği geçmiş ve tamamlanmış seansları değiştirmeyecek.

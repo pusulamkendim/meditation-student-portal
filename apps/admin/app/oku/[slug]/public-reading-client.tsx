@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Download,
+  Flower2,
   LoaderCircle,
   MessageCircle,
 } from 'lucide-react';
@@ -182,7 +183,7 @@ export function PublicReadingClient({ slug }: { slug: string }) {
 
   if (error && !reading)
     return (
-      <main className="public-reading-state">
+      <main className="public-reading-state public-reading-state--atmospheric">
         <BookOpen aria-hidden="true" />
         <h1>Okuma açılamadı</h1>
         <p>{error}</p>
@@ -190,7 +191,7 @@ export function PublicReadingClient({ slug }: { slug: string }) {
     );
   if (!reading)
     return (
-      <main className="public-reading-state">
+      <main className="public-reading-state public-reading-state--atmospheric">
         <LoaderCircle className="spin" aria-hidden="true" />
         <p>Okuma hazırlanıyor...</p>
       </main>
@@ -198,22 +199,32 @@ export function PublicReadingClient({ slug }: { slug: string }) {
 
   const section = reading.sections[sectionIndex]!;
   return (
-    <main className="public-reader public-social-reader">
+    <main className="public-reader public-social-reader public-reader-atmospheric">
+      <div className="public-reader-scene" aria-hidden="true">
+        <div className="public-reader-background" />
+        <div className="public-reader-shade" />
+        <div className="public-reader-amber-flow" />
+        <div className="public-reader-grain" />
+        <div className="public-reader-frame" />
+      </div>
       <header className="public-reader-header">
         <div className="public-reader-brand">
           <span>
-            <BookOpen aria-hidden="true" />
+            <Flower2 aria-hidden="true" />
           </span>
           <div>
-            <strong>Meditasyon</strong>
+            <strong>Sakin Zihin</strong>
             <small>Okuma alanı</small>
           </div>
         </div>
-        {reading.hasPdf ? (
-          <button type="button" onClick={() => void openPdf()} disabled={busy}>
-            <Download aria-hidden="true" /> PDF
-          </button>
-        ) : null}
+        <div className="public-reader-header-actions">
+          <span>OKUMA / {reading.estimatedMinutes} DK</span>
+          {reading.hasPdf ? (
+            <button type="button" onClick={() => void openPdf()} disabled={busy}>
+              <Download aria-hidden="true" /> PDF
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <div className="public-reader-progress" aria-label={`İlerleme yüzde ${progress}`}>

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PracticeSessionStatus } from '@meditation/database';
-import { currentMeditationRenderMap, PracticeService } from './practice.service.js';
+import {
+  currentMeditationRenderMap,
+  formatPracticeScheduleSummary,
+  normalizeActiveWeekdays,
+  PracticeService,
+} from './practice.service.js';
 
 const now = new Date('2026-07-13T07:00:00.000Z');
 const session = {
@@ -118,5 +123,24 @@ describe('currentMeditationRenderMap', () => {
 
     expect(current.get('breath:15')?.id).toBe('current-15');
     expect(current.has('breath:20')).toBe(false);
+  });
+});
+
+describe('practice plan settings', () => {
+  it('normalizes selected weekdays and rejects an empty selection', () => {
+    expect(normalizeActiveWeekdays([5, 1, 3, 3])).toEqual([1, 3, 5]);
+    expect(() => normalizeActiveWeekdays([])).toThrow('En az bir geçerli pratik günü');
+  });
+
+  it('summarizes independent slot durations and active weekdays', () => {
+    expect(
+      formatPracticeScheduleSummary(
+        [
+          { slotKey: 'MORNING', localTime: '08:00', active: true, durationMinutes: 15 },
+          { slotKey: 'EVENING', localTime: '21:00', active: true, durationMinutes: 25 },
+        ],
+        [1, 3, 5],
+      ),
+    ).toBe('Pazartesi, Çarşamba, Cuma; sabah 08:00 (15 dk), akşam 21:00 (25 dk)');
   });
 });

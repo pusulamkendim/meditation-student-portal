@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import {
   CLOCK_TOKEN,
   endOfLocalServiceDate,
@@ -21,6 +21,7 @@ import {
   SubscriptionStatus,
   type Prisma,
 } from '@meditation/database';
+import { randomUUID } from 'node:crypto';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { SystemMessageOrchestrator } from '../message-catalog/system-message-orchestrator.js';
@@ -29,9 +30,50 @@ type SlotInput = {
   slotKey: 'MORNING' | 'EVENING';
   localTime: string;
   active: boolean;
+  durationMinutes?: number;
   meditationTypeId?: string | null;
 };
 type Transaction = Prisma.TransactionClient;
+
+const allIsoWeekdays = [1, 2, 3, 4, 5, 6, 7] as const;
+const weekdayLabels = new Map([
+  [1, 'Pazartesi'],
+  [2, 'Salı'],
+  [3, 'Çarşamba'],
+  [4, 'Perşembe'],
+  [5, 'Cuma'],
+  [6, 'Cumartesi'],
+  [7, 'Pazar'],
+]);
+
+export function normalizeActiveWeekdays(days?: readonly number[]): number[] {
+  const normalized = [...new Set(days ?? allIsoWeekdays)].sort((left, right) => left - right);
+  if (!normalized.length || normalized.some((day) => !Number.isInteger(day) || day < 1 || day > 7))
+    throw new BadRequestException('En az bir geçerli pratik günü seçilmelidir.');
+  return normalized;
+}
+
+export function formatPracticeScheduleSummary(
+  slots: Array<{
+    slotKey: string;
+    localTime: string;
+    active: boolean;
+    durationMinutes: number;
+  }>,
+  activeWeekdays: readonly number[],
+): string {
+  const days = normalizeActiveWeekdays(activeWeekdays)
+    .map((day) => weekdayLabels.get(day))
+    .join(', ');
+  const schedule = slots
+    .filter((slot) => slot.active)
+    .map(
+      (slot) =>
+        `${slot.slotKey === 'MORNING' ? 'sabah' : 'akşam'} ${slot.localTime} (${slot.durationMinutes} dk)`,
+    )
+    .join(', ');
+  return `${days}; ${schedule}`;
+}
 
 export function currentMeditationRenderMap(
   meditationTypes: Array<{ id: string; audioRevision: number }>,
@@ -79,11 +121,12 @@ export class PracticeService {
     effectiveFrom?: Date,
     durationOverride?: number,
     adminId?: string,
+    activeWeekdays?: readonly number[],
   ) {
     const plan = await this.prisma.$transaction(async (tx) => {
       const subscription = await tx.subscriptionPeriod.findUniqueOrThrow({
         where: { id: subscriptionId },
-        include: { student: { include: { subscriptions: true } } },
+        include: { student: true },
       });
       if (
         subscription.studentId !== studentId ||
@@ -93,20 +136,16 @@ export class PracticeService {
         )
       )
         throw new Error('Practice plan requires an active or scheduled subscription.');
-      const isFirstPackage =
-        subscription.student.subscriptions.filter(
-          (item) => item.startDate <= subscription.startDate,
-        ).length <= 1;
       return this.createPlanInTransaction(
         tx,
         studentId,
         subscriptionId,
         slots,
         effectiveFrom,
-        isFirstPackage,
         'PLAN_CHANGED',
         durationOverride,
         adminId,
+        activeWeekdays,
       );
     });
     await this.notifyPlanChange(
@@ -116,29 +155,269 @@ export class PracticeService {
     return plan;
   }
 
+  async updateSubscriptionEnd(
+    subscriptionId: string,
+    requestedEndExclusive: Date,
+    expectedVersion: number,
+    reason: string,
+    adminId: string,
+  ) {
+    const now = this.clock.now();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const endExclusive = new Date(
+      Date.UTC(
+        requestedEndExclusive.getUTCFullYear(),
+        requestedEndExclusive.getUTCMonth(),
+        requestedEndExclusive.getUTCDate(),
+      ),
+    );
+    return this.prisma.$transaction(async (tx) => {
+      const initial = await tx.subscriptionPeriod.findUniqueOrThrow({
+        where: { id: subscriptionId },
+        select: { studentId: true },
+      });
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${initial.studentId}))`;
+      const subscription = await tx.subscriptionPeriod.findUniqueOrThrow({
+        where: { id: subscriptionId },
+        include: { student: true },
+      });
+      if (
+        subscription.status !== SubscriptionStatus.ACTIVE &&
+        subscription.status !== SubscriptionStatus.SCHEDULED
+      )
+        throw new BadRequestException('Yalnızca aktif veya planlanmış üyelik düzenlenebilir.');
+      if (endExclusive <= subscription.startDate || endExclusive <= today)
+        throw new BadRequestException('Üyelik bitiş tarihi başlangıç ve bugünden sonra olmalıdır.');
+      if (subscription.version !== expectedVersion)
+        throw new ConflictException('Üyelik başka bir işlem tarafından güncellendi.');
+      if (endExclusive.getTime() === subscription.endExclusive.getTime()) return subscription;
+
+      const overlap = await tx.subscriptionPeriod.findFirst({
+        where: {
+          id: { not: subscription.id },
+          studentId: subscription.studentId,
+          status: { in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.SCHEDULED] },
+          startDate: { lt: endExclusive },
+          endExclusive: { gt: subscription.startDate },
+        },
+        select: { id: true },
+      });
+      if (overlap) throw new ConflictException('Yeni tarih başka bir üyelik dönemiyle çakışıyor.');
+
+      if (endExclusive < subscription.endExclusive) {
+        const meetingOutsidePeriod = await tx.weeklyMeeting.findFirst({
+          where: {
+            meetingSeries: { subscriptionPeriodId: subscription.id },
+            status: { not: 'CANCELLED' },
+            endsAt: { gt: endExclusive },
+          },
+          select: { id: true },
+        });
+        if (meetingOutsidePeriod)
+          throw new BadRequestException(
+            'Yeni bitiş tarihinden sonraki görüşmeleri önce yeniden planlayın veya iptal edin.',
+          );
+      }
+
+      const changed = await tx.subscriptionPeriod.updateMany({
+        where: { id: subscription.id, version: expectedVersion, status: subscription.status },
+        data: { endExclusive, version: { increment: 1 } },
+      });
+      if (changed.count !== 1) throw new ConflictException('Üyelik güncelleme çakışması.');
+
+      let addedSessionCount = 0;
+      let suppressedSessionCount = 0;
+      if (endExclusive < subscription.endExclusive) {
+        const affected = await tx.practiceSession.findMany({
+          where: {
+            studentId: subscription.studentId,
+            practicePlan: { subscriptionPeriodId: subscription.id },
+            serviceDate: { gte: endExclusive },
+            status: { in: [PracticeSessionStatus.SCHEDULED, PracticeSessionStatus.REMINDED] },
+          },
+          select: { id: true },
+        });
+        const sessionIds = affected.map((session) => session.id);
+        if (sessionIds.length) {
+          const suppressed = await tx.practiceSession.updateMany({
+            where: {
+              id: { in: sessionIds },
+              status: { in: [PracticeSessionStatus.SCHEDULED, PracticeSessionStatus.REMINDED] },
+            },
+            data: {
+              status: PracticeSessionStatus.SUPPRESSED,
+              cancellationReason: 'SUBSCRIPTION_END_CHANGED',
+              version: { increment: 1 },
+            },
+          });
+          suppressedSessionCount = suppressed.count;
+          await tx.messageIntent.updateMany({
+            where: {
+              status: { in: ['PENDING', 'CLAIMED'] },
+              OR: sessionIds.map((id) => ({
+                payload: { path: ['practiceSessionId'], equals: id },
+              })),
+            },
+            data: { status: 'SUPPRESSED', suppressionReason: 'SUBSCRIPTION_END_CHANGED' },
+          });
+        }
+      } else {
+        const plan = await tx.practicePlan.findFirst({
+          where: {
+            subscriptionPeriodId: subscription.id,
+            status: {
+              in: [PracticePlanStatus.ACTIVE, PracticePlanStatus.PAUSED, PracticePlanStatus.DRAFT],
+            },
+          },
+          orderBy: { revision: 'desc' },
+          include: {
+            slots: {
+              include: {
+                meditationType: {
+                  select: { id: true, title: true, audioRevision: true, guidanceMode: true },
+                },
+              },
+            },
+          },
+        });
+        if (plan) {
+          const scheduled = generatePracticeSchedule({
+            startDate: subscription.endExclusive,
+            endExclusive,
+            timezone: subscription.student.timezone,
+            activeWeekdays: plan.activeWeekdays,
+            slots: plan.slots.map((slot) => ({
+              slotKey: slot.slotKey,
+              localTime: slot.localTime,
+              active: slot.active,
+              durationMinutes: slot.durationMinutes,
+            })),
+          });
+          const assignedTypes = plan.slots
+            .map((slot) => slot.meditationType)
+            .filter((item): item is NonNullable<typeof item> => Boolean(item));
+          const durations = [...new Set(scheduled.map((item) => item.durationMinutes))];
+          const renders = assignedTypes.length
+            ? await tx.meditationAudioRender.findMany({
+                where: {
+                  meditationTypeId: { in: assignedTypes.map((item) => item.id) },
+                  durationMinutes: { in: durations },
+                  status: MeditationRenderStatus.READY,
+                },
+                select: {
+                  id: true,
+                  meditationTypeId: true,
+                  sourceVersion: true,
+                  durationMinutes: true,
+                },
+              })
+            : [];
+          const renderMap = currentMeditationRenderMap(assignedTypes, renders);
+          const slotByKey = new Map(plan.slots.map((slot) => [slot.slotKey, slot]));
+          const sessionRows = scheduled.map((item) => {
+            const slot = slotByKey.get(item.slotKey)!;
+            const render = slot.meditationTypeId
+              ? renderMap.get(`${slot.meditationTypeId}:${item.durationMinutes}`)
+              : undefined;
+            if (slot.meditationType?.guidanceMode === MeditationGuidanceMode.GUIDED && !render)
+              throw new BadRequestException(
+                `${slot.meditationType.title} için ${item.durationMinutes} dakikalık ses hazır değil.`,
+              );
+            return {
+              studentId: subscription.studentId,
+              practicePlanId: plan.id,
+              practiceSlotId: slot.id,
+              meditationTypeId: slot.meditationTypeId,
+              meditationRenderId: render?.id,
+              serviceDate: item.serviceDate,
+              startAt: item.startAt,
+              durationMinutes: item.durationMinutes,
+              status:
+                plan.status === PracticePlanStatus.PAUSED
+                  ? PracticeSessionStatus.SUPPRESSED
+                  : PracticeSessionStatus.SCHEDULED,
+              cancellationReason:
+                plan.status === PracticePlanStatus.PAUSED ? 'PRACTICE_PAUSED' : null,
+            };
+          });
+          if (sessionRows.length) {
+            const created = await tx.practiceSession.createMany({
+              data: sessionRows,
+              skipDuplicates: true,
+            });
+            addedSessionCount = created.count;
+          }
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorType: AuditActorType.ADMIN,
+          actorId: adminId,
+          action: 'SUBSCRIPTION_END_UPDATED',
+          entityType: 'SubscriptionPeriod',
+          entityId: subscription.id,
+          reason,
+          safeDiff: {
+            previousEndExclusive: subscription.endExclusive.toISOString(),
+            endExclusive: endExclusive.toISOString(),
+            addedSessionCount,
+            suppressedSessionCount,
+          },
+          requestId: randomUUID(),
+          correlationId: `subscription-${subscription.id}`,
+        },
+      });
+      return {
+        ...subscription,
+        endExclusive,
+        version: expectedVersion + 1,
+        addedSessionCount,
+        suppressedSessionCount,
+      };
+    });
+  }
+
   private async createPlanInTransaction(
     tx: Transaction,
     studentId: string,
     subscriptionId: string,
     slots: SlotInput[],
     effectiveFrom?: Date,
-    isFirstPackage = true,
     eventType = 'PLAN_CHANGED',
     durationOverride?: number,
     adminId?: string,
+    requestedActiveWeekdays?: readonly number[],
   ) {
     if (!slots.some((item) => item.active))
-      throw new Error('At least one practice slot must be active.');
+      throw new BadRequestException('En az bir pratik slotu aktif olmalıdır.');
     const subscription = await tx.subscriptionPeriod.findUniqueOrThrow({
       where: { id: subscriptionId },
       include: { student: true },
     });
     const now = this.clock.now();
     const start = effectiveFrom && effectiveFrom > now ? effectiveFrom : now;
+    const activeWeekdays = normalizeActiveWeekdays(requestedActiveWeekdays);
+    const normalizedSlots = slots.map((slot) => ({
+      ...slot,
+      durationMinutes: slot.durationMinutes ?? durationOverride ?? 15,
+    }));
+    if (
+      normalizedSlots.some(
+        (slot) =>
+          slot.active &&
+          (!Number.isInteger(slot.durationMinutes) ||
+            slot.durationMinutes < 1 ||
+            slot.durationMinutes > 180),
+      )
+    )
+      throw new BadRequestException('Aktif pratik süreleri 1-180 dakika arasında olmalıdır.');
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${studentId}))`;
     const assignedTypeIds = [
       ...new Set(
-        slots.filter((slot) => slot.meditationTypeId).map((slot) => slot.meditationTypeId!),
+        normalizedSlots
+          .filter((slot) => slot.meditationTypeId)
+          .map((slot) => slot.meditationTypeId!),
       ),
     ];
     const meditationTypes = assignedTypeIds.length
@@ -211,8 +490,9 @@ export class PracticeService {
             : PracticePlanStatus.DRAFT,
         revision: revision + 1,
         effectiveFrom: start,
+        activeWeekdays,
         slots: {
-          create: slots.map((slot) => ({ ...slot, durationMinutes: durationOverride ?? 30 })),
+          create: normalizedSlots,
         },
       },
       include: { slots: true },
@@ -225,9 +505,9 @@ export class PracticeService {
         slotKey: slot.slotKey,
         localTime: slot.localTime,
         active: slot.active,
+        durationMinutes: slot.durationMinutes,
       })),
-      isFirstPackage,
-      durationOverride,
+      activeWeekdays,
     });
     const slotIds = new Map<string, string>(plan.slots.map((slot) => [slot.slotKey, slot.id]));
     const slotAssignments = new Map(
@@ -290,7 +570,12 @@ export class PracticeService {
         action: eventType,
         entityType: 'PracticePlan',
         entityId: plan.id,
-        safeDiff: { revision: plan.revision, slots, effectiveFrom: start.toISOString() },
+        safeDiff: {
+          revision: plan.revision,
+          slots: normalizedSlots,
+          activeWeekdays,
+          effectiveFrom: start.toISOString(),
+        },
         requestId: `practice-${plan.id}`,
         correlationId: `practice-${plan.id}`,
       },
@@ -404,6 +689,7 @@ export class PracticeService {
         active: boolean;
         durationMinutes: number;
       }>;
+      activeWeekdays: number[];
     },
     eventKey: 'PRACTICE_PLAN_CONFIRMED' | 'PRACTICE_PLAN_UPDATED',
   ) {
@@ -413,15 +699,6 @@ export class PracticeService {
     });
     if (!student?.defaultChannelIdentityId) return;
     const active = plan.slots.filter((slot) => slot.active);
-    const firstSession = await this.prisma.practiceSession.findFirst({
-      where: {
-        practicePlanId: plan.id,
-        status: { in: [PracticeSessionStatus.SCHEDULED, PracticeSessionStatus.REMINDED] },
-      },
-      orderBy: { startAt: 'asc' },
-      select: { durationMinutes: true },
-    });
-    const currentDurationMinutes = firstSession?.durationMinutes ?? active[0]?.durationMinutes ?? 0;
     const fullName =
       student.fullNameEncrypted && student.fullNameKeyId
         ? this.encryption.decrypt(
@@ -432,20 +709,19 @@ export class PracticeService {
             `student:${student.id}:name`,
           )
         : '';
-    const scheduleSummary = active
-      .map(
-        (slot) =>
-          `${slot.slotKey === 'MORNING' ? 'Sabah' : 'Akşam'} ${slot.localTime} (${currentDurationMinutes} dakika)`,
-      )
-      .join(', ');
+    const scheduleSummary = formatPracticeScheduleSummary(active, plan.activeWeekdays);
+    const morning = active.find((slot) => slot.slotKey === 'MORNING');
+    const evening = active.find((slot) => slot.slotKey === 'EVENING');
     const variables =
       eventKey === 'PRACTICE_PLAN_CONFIRMED'
         ? {
-            morningTimeText:
-              active.find((slot) => slot.slotKey === 'MORNING')?.localTime ?? 'kapalı',
-            eveningTimeText:
-              active.find((slot) => slot.slotKey === 'EVENING')?.localTime ?? 'kapalı',
-            durationText: `${currentDurationMinutes} dakika`,
+            morningTimeText: morning
+              ? `${morning.localTime} (${morning.durationMinutes} dakika)`
+              : 'kapalı',
+            eveningTimeText: evening
+              ? `${evening.localTime} (${evening.durationMinutes} dakika)`
+              : 'kapalı',
+            durationText: `${plan.activeWeekdays.map((day) => weekdayLabels.get(day)).join(', ')} günlerinde uygulanacak`,
             studentDisplayName: fullName ? ` ${fullName.trim().split(/\s+/)[0]}` : '',
           }
         : { scheduleSummary };
@@ -473,10 +749,10 @@ export class PracticeService {
       },
     });
     if (!student?.defaultChannelIdentityId) return;
-    const scheduleSummary = (student.practicePlans[0]?.slots ?? [])
-      .filter((slot) => slot.active)
-      .map((slot) => `${slot.slotKey === 'MORNING' ? 'Sabah' : 'Akşam'} ${slot.localTime}`)
-      .join(', ');
+    const currentPlan = student.practicePlans[0];
+    const scheduleSummary = currentPlan
+      ? formatPracticeScheduleSummary(currentPlan.slots, currentPlan.activeWeekdays)
+      : '';
     const eventKey = paused ? 'PRACTICE_PAUSED' : 'PRACTICE_RESUMED';
     try {
       await this.messages.createIntent({
@@ -800,7 +1076,13 @@ export class PracticeService {
     });
     return {
       status: plan?.status ?? 'NONE',
-      slots: plan?.slots.map((slot) => ({ slot: slot.slotKey, localTime: slot.localTime })) ?? [],
+      activeWeekdays: plan?.activeWeekdays ?? [],
+      slots:
+        plan?.slots.map((slot) => ({
+          slot: slot.slotKey,
+          localTime: slot.localTime,
+          durationMinutes: slot.durationMinutes,
+        })) ?? [],
       next: next.map((session) => ({
         slot: session.practiceSlot?.slotKey,
         startAt: session.startAt.toISOString(),

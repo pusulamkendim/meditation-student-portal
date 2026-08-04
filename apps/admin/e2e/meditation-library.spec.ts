@@ -250,3 +250,98 @@ test('manages the global meditation link in a separate dialog', async ({ page },
     fullPage: true,
   });
 });
+
+test('repairs obsolete global share durations after meditation durations change', async ({
+  page,
+}) => {
+  const publishedMeditation = {
+    ...meditation,
+    status: 'PUBLISHED',
+    targetDurations: [15, 25],
+    publicShare: { id: '40000000-0000-4000-8000-000000000001' },
+  };
+  const stalePublicShare = {
+    id: '40000000-0000-4000-8000-000000000001',
+    slug: 'dogal-nefes-farkindaligi',
+    status: 'ACTIVE',
+    effectiveStatus: 'ACTIVE',
+    allowedDurations: [15, 20, 25, 30],
+    defaultDurationMinutes: 20,
+    allowDurationSelection: true,
+    allowIndexing: false,
+    expiresAt: null,
+    version: 1,
+    publicUrl: 'http://localhost:3001/meditasyon/dogal-nefes-farkindaligi',
+    metrics: {
+      totalViews: 0,
+      uniqueVisitors: 0,
+      starts: 0,
+      completions: 0,
+      completionRate: 0,
+      completedMinutes: 0,
+      ctaViews: 0,
+      ctaClicks: 0,
+      ctaClickRate: 0,
+      durations: [],
+    },
+  };
+  let patchPayload: Record<string, unknown> | undefined;
+
+  await page.route('**/v1/admin/meditations', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: corsHeaders,
+      body: JSON.stringify([publishedMeditation]),
+    }),
+  );
+  await page.route(`**/v1/admin/meditations/${meditation.id}`, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: corsHeaders,
+      body: JSON.stringify(publishedMeditation),
+    }),
+  );
+  await page.route(`**/v1/admin/meditations/${meditation.id}/public-share`, (route) => {
+    if (route.request().method() === 'PATCH') {
+      patchPayload = route.request().postDataJSON() as Record<string, unknown>;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: corsHeaders,
+        body: JSON.stringify({
+          ...stalePublicShare,
+          allowedDurations: [15, 25],
+          defaultDurationMinutes: 15,
+          version: 2,
+        }),
+      });
+    }
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: corsHeaders,
+      body: JSON.stringify(stalePublicShare),
+    });
+  });
+
+  await page.goto('/meditations');
+  await page.getByRole('button', { name: 'Global paylaşım' }).click();
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByLabel('Varsayılan süre')).toHaveValue('15');
+  await expect(dialog.getByRole('checkbox', { name: '15 dk' })).toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: '25 dk' })).toBeChecked();
+  await expect(dialog.getByRole('checkbox', { name: '20 dk' })).toHaveCount(0);
+  await expect(dialog.getByRole('checkbox', { name: '30 dk' })).toHaveCount(0);
+
+  await dialog.getByRole('button', { name: 'Paylaşımı kaydet' }).click();
+  await expect
+    .poll(() => patchPayload)
+    .toMatchObject({
+      expectedVersion: 1,
+      allowedDurations: [15, 25],
+      defaultDurationMinutes: 15,
+    });
+});

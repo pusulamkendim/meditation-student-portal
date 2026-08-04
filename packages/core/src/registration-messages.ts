@@ -73,12 +73,12 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PRACTICE_PLAN_CONFIRMATION_REQUEST',
     content:
-      'Sana uygun pratik planını hazırladım. Sabah {{morningTimeText}}, akşam {{eveningTimeText}} ve her pratik {{durationText}}. Bu saatler uygunsa ONAYLIYORUM yazabilirsin; değiştirmek istediğin bir saat varsa bana yazman yeterli.',
+      'Sana uygun pratik planını hazırladım. Sabah {{morningTimeText}}, akşam {{eveningTimeText}}; program {{durationText}}. Bu plan uygunsa ONAYLIYORUM yazabilirsin; değiştirmek istediğin bir bölüm varsa bana yazman yeterli.',
   },
   {
     eventKey: 'PRACTICE_PLAN_CONFIRMED',
     content:
-      'Harika{{studentDisplayName}}, pratik programın hazır. Sabah {{morningTimeText}}, akşam {{eveningTimeText}} ve her pratik {{durationText}}. Pratiklerinden 10 dakika önce sana hatırlatma göndereceğim.',
+      'Harika{{studentDisplayName}}, pratik programın hazır. Sabah {{morningTimeText}}, akşam {{eveningTimeText}}; program {{durationText}}. Pratiklerinden 10 dakika önce sana hatırlatma göndereceğim.',
   },
   {
     eventKey: 'PRACTICE_PLAN_UPDATED',

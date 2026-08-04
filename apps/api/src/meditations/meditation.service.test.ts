@@ -2,7 +2,27 @@ import { randomBytes } from 'node:crypto';
 import { FakeClock, LookupHmac, createPracticePlayerToken } from '@meditation/core';
 import { describe, expect, it, vi } from 'vitest';
 
-import { MeditationService, validateMeditationAudio } from './meditation.service.js';
+import {
+  MeditationService,
+  reconcilePublicShareDurations,
+  validateMeditationAudio,
+} from './meditation.service.js';
+
+describe('reconcilePublicShareDurations', () => {
+  it('removes deleted durations and moves an obsolete default to the first retained duration', () => {
+    expect(reconcilePublicShareDurations([15, 25], [15, 20, 25, 30], 20)).toEqual({
+      allowedDurations: [15, 25],
+      defaultDurationMinutes: 15,
+    });
+  });
+
+  it('uses the first current meditation duration when none of the old durations remain', () => {
+    expect(reconcilePublicShareDurations([10, 12], [20, 30], 20)).toEqual({
+      allowedDurations: [10],
+      defaultDurationMinutes: 10,
+    });
+  });
+});
 
 describe('validateMeditationAudio', () => {
   it('accepts MP3 and M4A files whose content matches their extension', () => {

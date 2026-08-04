@@ -304,6 +304,7 @@ export class StudentAdminService {
             revision: student.practicePlans[0].revision,
             effectiveFrom: student.practicePlans[0].effectiveFrom.toISOString(),
             effectiveUntil: student.practicePlans[0].effectiveUntil?.toISOString(),
+            activeWeekdays: student.practicePlans[0].activeWeekdays,
             slots: student.practicePlans[0].slots.map((slot) => ({
               id: slot.id,
               slotKey: slot.slotKey,
@@ -549,6 +550,7 @@ function presentSubscription(subscription: {
   status: string;
   startDate: Date;
   endExclusive: Date;
+  version: number;
   priceMinor: bigint;
   currency: string;
   creditEvents: Array<{ delta: number }>;
@@ -558,6 +560,7 @@ function presentSubscription(subscription: {
     status: subscription.status,
     startDate: subscription.startDate.toISOString(),
     endExclusive: subscription.endExclusive.toISOString(),
+    version: subscription.version,
     priceMinor: subscription.priceMinor.toString(),
     currency: subscription.currency,
     credits: subscription.creditEvents.reduce((sum, event) => sum + event.delta, 0),

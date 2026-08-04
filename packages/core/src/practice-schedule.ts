@@ -2,6 +2,7 @@ export type PracticeSlotInput = {
   slotKey: string;
   localTime: string;
   active: boolean;
+  durationMinutes: number;
 };
 
 export type GeneratedPracticeSession = {
@@ -13,44 +14,31 @@ export type GeneratedPracticeSession = {
 
 const dayMs = 86_400_000;
 
-export function durationForPackageDay(
-  day: number,
-  isFirstPackage: boolean,
-  override?: number,
-): number {
-  if (override !== undefined) return override;
-  if (!isFirstPackage) return 30;
-  if (day <= 7) return 15;
-  if (day <= 14) return 20;
-  if (day <= 21) return 25;
-  return 30;
-}
-
 export function generatePracticeSchedule(input: {
   startDate: Date;
   endExclusive: Date;
   timezone: string;
   slots: PracticeSlotInput[];
-  isFirstPackage: boolean;
-  durationOverride?: number;
+  activeWeekdays?: readonly number[];
 }): GeneratedPracticeSession[] {
+  const activeWeekdays = new Set(input.activeWeekdays ?? [1, 2, 3, 4, 5, 6, 7]);
+  if (!activeWeekdays.size || [...activeWeekdays].some((day) => day < 1 || day > 7))
+    throw new Error('At least one valid ISO weekday is required.');
   const result: GeneratedPracticeSession[] = [];
   for (
     let date = new Date(input.startDate);
     date < input.endExclusive;
     date = new Date(date.getTime() + dayMs)
   ) {
-    const day = Math.floor((date.getTime() - input.startDate.getTime()) / dayMs) + 1;
-    const durationMinutes = durationForPackageDay(
-      day,
-      input.isFirstPackage,
-      input.durationOverride,
-    );
+    const isoWeekday = date.getUTCDay() || 7;
+    if (!activeWeekdays.has(isoWeekday)) continue;
     for (const slot of input.slots.filter((item) => item.active)) {
+      if (!Number.isInteger(slot.durationMinutes) || slot.durationMinutes < 1)
+        throw new Error('Practice duration must be a positive integer.');
       result.push({
         serviceDate: new Date(date),
         startAt: zonedDateTime(date, slot.localTime, input.timezone),
-        durationMinutes,
+        durationMinutes: slot.durationMinutes,
         slotKey: slot.slotKey,
       });
     }

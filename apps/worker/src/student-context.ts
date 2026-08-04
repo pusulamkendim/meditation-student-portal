@@ -313,6 +313,7 @@ export class StudentContextReader {
       ? {
           revision: plan.revision,
           status: plan.status,
+          activeWeekdays: plan.activeWeekdays,
           slots: plan.slots.map((slot) => ({
             slot: slot.slotKey,
             localTime: slot.localTime,

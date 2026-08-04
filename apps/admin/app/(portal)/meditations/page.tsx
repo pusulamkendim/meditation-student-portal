@@ -108,6 +108,26 @@ type PublicShare = {
 };
 type Notice = { tone: 'success' | 'danger' | 'info'; text: string };
 
+function reconcileShareDurations(
+  targetDurations: number[],
+  allowedDurations: number[],
+  defaultDurationMinutes: number,
+) {
+  const targetSet = new Set(targetDurations);
+  const retainedDurations = [...new Set(allowedDurations)]
+    .filter((duration) => targetSet.has(duration))
+    .sort((left, right) => left - right);
+  const nextAllowedDurations = retainedDurations.length
+    ? retainedDurations
+    : targetDurations.slice(0, 1);
+  return {
+    allowedDurations: nextAllowedDurations,
+    defaultDurationMinutes: nextAllowedDurations.includes(defaultDurationMinutes)
+      ? defaultDurationMinutes
+      : (nextAllowedDurations[0] ?? 15),
+  };
+}
+
 function csrfHeaders(json = false): HeadersInit {
   return {
     ...(json ? { 'content-type': 'application/json' } : {}),
@@ -261,10 +281,15 @@ export default function MeditationsPage() {
       const share = await request<PublicShare>(
         `/v1/admin/meditations/${meditation.id}/public-share`,
       );
+      const reconciled = reconcileShareDurations(
+        meditation.targetDurations,
+        share.allowedDurations,
+        share.defaultDurationMinutes,
+      );
       setPublicShare(share);
       setShareSlug(share.slug);
-      setShareDurations(share.allowedDurations);
-      setShareDefaultDuration(share.defaultDurationMinutes);
+      setShareDurations(reconciled.allowedDurations);
+      setShareDefaultDuration(reconciled.defaultDurationMinutes);
       setShareAllowsSelection(share.allowDurationSelection);
       setShareAllowsIndexing(share.allowIndexing);
       setShareExpiresAt(localDateTimeValue(share.expiresAt));
@@ -422,16 +447,17 @@ export default function MeditationsPage() {
 
   async function savePublicShare() {
     if (!detail) return;
-    if (!shareDurations.includes(shareDefaultDuration)) {
-      setNotice({ tone: 'danger', text: 'Varsayılan süre yayın sürelerinden biri olmalı.' });
-      return;
-    }
+    const reconciled = reconcileShareDurations(
+      detail.targetDurations,
+      shareDurations,
+      shareDefaultDuration,
+    );
     setBusy(true);
     try {
       const payload = {
         slug: shareSlug,
-        allowedDurations: shareDurations,
-        defaultDurationMinutes: shareDefaultDuration,
+        allowedDurations: reconciled.allowedDurations,
+        defaultDurationMinutes: reconciled.defaultDurationMinutes,
         allowDurationSelection: shareAllowsSelection,
         allowIndexing: shareAllowsIndexing,
         expiresAt: shareExpiresAt ? new Date(shareExpiresAt).toISOString() : null,
@@ -444,6 +470,8 @@ export default function MeditationsPage() {
         ),
       });
       setPublicShare(share);
+      setShareDurations(share.allowedDurations);
+      setShareDefaultDuration(share.defaultDurationMinutes);
       await loadDetail(detail.id, true);
       setNotice({ tone: 'success', text: 'Herkese açık paylaşım ayarları kaydedildi.' });
     } catch (reason) {

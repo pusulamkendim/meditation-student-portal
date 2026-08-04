@@ -21,6 +21,7 @@ export const practiceContextSchema = z.object({
     .object({
       revision: z.number().int(),
       status: z.string(),
+      activeWeekdays: z.array(z.number().int().min(1).max(7)),
       slots: z.array(
         z.object({
           slot: z.string(),
