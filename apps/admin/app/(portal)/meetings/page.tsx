@@ -54,6 +54,12 @@ type Meeting = {
     completionRate: number;
     generatedAt: string;
   };
+  coachNotes?: Array<{
+    id: string;
+    version: number;
+    content: string;
+    createdAt: string;
+  }>;
   discrepancies: Array<{ id: string; type: string; status: string; createdAt: string }>;
 };
 type Subscription = {
@@ -159,9 +165,11 @@ export default function MeetingsPage() {
       setConnection(meetings.connection);
       setSubscriptions(available.items);
       setDrafts(summaryDrafts);
-      setSelected((current) =>
-        current ? meetings.items.find((item) => item.id === current.id) : undefined,
-      );
+      setSelected((current) => {
+        if (!current) return undefined;
+        const updated = meetings.items.find((item) => item.id === current.id);
+        return updated ? { ...updated, coachNotes: current.coachNotes } : undefined;
+      });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Görüşmeler yüklenemedi.');
     }
@@ -170,6 +178,21 @@ export default function MeetingsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function selectMeeting(item: Meeting) {
+    setSelected(item);
+    try {
+      const response = await fetch(`${api}/v1/admin/meetings/${item.id}`, {
+        credentials: 'include',
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error(`Görüşme detayı HTTP ${response.status}`);
+      const detail = (await response.json()) as Meeting;
+      setSelected((current) => (current?.id === item.id ? detail : current));
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Görüşme detayı yüklenemedi.');
+    }
+  }
 
   async function request(path: string, init: RequestInit = {}) {
     setBusy(true);
@@ -282,7 +305,7 @@ export default function MeetingsPage() {
       });
       form.reset();
       setNotice('Koç notu yeni sürüm olarak kaydedildi.');
-      await load();
+      await selectMeeting(selected);
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : 'Koç notu kaydedilemedi.');
     }
@@ -529,7 +552,7 @@ export default function MeetingsPage() {
                   className="meeting-row"
                   data-selected={selected?.id === item.id}
                   key={item.id}
-                  onClick={() => setSelected(item)}
+                  onClick={() => void selectMeeting(item)}
                 >
                   <span>
                     <strong>{item.studentName ?? item.studentId.slice(0, 8)}</strong>
@@ -641,6 +664,22 @@ export default function MeetingsPage() {
                       Notu kaydet
                     </Button>
                   </form>
+                  {selected.coachNotes?.length ? (
+                    <div className="meeting-note-history">
+                      <div className="meeting-note-history__heading">
+                        <strong>Haftalık değerlendirme</strong>
+                        <Badge tone="neutral">{selected.coachNotes.length} sürüm</Badge>
+                      </div>
+                      {selected.coachNotes.map((note) => (
+                        <article key={note.id}>
+                          <small>
+                            v{note.version} · {formatDate(note.createdAt, selected.series.timezone)}
+                          </small>
+                          <p>{note.content}</p>
+                        </article>
+                      ))}
+                    </div>
+                  ) : null}
                   {selected.summary ? (
                     <div className="meeting-summary">
                       <div>
