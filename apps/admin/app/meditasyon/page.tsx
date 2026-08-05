@@ -338,10 +338,10 @@ export default function PracticePlayerPage({ publicSlug }: PracticePlayerPagePro
       </div>
 
       <header className="practice-player-brand">
-        <strong>
+        <a href="/kesfet" aria-label="Sakin Zihin kütüphanesi">
           <Flower2 aria-hidden="true" />
           SAKİN ZİHİN
-        </strong>
+        </a>
         <span>MEDİTASYON / {practice.durationMinutes} DK</span>
       </header>
 

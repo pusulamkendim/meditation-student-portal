@@ -48,6 +48,7 @@ export const applicationConfigSchema = z
     NODE_ENV: z.enum(['development', 'test', 'staging', 'production']).default('development'),
     API_PORT: z.coerce.number().int().positive().default(3000),
     ADMIN_ORIGIN: z.string().url().optional(),
+    PUBLIC_CONTENT_ORIGIN: z.string().url().optional(),
     DATABASE_URL: z.string().url(),
     REDIS_URL: z.string().url().optional(),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),

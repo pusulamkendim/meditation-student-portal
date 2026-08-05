@@ -23,8 +23,11 @@ async function bootstrap(): Promise<void> {
   await app.register(multipart, {
     limits: { fileSize: 25 * 1024 * 1024, files: 20, parts: 40 },
   });
+  const allowedOrigins = [...new Set([config.ADMIN_ORIGIN, config.PUBLIC_CONTENT_ORIGIN])].filter(
+    (origin): origin is string => Boolean(origin),
+  );
   app.enableCors({
-    origin: config.ADMIN_ORIGIN ? [config.ADMIN_ORIGIN] : false,
+    origin: allowedOrigins.length > 0 ? allowedOrigins : false,
     credentials: true,
     methods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   });

@@ -1011,7 +1011,11 @@ export class MeditationService {
   }
 
   private publicMeditationUrl(slug: string) {
-    const origin = (this.config.ADMIN_ORIGIN ?? 'http://localhost:3001').replace(/\/+$/u, '');
+    const origin = (
+      this.config.PUBLIC_CONTENT_ORIGIN ??
+      this.config.ADMIN_ORIGIN ??
+      'http://localhost:3001'
+    ).replace(/\/+$/u, '');
     return `${origin}/meditasyon/${slug}`;
   }
 

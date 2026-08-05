@@ -208,7 +208,7 @@ export function PublicReadingClient({ slug }: { slug: string }) {
         <div className="public-reader-frame" />
       </div>
       <header className="public-reader-header">
-        <div className="public-reader-brand">
+        <a className="public-reader-brand" href="/kesfet" aria-label="Sakin Zihin kütüphanesi">
           <span>
             <Flower2 aria-hidden="true" />
           </span>
@@ -216,7 +216,7 @@ export function PublicReadingClient({ slug }: { slug: string }) {
             <strong>Sakin Zihin</strong>
             <small>Okuma alanı</small>
           </div>
-        </div>
+        </a>
         <div className="public-reader-header-actions">
           <span>OKUMA / {reading.estimatedMinutes} DK</span>
           {reading.hasPdf ? (

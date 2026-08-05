@@ -1899,13 +1899,18 @@ a {
   font-weight: 760;
   letter-spacing: 0;
 }
-.practice-player-brand strong {
+.practice-player-brand strong,
+.practice-player-brand > a {
   display: inline-flex;
   align-items: center;
   gap: 9px;
+  color: inherit;
   font-size: inherit;
+  font-weight: inherit;
+  text-decoration: none;
 }
-.practice-player-brand strong svg {
+.practice-player-brand strong svg,
+.practice-player-brand > a svg {
   width: 19px;
   height: 19px;
   color: var(--meditation-gold);
