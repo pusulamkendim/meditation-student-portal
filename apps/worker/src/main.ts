@@ -12,6 +12,7 @@ import { createChannelAdapters, MessageDispatcher } from './message-dispatcher.j
 import { reconcileSubscriptions } from './subscription-lifecycle.js';
 import { processPracticeLifecycle } from './practice-lifecycle.js';
 import { processPracticeResponse } from './practice-response.js';
+import { expireStalePracticeResponses } from './practice-response-timeout.js';
 import { processMeetingReminder, processMeetingSummaries } from './meeting-lifecycle.js';
 import { MeetingCalendarWorker } from './meeting-calendar.js';
 import { LlmAgentProcessor } from './llm-agent.js';
@@ -208,6 +209,13 @@ async function bootstrap(): Promise<void> {
     for (const job of jobs)
       await processPracticeResponse(prisma, systemClock, config, job.data.inboxEventId);
   });
+  await boss.createQueue('practice.response-timeout');
+  await boss.work('practice.response-timeout', async () => {
+    const expiredPracticeResponses = await expireStalePracticeResponses(prisma, systemClock);
+    if (expiredPracticeResponses > 0)
+      logger.info({ expiredPracticeResponses }, 'Stale practice responses marked as missed');
+  });
+  await boss.schedule('practice.response-timeout', '*/15 * * * *', {});
   await boss.createQueue('llm.agent-reply');
   await boss.createQueue('channel.inbound');
   await boss.work<{ inboxEventId: string }>('channel.inbound', async (jobs) => {
