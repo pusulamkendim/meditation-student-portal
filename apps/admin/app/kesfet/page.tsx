@@ -20,6 +20,7 @@ const publicOrigin = 'https://sakinzihin.com';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
+  metadataBase: new URL(publicOrigin),
   title: 'Sakin Zihin | Meditasyon ve Farkındalık Kütüphanesi',
   description:
     'Rehberli meditasyonlar, sessiz pratikler ve farkındalık okumalarıyla kendi ritminde başla.',
