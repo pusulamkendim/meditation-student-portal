@@ -1,5 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
+const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
+
 export default defineConfig({
   testDir: './apps/admin/e2e',
   outputDir: './test-results/playwright',
@@ -8,7 +10,7 @@ export default defineConfig({
   timeout: 60_000,
   reporter: 'line',
   use: {
-    baseURL: 'http://localhost:3001',
+    baseURL: externalBaseUrl ?? 'http://localhost:3001',
     channel: 'chrome',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
@@ -23,10 +25,12 @@ export default defineConfig({
       use: { ...devices['iPhone 13'], browserName: 'chromium' },
     },
   ],
-  webServer: {
-    command: 'pnpm dev:admin',
-    url: 'http://localhost:3001/read',
-    reuseExistingServer: true,
-    timeout: 120_000,
-  },
+  webServer: externalBaseUrl
+    ? undefined
+    : {
+        command: 'pnpm dev:admin',
+        url: 'http://localhost:3001/read',
+        reuseExistingServer: true,
+        timeout: 120_000,
+      },
 });

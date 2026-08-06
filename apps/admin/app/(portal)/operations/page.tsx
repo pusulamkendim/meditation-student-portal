@@ -19,6 +19,7 @@ type Data = {
     category: string;
     status: string;
     suppressionReason?: string;
+    preview?: string;
     dueAt: string;
     updatedAt: string;
     student: { id: string; fullName?: string };
@@ -226,6 +227,9 @@ export default function OperationsPage() {
                         </Badge>
                         {item.suppressionReason ? (
                           <p>{reasonLabels[item.suppressionReason] ?? item.suppressionReason}</p>
+                        ) : null}
+                        {item.preview ? (
+                          <p className="operation-message-preview">{item.preview}</p>
                         ) : null}
                       </article>
                     ))}

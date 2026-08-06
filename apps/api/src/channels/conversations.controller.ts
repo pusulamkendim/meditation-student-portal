@@ -584,6 +584,7 @@ export class OperationsController {
           category: true,
           status: true,
           suppressionReason: true,
+          payload: true,
           dueAt: true,
           updatedAt: true,
           student: { select: { fullNameEncrypted: true, fullNameKeyId: true } },
@@ -695,6 +696,8 @@ export class OperationsController {
       counts: { pending, failed, suppressed, openHandoffs: openHandoffCount },
       recentIntents: recentIntents.map(({ student, ...intent }) => ({
         ...intent,
+        preview: this.intentPreview(intent.studentId, intent.payload as Record<string, unknown>),
+        payload: undefined,
         student: this.presentStudent({ id: intent.studentId, ...student }),
       })),
       webhooks: webhooks.map((webhook) => ({
@@ -737,5 +740,22 @@ export class OperationsController {
       }
     }
     return { id: student.id, fullName, status: student.status };
+  }
+
+  private intentPreview(studentId: string, payload: Record<string, unknown>) {
+    if (typeof payload.rendered === 'string') return payload.rendered;
+    if (typeof payload.contentEncrypted !== 'string' || typeof payload.contentKeyId !== 'string')
+      return undefined;
+    try {
+      return this.encryption.decrypt(
+        {
+          ciphertext: Buffer.from(payload.contentEncrypted, 'base64'),
+          keyId: payload.contentKeyId,
+        },
+        `admin-reply:${studentId}`,
+      );
+    } catch {
+      return undefined;
+    }
   }
 }
