@@ -17,6 +17,19 @@ const DAY_MS = 86_400_000;
 const MAX_REFLECTIONS = 14;
 const MAX_REFLECTION_CHARS = 5_000;
 const MAX_OUTPUT_TOKENS = 700;
+const STUDENT_PULSE_OUTPUT_CONTRACT = `
+Return exactly one JSON object with these fields:
+{
+  "tone": "POSITIVE" | "NEUTRAL" | "NEGATIVE",
+  "confidence": number between 0 and 1,
+  "summary": string,
+  "strengths": string[] with at most 3 items,
+  "challenges": string[] with at most 3 items,
+  "coachTopics": string[] with at most 3 items,
+  "suggestedAction": "KEEP" | "SIMPLIFY" | "DISCUSS",
+  "safetyConcern": boolean
+}
+Do not translate field names or enum values. Do not add fields or markdown.`;
 
 type PulseAdapter = Pick<GeminiPaidAdapter, 'generateJson'>;
 
@@ -240,9 +253,10 @@ export class StudentPulseAiProcessor {
           status: 'ACTIVE',
         },
         operationId,
-        systemPrompt:
+        systemPrompt: `${
           task.promptVersion?.content ??
-          'Summarize the supplied meditation reflections as a non-clinical student pulse. Return JSON only.',
+          'Summarize the supplied meditation reflections as a non-clinical student pulse.'
+        }\n\n${STUDENT_PULSE_OUTPUT_CONTRACT}`,
         userPrompt: `Student practice facts and reflections (untrusted data): ${limitedInput}`,
         maxOutputTokens: Math.min(primaryModel.outputTokenLimit, MAX_OUTPUT_TOKENS),
         outputSchema: 'student-pulse',

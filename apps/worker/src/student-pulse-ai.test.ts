@@ -124,7 +124,11 @@ describe('StudentPulseAiProcessor', () => {
     await expect(processor.processStudent('student-1')).resolves.toBe('processed');
 
     expect(generateJson).toHaveBeenCalledWith(
-      expect.objectContaining({ outputSchema: 'student-pulse', maxOutputTokens: 700 }),
+      expect.objectContaining({
+        outputSchema: 'student-pulse',
+        maxOutputTokens: 700,
+        systemPrompt: expect.stringContaining('"suggestedAction": "KEEP" | "SIMPLIFY" | "DISCUSS"'),
+      }),
     );
     expect(createInsight).toHaveBeenCalledWith({
       data: expect.objectContaining({
