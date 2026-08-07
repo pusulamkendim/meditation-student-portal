@@ -107,7 +107,10 @@ describe('StudentPulseAiProcessor', () => {
         }),
       ),
       llmBudgetReservation: { updateMany: vi.fn() },
-      llmUsageLog: { create: vi.fn() },
+      llmUsageLog: {
+        findFirst: vi.fn().mockResolvedValue({ attempt: 1 }),
+        create: vi.fn(),
+      },
     };
     const config = {
       DATA_ENCRYPTION_KEYS_JSON: JSON.stringify({ test: key.toString('base64') }),
@@ -139,7 +142,7 @@ describe('StudentPulseAiProcessor', () => {
       }),
     });
     expect(createUsage).toHaveBeenCalledWith({
-      data: expect.objectContaining({ task: 'STUDENT_PULSE', totalTokens: 180 }),
+      data: expect.objectContaining({ task: 'STUDENT_PULSE', attempt: 2, totalTokens: 180 }),
     });
   });
 

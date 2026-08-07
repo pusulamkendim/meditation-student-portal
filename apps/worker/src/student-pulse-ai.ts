@@ -233,6 +233,12 @@ export class StudentPulseAiProcessor {
     const limitedInput = masked.value.slice(0, MAX_REFLECTION_CHARS);
     const inputHash = createHash('sha256').update(limitedInput).digest('hex');
     const operationId = `student-pulse:${studentId}:${periodEndExclusive.toISOString().slice(0, 10)}:${inputHash.slice(0, 12)}`;
+    const previousUsage = await this.prisma.llmUsageLog.findFirst({
+      where: { operationId },
+      select: { attempt: true },
+      orderBy: { attempt: 'desc' },
+    });
+    const attempt = (previousUsage?.attempt ?? 0) + 1;
     const price = primaryModel.priceVersions[0];
     const estimatedInputTokens = Math.ceil(limitedInput.length / 4);
     const estimate = price
@@ -292,7 +298,7 @@ export class StudentPulseAiProcessor {
         await tx.llmUsageLog.create({
           data: {
             operationId,
-            attempt: 1,
+            attempt,
             task: LlmTask.STUDENT_PULSE,
             studentId,
             requestedModelId: primaryModel.id,
@@ -323,7 +329,7 @@ export class StudentPulseAiProcessor {
         .create({
           data: {
             operationId,
-            attempt: 1,
+            attempt,
             task: LlmTask.STUDENT_PULSE,
             studentId,
             requestedModelId: primaryModel.id,
