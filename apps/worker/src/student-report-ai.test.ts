@@ -128,7 +128,13 @@ describe('StudentReportAiProcessor', () => {
       'processed',
     );
     expect(generateJson).toHaveBeenCalledWith(
-      expect.objectContaining({ outputSchema: 'student-report', temperature: 0.15 }),
+      expect.objectContaining({
+        outputSchema: 'student-report',
+        temperature: 0.15,
+        systemPrompt: expect.stringContaining(
+          '"featuredReflectionId": UUID string from reflectionCandidates or null',
+        ),
+      }),
     );
     const update = updateReport.mock.calls[0]?.[0] as {
       data: { contentEncrypted: Uint8Array; contentKeyId: string; featuredReflectionId: string };

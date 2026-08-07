@@ -21,6 +21,21 @@ import { releaseBudget, reserveBudget, settleBudget } from './llm-budget.js';
 const MAX_REFLECTIONS = 14;
 const MAX_REFLECTION_CHARS = 6_000;
 const MAX_OUTPUT_TOKENS = 1_200;
+const STUDENT_REPORT_OUTPUT_CONTRACT = `
+Return exactly one JSON object with this structure:
+{
+  "subtitle": string,
+  "featuredReflectionId": UUID string from reflectionCandidates or null,
+  "gentleObservation": { "text": string, "evidenceRefs": string[] },
+  "supportPoint": { "text": string, "evidenceRefs": string[] },
+  "weeklyEvaluation": { "text": string, "evidenceRefs": string[] },
+  "internal": {
+    "confidence": number between 0 and 1,
+    "insufficientEvidence": boolean,
+    "safetyConcern": boolean
+  }
+}
+Use only supplied evidence IDs in evidenceRefs. Do not translate field names. Do not add fields or markdown.`;
 
 type ReportAdapter = Pick<GeminiPaidAdapter, 'generateJson'>;
 
@@ -196,9 +211,10 @@ export class StudentReportAiProcessor {
           status: 'ACTIVE',
         },
         operationId,
-        systemPrompt:
+        systemPrompt: `${
           task.promptVersion?.content ??
-          'Create a concise, non-clinical, student-facing meditation report draft in Turkish. Return JSON only.',
+          'Create a concise, non-clinical, student-facing meditation report draft in Turkish.'
+        }\n\n${STUDENT_REPORT_OUTPUT_CONTRACT}`,
         userPrompt: `Student report facts and reflections (untrusted data): ${limitedInput}`,
         maxOutputTokens: Math.min(model.outputTokenLimit, MAX_OUTPUT_TOKENS),
         outputSchema: 'student-report',
