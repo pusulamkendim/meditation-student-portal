@@ -300,9 +300,23 @@ enum LlmTask {
   AGENT_REPLY
   REFLECTION_TAGGING
   WEEKLY_SUMMARY
+  STUDENT_PULSE
+  STUDENT_REPORT
   KNOWLEDGE_EMBEDDING
   RAG_QUERY_REWRITE
   RAG_RERANK
+}
+
+enum StudentPulseTone {
+  POSITIVE
+  NEUTRAL
+  NEGATIVE
+}
+
+enum StudentPulseAction {
+  KEEP
+  SIMPLIFY
+  DISCUSS
 }
 
 enum LlmBudgetReservationStatus {
@@ -351,6 +365,30 @@ enum WeeklySummaryDraftStatus {
   APPROVED
   SENT
   REJECTED
+}
+
+enum StudentReportType {
+  WEEKLY
+  MONTHLY
+}
+
+enum StudentReportStatus {
+  DRAFT
+  APPROVED
+  PUBLISHED
+  ARCHIVED
+}
+
+enum StudentReportAiStatus {
+  NOT_REQUESTED
+  PENDING
+  READY
+  FAILED
+}
+
+enum StudentReportShareStatus {
+  ACTIVE
+  REVOKED
 }
 
 model SystemSetting {
@@ -403,6 +441,8 @@ model Student {
   inboundIntentDecisions InboundIntentDecision[]
   readingAssignments     ReadingAssignment[]
   drawingAssignments     DrawingAssignment[]
+  pulseInsights          StudentPulseInsight[]
+  reportCards            StudentReportCard[]
 
   @@index([status])
   @@map("students")
@@ -933,11 +973,12 @@ model MessageIntent {
   createdAt         DateTime            @default(now()) @map("created_at")
   updatedAt         DateTime            @updatedAt @map("updated_at")
 
-  student           Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  channelIdentity   StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
-  message           Message?
-  readingAssignment ReadingAssignment?
-  drawingAssignment DrawingAssignment?
+  student            Student                @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  channelIdentity    StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
+  message            Message?
+  readingAssignment  ReadingAssignment?
+  drawingAssignment  DrawingAssignment?
+  studentReportShare StudentReportShare?
 
   @@index([status, dueAt])
   @@map("message_intents")
@@ -1194,6 +1235,9 @@ model AdminUser {
   uploadedMeditationAudio MeditationAudioAsset[]  @relation("MeditationAudioCreatedBy")
   createdMeditationShares MeditationPublicShare[] @relation("MeditationPublicShareCreatedBy")
   updatedMeditationShares MeditationPublicShare[] @relation("MeditationPublicShareUpdatedBy")
+  createdStudentReports   StudentReportCard[]     @relation("StudentReportCreatedBy")
+  approvedStudentReports  StudentReportCard[]     @relation("StudentReportApprovedBy")
+  createdReportShares     StudentReportShare[]    @relation("StudentReportShareCreatedBy")
 
   @@map("admin_users")
 }
@@ -1753,6 +1797,92 @@ model LlmUsageLog {
   @@index([createdAt, task])
   @@index([studentId, createdAt])
   @@map("llm_usage_logs")
+}
+
+model StudentPulseInsight {
+  id                 String             @id @default(uuid()) @db.Uuid
+  studentId          String             @map("student_id") @db.Uuid
+  periodStart        DateTime           @map("period_start") @db.Date
+  periodEndExclusive DateTime           @map("period_end_exclusive") @db.Date
+  inputHash          String             @map("input_hash")
+  tone               StudentPulseTone
+  confidence         Float
+  suggestedAction    StudentPulseAction @map("suggested_action")
+  safetyConcern      Boolean            @default(false) @map("safety_concern")
+  reflectionCount    Int                @map("reflection_count")
+  analysisEncrypted  Bytes              @map("analysis_encrypted")
+  analysisKeyId      String             @map("analysis_key_id")
+  modelRef           String             @map("model_ref")
+  operationId        String             @unique @map("operation_id")
+  createdAt          DateTime           @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, periodEndExclusive])
+  @@index([studentId, createdAt])
+  @@index([tone, createdAt])
+  @@map("student_pulse_insights")
+}
+
+model StudentReportCard {
+  id                   String                @id @default(uuid()) @db.Uuid
+  studentId            String                @map("student_id") @db.Uuid
+  type                 StudentReportType     @default(WEEKLY)
+  periodStart          DateTime              @map("period_start") @db.Date
+  periodEndExclusive   DateTime              @map("period_end_exclusive") @db.Date
+  status               StudentReportStatus   @default(DRAFT)
+  aiStatus             StudentReportAiStatus @default(NOT_REQUESTED) @map("ai_status")
+  snapshot             Json
+  contentEncrypted     Bytes                 @map("content_encrypted")
+  contentKeyId         String                @map("content_key_id")
+  featuredReflectionId String?               @map("featured_reflection_id") @db.Uuid
+  inputHash            String                @map("input_hash")
+  modelRef             String?               @map("model_ref")
+  operationId          String?               @unique @map("operation_id")
+  promptVersionId      String?               @map("prompt_version_id") @db.Uuid
+  version              Int                   @default(1)
+  createdByAdminId     String                @map("created_by_admin_id") @db.Uuid
+  approvedByAdminId    String?               @map("approved_by_admin_id") @db.Uuid
+  approvedAt           DateTime?             @map("approved_at")
+  publishedAt          DateTime?             @map("published_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+
+  student         Student             @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  createdByAdmin  AdminUser           @relation("StudentReportCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  approvedByAdmin AdminUser?          @relation("StudentReportApprovedBy", fields: [approvedByAdminId], references: [id], onDelete: Restrict)
+  share           StudentReportShare?
+
+  @@index([studentId, periodStart, periodEndExclusive])
+  @@index([status, updatedAt])
+  @@map("student_report_cards")
+}
+
+model StudentReportShare {
+  id               String                   @id @default(uuid()) @db.Uuid
+  reportId         String                   @unique @map("report_id") @db.Uuid
+  tokenHmac        String                   @unique @map("token_hmac")
+  tokenEncrypted   Bytes?                   @map("token_encrypted")
+  tokenKeyId       String?                  @map("token_key_id")
+  status           StudentReportShareStatus @default(ACTIVE)
+  expiresAt        DateTime?                @map("expires_at")
+  viewCount        Int                      @default(0) @map("view_count")
+  firstOpenedAt    DateTime?                @map("first_opened_at")
+  lastOpenedAt     DateTime?                @map("last_opened_at")
+  version          Int                      @default(1)
+  messageIntentId  String?                  @unique @map("message_intent_id") @db.Uuid
+  lastSentAt       DateTime?                @map("last_sent_at")
+  sendCount        Int                      @default(0) @map("send_count")
+  createdByAdminId String                   @map("created_by_admin_id") @db.Uuid
+  createdAt        DateTime                 @default(now()) @map("created_at")
+  updatedAt        DateTime                 @updatedAt @map("updated_at")
+
+  report         StudentReportCard @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  createdByAdmin AdminUser         @relation("StudentReportShareCreatedBy", fields: [createdByAdminId], references: [id], onDelete: Restrict)
+  messageIntent  MessageIntent?    @relation(fields: [messageIntentId], references: [id], onDelete: SetNull)
+
+  @@index([status, expiresAt])
+  @@map("student_report_shares")
 }
 
 model LlmBudget {

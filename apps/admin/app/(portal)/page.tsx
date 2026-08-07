@@ -3,7 +3,9 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowDownRight,
   ArrowRight,
+  ArrowUpRight,
   BookOpen,
   CalendarDays,
   CheckCircle2,
@@ -11,12 +13,36 @@ import {
   Clock3,
   LifeBuoy,
   MessageSquareText,
+  Minus,
   RefreshCw,
 } from 'lucide-react';
 import { Alert, Badge, Button, EmptyState, Metric, PageHeader, Skeleton } from '@meditation/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+
+type Comparison = {
+  completed: number;
+  skipped: number;
+  missed: number;
+  pending?: number;
+  completionRate: number;
+  responseRate?: number;
+  reflectionRate?: number;
+};
+
+type PulseInsight = {
+  tone: 'POSITIVE' | 'NEUTRAL' | 'NEGATIVE';
+  confidence: number;
+  suggestedAction: 'KEEP' | 'SIMPLIFY' | 'DISCUSS';
+  safetyConcern: boolean;
+  reflectionCount: number;
+  generatedAt: string;
+  summary?: string;
+  strengths: string[];
+  challenges: string[];
+  coachTopics: string[];
+};
 
 type DashboardData = {
   generatedAt: string;
@@ -28,21 +54,22 @@ type DashboardData = {
     openHandoffs: number;
     todayMeetings: number;
   };
-  practice: {
-    completed: number;
-    skipped: number;
-    missed: number;
-    completionRate: number;
-    responseRate: number;
+  practice: Comparison & {
+    periodStart: string;
+    periodEndExclusive: string;
     reflectionRate: number;
+    responseRate: number;
     trend: number;
-    daily: Array<{ date: string; completed: number; skipped: number; missed: number }>;
-    slots: Array<{
-      slotKey: string;
+    previous: Comparison;
+    deltas: { completionRate: number; responseRate: number; reflectionRate: number };
+    daily: Array<{
+      date: string;
       completed: number;
-      total: number;
-      completionRate: number;
+      skipped: number;
+      missed: number;
+      pending: number;
     }>;
+    slots: Array<{ slotKey: string; completed: number; total: number; completionRate: number }>;
   };
   studentPulse: Array<{
     id: string;
@@ -52,9 +79,12 @@ type DashboardData = {
     completed: number;
     skipped: number;
     missed: number;
+    pending: number;
     reflections: number;
     completionRate: number;
     trend: number;
+    previous: Comparison & { reflections: number };
+    insight?: PulseInsight;
     openHandoffs: number;
     schedule: Array<{ slotKey: string; localTime: string; durationMinutes: number }>;
     recommendation?: string;
@@ -129,12 +159,39 @@ const reasonLabels: Record<string, string> = {
   PROACTIVE_MESSAGING_PAUSED: 'Öğrencinin otomatik mesajları duraklatılmış.',
 };
 
+const toneLabels: Record<PulseInsight['tone'], string> = {
+  POSITIVE: 'Pozitif',
+  NEUTRAL: 'Nötr',
+  NEGATIVE: 'Negatif',
+};
+
+const actionLabels: Record<PulseInsight['suggestedAction'], string> = {
+  KEEP: 'Programı koru',
+  SIMPLIFY: 'Sadeleştirmeyi değerlendir',
+  DISCUSS: 'Görüşmede ele al',
+};
+
 function name(value?: string, id?: string) {
   return value ?? (id ? `İsimsiz öğrenci · ${id.slice(0, 8)}` : 'Kayıtlı olmayan kişi');
 }
 
 function dayLabel(value: string) {
   return new Date(`${value}T12:00:00`).toLocaleDateString('tr-TR', { weekday: 'short' });
+}
+
+function deltaText(value: number) {
+  if (value === 0) return 'Değişmedi';
+  return `${value > 0 ? '+' : ''}${value} puan`;
+}
+
+function Trend({ value, label }: { value: number; label?: string }) {
+  const Icon = value > 0 ? ArrowUpRight : value < 0 ? ArrowDownRight : Minus;
+  return (
+    <span className={`dashboard-trend is-${value > 0 ? 'up' : value < 0 ? 'down' : 'flat'}`}>
+      <Icon aria-hidden="true" />
+      <span>{label ?? deltaText(value)}</span>
+    </span>
+  );
 }
 
 export default function HomePage() {
@@ -176,7 +233,9 @@ export default function HomePage() {
     () =>
       Math.max(
         1,
-        ...(data?.practice.daily.map((item) => item.completed + item.skipped + item.missed) ?? []),
+        ...(data?.practice.daily.map(
+          (item) => item.completed + item.skipped + item.missed + item.pending,
+        ) ?? []),
       ),
     [data],
   );
@@ -209,7 +268,236 @@ export default function HomePage() {
           <p className="dashboard-updated">
             Son güncelleme: {new Date(data.generatedAt).toLocaleString('tr-TR')}
           </p>
-          <section className="metrics dashboard-metrics" aria-label="Günlük metrikler">
+
+          <div className="dashboard-top-grid">
+            <section className="dashboard-panel dashboard-chart-panel dashboard-practice-primary">
+              <div className="dashboard-panel-heading">
+                <div>
+                  <span>PRATİK TAKİBİ · SON 7 TAM GÜN</span>
+                  <h2>Haftalık sonuçlar</h2>
+                  <p>Bir önceki 7 günlük dönemle karşılaştırma</p>
+                </div>
+                <Trend value={data.practice.deltas.completionRate} />
+              </div>
+              <div className="dashboard-practice-summary is-comparison">
+                <div>
+                  <span>Tamamlama</span>
+                  <strong>%{data.practice.completionRate}</strong>
+                  <small>Önceki %{data.practice.previous.completionRate}</small>
+                  <Trend value={data.practice.deltas.completionRate} />
+                </div>
+                <div>
+                  <span>Yanıt</span>
+                  <strong>%{data.practice.responseRate}</strong>
+                  <small>Önceki %{data.practice.previous.responseRate}</small>
+                  <Trend value={data.practice.deltas.responseRate} />
+                </div>
+                <div>
+                  <span>Refleksiyon</span>
+                  <strong>%{data.practice.reflectionRate}</strong>
+                  <small>Önceki %{data.practice.previous.reflectionRate}</small>
+                  <Trend value={data.practice.deltas.reflectionRate} />
+                </div>
+                <div>
+                  <span>Tamamlanan</span>
+                  <strong>{data.practice.completed}</strong>
+                  <small>Önceki {data.practice.previous.completed}</small>
+                </div>
+              </div>
+              <div className="dashboard-chart-legend" aria-label="Pratik sonucu renkleri">
+                <span>
+                  <i className="is-completed" />
+                  Tamamlandı
+                </span>
+                <span>
+                  <i className="is-skipped" />
+                  Yapılamadı
+                </span>
+                <span>
+                  <i className="is-missed" />
+                  Kaçırıldı
+                </span>
+                <span>
+                  <i className="is-pending" />
+                  Henüz sonuçlanmadı
+                </span>
+              </div>
+              <div className="dashboard-bars" aria-label="Son yedi tam günün pratik sonuçları">
+                {data.practice.daily.map((point) => {
+                  const total = point.completed + point.skipped + point.missed + point.pending;
+                  return (
+                    <div key={point.date}>
+                      <span className="dashboard-bar-track" title={`${total} sonuç`}>
+                        <i
+                          className="is-missed"
+                          style={{ height: `${(point.missed / maximumDaily) * 100}%` }}
+                        />
+                        <i
+                          className="is-skipped"
+                          style={{ height: `${(point.skipped / maximumDaily) * 100}%` }}
+                        />
+                        <i
+                          className="is-completed"
+                          style={{ height: `${(point.completed / maximumDaily) * 100}%` }}
+                        />
+                        <i
+                          className="is-pending"
+                          style={{ height: `${(point.pending / maximumDaily) * 100}%` }}
+                        />
+                      </span>
+                      <small>{dayLabel(point.date)}</small>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="dashboard-slot-rates">
+                {data.practice.slots.map((slot) => (
+                  <div key={slot.slotKey}>
+                    <span>
+                      {slot.slotKey === 'MORNING'
+                        ? 'Sabah'
+                        : slot.slotKey === 'EVENING'
+                          ? 'Akşam'
+                          : slot.slotKey}
+                    </span>
+                    <strong>%{slot.completionRate}</strong>
+                    <i>
+                      <b style={{ width: `${slot.completionRate}%` }} />
+                    </i>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="dashboard-panel dashboard-content-panel dashboard-content-primary">
+              <div className="dashboard-panel-heading">
+                <div>
+                  <span>İÇERİK ETKİLEŞİMİ</span>
+                  <h2>Okuma ve meditasyonlar</h2>
+                </div>
+              </div>
+              <a href="/readings">
+                <BookOpen />
+                <span>
+                  <strong>Atanan okumalar</strong>
+                  <small>
+                    {data.content.assignments.COMPLETED ?? 0} tamamlandı ·{' '}
+                    {data.content.assignments.OPENED ?? 0} okunuyor
+                  </small>
+                </span>
+                <ArrowRight />
+              </a>
+              <div className="dashboard-content-metrics is-stacked">
+                <article>
+                  <span>Global okuma</span>
+                  <strong>{data.content.readings.views}</strong>
+                  <small>görüntülenme · {data.content.readings.whatsappClicks} WhatsApp</small>
+                </article>
+                <article>
+                  <span>Global meditasyon</span>
+                  <strong>{data.content.meditations.starts}</strong>
+                  <small>başlatma · {data.content.meditations.completions} tamamlama</small>
+                </article>
+                <article>
+                  <span>İlgi sinyali</span>
+                  <strong>
+                    {data.content.meditations.ctaClicks + data.content.readings.whatsappClicks}
+                  </strong>
+                  <small>toplam CTA tıklaması</small>
+                </article>
+              </div>
+            </section>
+          </div>
+
+          <section className="dashboard-panel dashboard-pulse-panel">
+            <div className="dashboard-panel-heading">
+              <div>
+                <span>ÖĞRENCİ DURUMLARI</span>
+                <h2>Haftalık takip özeti</h2>
+                <p>Pratik düzeni, önceki döneme göre değişim ve son refleksiyonların genel tonu</p>
+              </div>
+              <a href="/students">
+                Öğrencileri aç <ArrowRight />
+              </a>
+            </div>
+            <div className="dashboard-pulse-table">
+              <div className="dashboard-pulse-header" aria-hidden="true">
+                <span>Öğrenci</span>
+                <span>Program</span>
+                <span>Pratik</span>
+                <span>Değişim</span>
+                <span>Refleksiyon tonu ve durum</span>
+              </div>
+              {data.studentPulse.map((student) => (
+                <a key={student.id} href={`/students/${student.id}`}>
+                  <span className="dashboard-student-name">
+                    <strong>{name(student.fullName, student.id)}</strong>
+                    <small>
+                      {student.channel ?? 'Kanal yok'} ·{' '}
+                      {student.lastInboundAt
+                        ? new Date(student.lastInboundAt).toLocaleDateString('tr-TR')
+                        : 'Mesaj yok'}
+                    </small>
+                  </span>
+                  <span className="dashboard-schedule">
+                    {student.schedule.length
+                      ? student.schedule
+                          .map((slot) => `${slot.localTime} · ${slot.durationMinutes} dk`)
+                          .join(', ')
+                      : 'Aktif plan yok'}
+                  </span>
+                  <span className="dashboard-rate">
+                    <strong>%{student.completionRate}</strong>
+                    <small>
+                      {student.completed} tamam · {student.skipped} yapılamadı · {student.missed}{' '}
+                      kaçırıldı{student.pending ? ` · ${student.pending} bekliyor` : ''}
+                    </small>
+                  </span>
+                  <span>
+                    <Trend value={student.trend} />
+                    <small>Önceki %{student.previous.completionRate}</small>
+                  </span>
+                  <span className="dashboard-pulse-status">
+                    {student.insight ? (
+                      <>
+                        <span
+                          className={`dashboard-tone is-${student.insight.tone.toLocaleLowerCase('en-US')}`}
+                        >
+                          {toneLabels[student.insight.tone]} · %
+                          {Math.round(student.insight.confidence * 100)}
+                        </span>
+                        <small>
+                          {student.insight.summary ?? actionLabels[student.insight.suggestedAction]}
+                        </small>
+                        {student.insight.safetyConcern ? (
+                          <em className="is-safety">Güvenlik açısından görüşmede ele alın.</em>
+                        ) : null}
+                        {student.insight.coachTopics[0] ? (
+                          <em>Görüşme: {student.insight.coachTopics[0]}</em>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <span className="dashboard-tone is-empty">Analiz yok</span>
+                        <small>
+                          {student.reflections
+                            ? 'Günlük analiz henüz hazırlanmadı.'
+                            : 'Yeterli refleksiyon bulunmuyor.'}
+                        </small>
+                      </>
+                    )}
+                    {student.recommendation ? (
+                      <em>{student.recommendation}</em>
+                    ) : student.openHandoffs ? (
+                      <em>Admin yanıtı bekleniyor.</em>
+                    ) : null}
+                  </span>
+                </a>
+              ))}
+            </div>
+          </section>
+
+          <section className="metrics dashboard-metrics" aria-label="Günlük operasyon metrikleri">
             <Metric
               label="Yeni mesaj"
               value={data.counts.recentMessages}
@@ -235,10 +523,10 @@ export default function HomePage() {
               detail="Önümüzdeki 24 saat"
             />
             <Metric
-              label="Pratik tamamlama"
-              value={`%${data.practice.completionRate}`}
+              label="Aktif öğrenci"
+              value={data.counts.activeStudents}
               icon={Activity}
-              detail="Son 7 gün"
+              detail="Test profilleri hariç"
             />
           </section>
 
@@ -342,209 +630,39 @@ export default function HomePage() {
             </section>
           </div>
 
-          <section className="dashboard-panel dashboard-pulse-panel">
+          <section className="dashboard-panel dashboard-meetings-panel dashboard-meetings-wide">
             <div className="dashboard-panel-heading">
               <div>
-                <span>SON 7 GÜN</span>
-                <h2>Öğrenci nabzı</h2>
+                <span>BUGÜN</span>
+                <h2>Görüşmeler</h2>
               </div>
-              <a href="/students">
-                Öğrencileri aç <ArrowRight />
+              <a href="/meetings">
+                Takvimi aç <ArrowRight />
               </a>
             </div>
-            <div className="dashboard-pulse-table">
-              <div className="dashboard-pulse-header" aria-hidden="true">
-                <span>Öğrenci</span>
-                <span>Program</span>
-                <span>Pratik</span>
-                <span>Refleksiyon</span>
-                <span>Durum</span>
-              </div>
-              {data.studentPulse.map((student) => (
-                <a key={student.id} href={`/students/${student.id}`}>
-                  <span className="dashboard-student-name">
-                    <strong>{name(student.fullName, student.id)}</strong>
-                    <small>
-                      {student.channel ?? 'Kanal yok'} ·{' '}
-                      {student.lastInboundAt
-                        ? new Date(student.lastInboundAt).toLocaleDateString('tr-TR')
-                        : 'Mesaj yok'}
-                    </small>
-                  </span>
-                  <span className="dashboard-schedule">
-                    {student.schedule.length
-                      ? student.schedule
-                          .map((slot) => `${slot.localTime} · ${slot.durationMinutes} dk`)
-                          .join(', ')
-                      : 'Aktif plan yok'}
-                  </span>
-                  <span className="dashboard-rate">
-                    <strong>%{student.completionRate}</strong>
-                    <small>
-                      {student.completed} tamam · {student.missed} kaçırıldı
-                    </small>
+            {data.meetings.length ? (
+              data.meetings.map((meeting) => (
+                <a key={meeting.id} href={`/students/${meeting.studentId}`}>
+                  <span className="dashboard-meeting-time">
+                    <Clock3 />
+                    <strong>
+                      {new Date(meeting.startsAt).toLocaleTimeString('tr-TR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </strong>
                   </span>
                   <span>
-                    <strong>{student.reflections}</strong>
-                    <small>geri dönüş</small>
+                    <strong>{name(meeting.fullName, meeting.studentId)}</strong>
+                    <small>{meeting.status === 'SCHEDULED' ? 'Planlandı' : meeting.status}</small>
                   </span>
-                  <span>
-                    {student.recommendation ? (
-                      <Badge tone="warning">Sadeleştirme önerisi</Badge>
-                    ) : student.openHandoffs ? (
-                      <Badge tone="warning">Yanıt bekliyor</Badge>
-                    ) : (
-                      <Badge tone="success">Takipte</Badge>
-                    )}
-                    {student.recommendation ? <small>{student.recommendation}</small> : null}
-                  </span>
+                  <ArrowRight />
                 </a>
-              ))}
-            </div>
+              ))
+            ) : (
+              <EmptyState icon={CalendarDays} title="Bugün görüşme yok" />
+            )}
           </section>
-
-          <div className="dashboard-secondary-grid">
-            <section className="dashboard-panel dashboard-chart-panel">
-              <div className="dashboard-panel-heading">
-                <div>
-                  <span>PRATİK TAKİBİ</span>
-                  <h2>Haftalık sonuçlar</h2>
-                </div>
-                <Badge tone={data.practice.trend >= 0 ? 'success' : 'warning'}>
-                  {data.practice.trend >= 0 ? '+' : ''}
-                  {data.practice.trend} puan
-                </Badge>
-              </div>
-              <div className="dashboard-practice-summary">
-                <div>
-                  <strong>%{data.practice.responseRate}</strong>
-                  <small>yanıt oranı</small>
-                </div>
-                <div>
-                  <strong>%{data.practice.reflectionRate}</strong>
-                  <small>refleksiyon oranı</small>
-                </div>
-                <div>
-                  <strong>{data.practice.completed}</strong>
-                  <small>tamamlandı</small>
-                </div>
-              </div>
-              <div className="dashboard-bars" aria-label="Son yedi günlük pratik sonuçları">
-                {data.practice.daily.map((point) => {
-                  const total = point.completed + point.skipped + point.missed;
-                  return (
-                    <div key={point.date}>
-                      <span className="dashboard-bar-track" title={`${total} sonuç`}>
-                        <i
-                          className="is-missed"
-                          style={{ height: `${(point.missed / maximumDaily) * 100}%` }}
-                        />
-                        <i
-                          className="is-skipped"
-                          style={{ height: `${(point.skipped / maximumDaily) * 100}%` }}
-                        />
-                        <i
-                          className="is-completed"
-                          style={{ height: `${(point.completed / maximumDaily) * 100}%` }}
-                        />
-                      </span>
-                      <small>{dayLabel(point.date)}</small>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="dashboard-slot-rates">
-                {data.practice.slots.map((slot) => (
-                  <div key={slot.slotKey}>
-                    <span>
-                      {slot.slotKey === 'MORNING'
-                        ? 'Sabah'
-                        : slot.slotKey === 'EVENING'
-                          ? 'Akşam'
-                          : slot.slotKey}
-                    </span>
-                    <strong>%{slot.completionRate}</strong>
-                    <i>
-                      <b style={{ width: `${slot.completionRate}%` }} />
-                    </i>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="dashboard-panel dashboard-content-panel">
-              <div className="dashboard-panel-heading">
-                <div>
-                  <span>İÇERİK ETKİLEŞİMİ</span>
-                  <h2>Okuma ve meditasyonlar</h2>
-                </div>
-              </div>
-              <a href="/readings">
-                <BookOpen />
-                <span>
-                  <strong>Atanan okumalar</strong>
-                  <small>
-                    {data.content.assignments.COMPLETED ?? 0} tamamlandı ·{' '}
-                    {data.content.assignments.OPENED ?? 0} okunuyor
-                  </small>
-                </span>
-                <ArrowRight />
-              </a>
-              <div className="dashboard-content-metrics">
-                <article>
-                  <span>Global okuma</span>
-                  <strong>{data.content.readings.views}</strong>
-                  <small>görüntülenme · {data.content.readings.whatsappClicks} WhatsApp</small>
-                </article>
-                <article>
-                  <span>Global meditasyon</span>
-                  <strong>{data.content.meditations.starts}</strong>
-                  <small>başlatma · {data.content.meditations.completions} tamamlama</small>
-                </article>
-                <article>
-                  <span>İlgi sinyali</span>
-                  <strong>
-                    {data.content.meditations.ctaClicks + data.content.readings.whatsappClicks}
-                  </strong>
-                  <small>toplam CTA tıklaması</small>
-                </article>
-              </div>
-            </section>
-
-            <section className="dashboard-panel dashboard-meetings-panel">
-              <div className="dashboard-panel-heading">
-                <div>
-                  <span>BUGÜN</span>
-                  <h2>Görüşmeler</h2>
-                </div>
-                <a href="/meetings">
-                  Takvimi aç <ArrowRight />
-                </a>
-              </div>
-              {data.meetings.length ? (
-                data.meetings.map((meeting) => (
-                  <a key={meeting.id} href={`/students/${meeting.studentId}`}>
-                    <span className="dashboard-meeting-time">
-                      <Clock3 />
-                      <strong>
-                        {new Date(meeting.startsAt).toLocaleTimeString('tr-TR', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </strong>
-                    </span>
-                    <span>
-                      <strong>{name(meeting.fullName, meeting.studentId)}</strong>
-                      <small>{meeting.status === 'SCHEDULED' ? 'Planlandı' : meeting.status}</small>
-                    </span>
-                    <ArrowRight />
-                  </a>
-                ))
-              ) : (
-                <EmptyState icon={CalendarDays} title="Bugün görüşme yok" />
-              )}
-            </section>
-          </div>
         </>
       )}
     </main>

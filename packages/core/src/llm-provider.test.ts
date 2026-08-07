@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GeminiPaidAdapter } from './llm-provider.js';
+import type { StudentPulseOutput, StudentReportOutput } from './llm.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -72,5 +73,104 @@ describe('GeminiPaidAdapter', () => {
         operationId: 'operation',
       }),
     ).rejects.toMatchObject({ code: 'TRANSIENT' });
+  });
+
+  it('validates student pulse structured output', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              candidates: [
+                {
+                  content: {
+                    parts: [
+                      {
+                        text: JSON.stringify({
+                          tone: 'NEUTRAL',
+                          confidence: 0.78,
+                          summary: 'Pratik deneyimi dengeli ilerliyor.',
+                          strengths: ['Duyumları fark ediyor.'],
+                          challenges: ['Dikkat zaman zaman dağılıyor.'],
+                          coachTopics: ['Dikkati geri getirme'],
+                          suggestedAction: 'KEEP',
+                          safetyConcern: false,
+                        }),
+                      },
+                    ],
+                  },
+                },
+              ],
+              usageMetadata: { promptTokenCount: 20, candidatesTokenCount: 15 },
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+
+    const result = await new GeminiPaidAdapter('test-key').generateJson<StudentPulseOutput>({
+      model: {
+        id: 'model',
+        providerId: 'provider',
+        providerModelId: 'gemini-test',
+        status: 'ACTIVE',
+      },
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      maxOutputTokens: 700,
+      operationId: 'student-pulse-operation',
+      outputSchema: 'student-pulse',
+    });
+
+    expect(result.output).toMatchObject({ tone: 'NEUTRAL', suggestedAction: 'KEEP' });
+    expect(result.totalTokens).toBe(35);
+  });
+
+  it('validates evidence-backed student report output', async () => {
+    const output = {
+      subtitle: 'Sakin ve düzenli geçen bir hafta.',
+      featuredReflectionId: null,
+      gentleObservation: {
+        text: 'Sabah pratiklerinde devamlılık görülüyor.',
+        evidenceRefs: ['practice:summary'],
+      },
+      supportPoint: {
+        text: 'Akşam düzenini birlikte değerlendirebiliriz.',
+        evidenceRefs: ['practice:comparison'],
+      },
+      weeklyEvaluation: { text: 'Bu hafta ritmini korudun.', evidenceRefs: ['practice:summary'] },
+      internal: { confidence: 0.82, insufficientEvidence: false, safetyConcern: false },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              candidates: [{ content: { parts: [{ text: JSON.stringify(output) }] } }],
+              usageMetadata: { promptTokenCount: 24, candidatesTokenCount: 20 },
+            }),
+            { status: 200 },
+          ),
+      ),
+    );
+
+    const result = await new GeminiPaidAdapter('test-key').generateJson<StudentReportOutput>({
+      model: {
+        id: 'model',
+        providerId: 'provider',
+        providerModelId: 'gemini-test',
+        status: 'ACTIVE',
+      },
+      systemPrompt: 'system',
+      userPrompt: 'user',
+      maxOutputTokens: 1200,
+      operationId: 'student-report-operation',
+      outputSchema: 'student-report',
+    });
+
+    expect(result.output.gentleObservation.evidenceRefs).toEqual(['practice:summary']);
+    expect(result.totalTokens).toBe(44);
   });
 });

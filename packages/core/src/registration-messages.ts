@@ -190,6 +190,11 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
     content:
       'Merhaba{{studentDisplayName}}, seninle “{{drawingTitle}}” başlıklı çizimi paylaşıyorum. Çizimi yakınlaştırarak ve ekranda hareket ettirerek inceleyebilirsin.\n\nÇizimi aç: {{drawingUrl}}',
   },
+  {
+    eventKey: 'STUDENT_REPORT_SHARED',
+    content:
+      'Merhaba{{studentDisplayName}}, {{periodText}} dönemine ait pratik karnen hazır. Bu dönemdeki pratik düzenini ve öne çıkan noktaları aşağıdaki bağlantıdan inceleyebilirsin.\n\nKarneni aç: {{reportUrl}}\n\nGörüşmemizde birlikte değerlendirebiliriz.',
+  },
 ] as const;
 
 export function getDefaultRegistrationMessage(eventKey: SystemEventKey): string | undefined {

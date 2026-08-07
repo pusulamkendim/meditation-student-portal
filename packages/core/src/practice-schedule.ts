@@ -99,6 +99,12 @@ export function createPracticeResponsePayload(
   return payload;
 }
 
+export function humanizePracticeResponsePayload(value: string): string {
+  const parsed = parsePracticeResponsePayload(value);
+  if (!parsed) return value;
+  return parsed.response === 'COMPLETED' ? 'Yaptım' : 'Yapamadım';
+}
+
 function zonedDateTime(date: Date, localTime: string, timezone: string): Date {
   const [hour, minute] = localTime.split(':').map(Number);
   if (

@@ -94,6 +94,35 @@ export function currentMeditationRenderMap(
   );
 }
 
+export function presentSubscriptionEndUpdate(
+  subscription: {
+    id: string;
+    studentId: string;
+    status: SubscriptionStatus;
+    startDate: Date;
+    priceMinor: bigint;
+    currency: string;
+    version: number;
+  },
+  endExclusive: Date,
+  addedSessionCount: number,
+  suppressedSessionCount: number,
+  version = subscription.version + 1,
+) {
+  return {
+    id: subscription.id,
+    studentId: subscription.studentId,
+    status: subscription.status,
+    startDate: subscription.startDate,
+    endExclusive,
+    priceMinor: subscription.priceMinor.toString(),
+    currency: subscription.currency,
+    version,
+    addedSessionCount,
+    suppressedSessionCount,
+  };
+}
+
 @Injectable()
 export class PracticeService {
   private readonly encryption: FieldEncryption;
@@ -190,7 +219,14 @@ export class PracticeService {
         throw new BadRequestException('Üyelik bitiş tarihi başlangıç ve bugünden sonra olmalıdır.');
       if (subscription.version !== expectedVersion)
         throw new ConflictException('Üyelik başka bir işlem tarafından güncellendi.');
-      if (endExclusive.getTime() === subscription.endExclusive.getTime()) return subscription;
+      if (endExclusive.getTime() === subscription.endExclusive.getTime())
+        return presentSubscriptionEndUpdate(
+          subscription,
+          subscription.endExclusive,
+          0,
+          0,
+          subscription.version,
+        );
 
       const overlap = await tx.subscriptionPeriod.findFirst({
         where: {
@@ -368,13 +404,12 @@ export class PracticeService {
           correlationId: `subscription-${subscription.id}`,
         },
       });
-      return {
-        ...subscription,
+      return presentSubscriptionEndUpdate(
+        subscription,
         endExclusive,
-        version: expectedVersion + 1,
         addedSessionCount,
         suppressedSessionCount,
-      };
+      );
     });
   }
 

@@ -16,6 +16,7 @@ import { DrawingModule } from './drawings/drawing.module.js';
 import { ReadingModule } from './readings/reading.module.js';
 import { MeditationModule } from './meditations/meditation.module.js';
 import { ContentHubModule } from './content-hub/content-hub.module.js';
+import { StudentReportModule } from './student-reports/student-report.module.js';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ContentHubModule } from './content-hub/content-hub.module.js';
     ReadingModule,
     MeditationModule,
     ContentHubModule,
+    StudentReportModule,
   ],
   controllers: [HealthController],
 })

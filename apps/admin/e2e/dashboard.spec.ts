@@ -11,21 +11,33 @@ const dashboard = {
     todayMeetings: 1,
   },
   practice: {
+    periodStart: '2026-07-29',
+    periodEndExclusive: '2026-08-05',
     completed: 12,
     skipped: 2,
     missed: 4,
+    pending: 1,
     completionRate: 66.7,
     responseRate: 77.8,
     reflectionRate: 75,
     trend: 8.4,
+    previous: {
+      completed: 9,
+      skipped: 3,
+      missed: 6,
+      completionRate: 50,
+      responseRate: 66.7,
+      reflectionRate: 55.6,
+    },
+    deltas: { completionRate: 16.7, responseRate: 11.1, reflectionRate: 19.4 },
     daily: [
-      { date: '2026-07-30', completed: 1, skipped: 0, missed: 1 },
-      { date: '2026-07-31', completed: 2, skipped: 0, missed: 0 },
-      { date: '2026-08-01', completed: 1, skipped: 1, missed: 1 },
-      { date: '2026-08-02', completed: 2, skipped: 0, missed: 1 },
-      { date: '2026-08-03', completed: 1, skipped: 0, missed: 0 },
-      { date: '2026-08-04', completed: 3, skipped: 1, missed: 1 },
-      { date: '2026-08-05', completed: 2, skipped: 0, missed: 0 },
+      { date: '2026-07-29', completed: 1, skipped: 0, missed: 1, pending: 0 },
+      { date: '2026-07-30', completed: 2, skipped: 0, missed: 0, pending: 0 },
+      { date: '2026-07-31', completed: 1, skipped: 1, missed: 1, pending: 0 },
+      { date: '2026-08-01', completed: 2, skipped: 0, missed: 1, pending: 0 },
+      { date: '2026-08-02', completed: 1, skipped: 0, missed: 0, pending: 1 },
+      { date: '2026-08-03', completed: 3, skipped: 1, missed: 1, pending: 0 },
+      { date: '2026-08-04', completed: 2, skipped: 0, missed: 0, pending: 0 },
     ],
     slots: [
       { slotKey: 'MORNING', completed: 10, total: 13, completionRate: 76.9 },
@@ -41,9 +53,29 @@ const dashboard = {
       completed: 3,
       skipped: 1,
       missed: 3,
+      pending: 0,
       reflections: 2,
       completionRate: 42.9,
       trend: -7.1,
+      previous: {
+        completed: 3,
+        skipped: 1,
+        missed: 2,
+        reflections: 2,
+        completionRate: 50,
+      },
+      insight: {
+        tone: 'NEUTRAL',
+        confidence: 0.82,
+        suggestedAction: 'SIMPLIFY',
+        safetyConcern: false,
+        reflectionCount: 2,
+        generatedAt: '2026-08-05T03:15:00.000Z',
+        summary: 'Düzen dalgalı; sabah pratiği daha sürdürülebilir görünüyor.',
+        strengths: ['Pratiğe geri dönüyor.'],
+        challenges: ['Akşam oturumları aksıyor.'],
+        coachTopics: ['Programı sadeleştirme'],
+      },
       openHandoffs: 0,
       schedule: [
         { slotKey: 'MORNING', localTime: '09:15', durationMinutes: 20 },
@@ -59,9 +91,17 @@ const dashboard = {
       completed: 5,
       skipped: 1,
       missed: 0,
+      pending: 1,
       reflections: 5,
       completionRate: 83.3,
       trend: 12,
+      previous: {
+        completed: 4,
+        skipped: 1,
+        missed: 1,
+        reflections: 3,
+        completionRate: 66.7,
+      },
       openHandoffs: 1,
       schedule: [{ slotKey: 'MORNING', localTime: '10:00', durationMinutes: 20 }],
     },
@@ -141,14 +181,17 @@ test.beforeEach(async ({ page }) => {
   );
 });
 
-test('shows daily actions, student pulse and content metrics without horizontal overflow', async ({
+test('shows daily actions, student status and content metrics without horizontal overflow', async ({
   page,
 }, testInfo) => {
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Genel Bakış' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Haftalık takip özeti' })).toBeVisible();
+  await expect(page.getByText('ÖĞRENCİ DURUMLARI')).toBeVisible();
   await expect(page.getByText('Son öğrenci mesajları')).toBeVisible();
-  await expect(page.getByText('Sadeleştirme önerisi')).toBeVisible();
+  await expect(page.getByText('Nötr · %82')).toBeVisible();
+  await expect(page.getByText('Programı sadeleştirme')).toBeVisible();
   await expect(
     page.getByText('Merhaba Duygu, saat 10:00 pratiğine 10 dakika kaldı.'),
   ).toBeVisible();

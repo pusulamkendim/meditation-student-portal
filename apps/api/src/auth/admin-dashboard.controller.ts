@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
 import { Controller, Get, Inject, Req, UseGuards } from '@nestjs/common';
-import { CLOCK_TOKEN, type Clock, FieldEncryption } from '@meditation/core';
+import {
+  CLOCK_TOKEN,
+  type Clock,
+  FieldEncryption,
+  humanizePracticeResponsePayload,
+  type StudentPulseOutput,
+} from '@meditation/core';
 import type { FastifyRequest } from 'fastify';
 
 import { PrismaService } from '../database/prisma.service.js';
@@ -41,9 +47,8 @@ export class AdminDashboardController {
   async dashboard(@Req() request: FastifyRequest) {
     const now = this.clock.now();
     const today = serviceDate(now);
-    const lastSevenStart = new Date(today.getTime() - 6 * dayMilliseconds);
-    const previousSevenStart = new Date(today.getTime() - 13 * dayMilliseconds);
-    const tomorrow = new Date(today.getTime() + dayMilliseconds);
+    const lastSevenStart = new Date(today.getTime() - 7 * dayMilliseconds);
+    const previousSevenStart = new Date(today.getTime() - 14 * dayMilliseconds);
     const recentThreshold = new Date(now.getTime() - dayMilliseconds);
 
     const [students, paymentReviewCount, inboxEvents, failedIntents, openHandoffs, meetings] =
@@ -64,8 +69,8 @@ export class AdminDashboardController {
             },
             practiceSessions: {
               where: {
-                serviceDate: { gte: previousSevenStart, lt: tomorrow },
-                status: { in: ['COMPLETED', 'SKIPPED', 'MISSED'] },
+                serviceDate: { gte: previousSevenStart, lt: today },
+                status: { in: ['COMPLETED', 'SKIPPED', 'MISSED', 'AWAITING_RESPONSE'] },
               },
               orderBy: { serviceDate: 'asc' },
               select: {
@@ -88,6 +93,22 @@ export class AdminDashboardController {
               },
             },
             handoffs: { where: { status: 'OPEN' }, select: { id: true } },
+            pulseInsights: {
+              take: 1,
+              orderBy: { createdAt: 'desc' },
+              select: {
+                periodStart: true,
+                periodEndExclusive: true,
+                tone: true,
+                confidence: true,
+                suggestedAction: true,
+                safetyConcern: true,
+                reflectionCount: true,
+                analysisEncrypted: true,
+                analysisKeyId: true,
+                createdAt: true,
+              },
+            },
           },
         }),
         this.prisma.payment.count({ where: { status: 'REPORTED' } }),
@@ -171,15 +192,25 @@ export class AdminDashboardController {
     const realStudents = namedStudents.filter((student) => !isTestProfile(student.fullName));
     const daily = Array.from({ length: 7 }, (_, index) => {
       const date = new Date(lastSevenStart.getTime() + index * dayMilliseconds);
-      return { date: date.toISOString().slice(0, 10), completed: 0, skipped: 0, missed: 0 };
+      return {
+        date: date.toISOString().slice(0, 10),
+        completed: 0,
+        skipped: 0,
+        missed: 0,
+        pending: 0,
+      };
     });
     const dailyByDate = new Map(daily.map((item) => [item.date, item]));
 
     let completed = 0;
     let skipped = 0;
     let missed = 0;
+    let pending = 0;
     let reflections = 0;
     let previousCompleted = 0;
+    let previousSkipped = 0;
+    let previousMissed = 0;
+    let previousReflections = 0;
     let previousOutcomeCount = 0;
     const slotMetrics = new Map<string, { completed: number; total: number }>();
 
@@ -193,26 +224,45 @@ export class AdminDashboardController {
       const currentCompleted = current.filter((session) => session.status === 'COMPLETED').length;
       const currentSkipped = current.filter((session) => session.status === 'SKIPPED').length;
       const currentMissed = current.filter((session) => session.status === 'MISSED').length;
+      const currentPending = current.filter(
+        (session) => session.status === 'AWAITING_RESPONSE',
+      ).length;
       const currentReflections = current.filter((session) => session.reflection).length;
       const previousCompletedForStudent = previous.filter(
         (session) => session.status === 'COMPLETED',
       ).length;
+      const previousSkippedForStudent = previous.filter(
+        (session) => session.status === 'SKIPPED',
+      ).length;
+      const previousMissedForStudent = previous.filter(
+        (session) => session.status === 'MISSED',
+      ).length;
+      const previousReflectionsForStudent = previous.filter((session) => session.reflection).length;
 
       completed += currentCompleted;
       skipped += currentSkipped;
       missed += currentMissed;
+      pending += currentPending;
       reflections += currentReflections;
       previousCompleted += previousCompletedForStudent;
-      previousOutcomeCount += previous.length;
+      previousSkipped += previousSkippedForStudent;
+      previousMissed += previousMissedForStudent;
+      previousReflections += previousReflectionsForStudent;
+      previousOutcomeCount += previous.filter(
+        (session) => session.status !== 'AWAITING_RESPONSE',
+      ).length;
 
       for (const session of current) {
         const key = session.serviceDate.toISOString().slice(0, 10);
         const point = dailyByDate.get(key);
         if (point) {
-          const status = session.status.toLocaleLowerCase('en-US') as
-            'completed' | 'skipped' | 'missed';
+          const status =
+            session.status === 'AWAITING_RESPONSE'
+              ? 'pending'
+              : (session.status.toLocaleLowerCase('en-US') as 'completed' | 'skipped' | 'missed');
           point[status] += 1;
         }
+        if (session.status === 'AWAITING_RESPONSE') continue;
         const slot = session.practiceSlot?.slotKey ?? 'OTHER';
         const metric = slotMetrics.get(slot) ?? { completed: 0, total: 0 };
         metric.total += 1;
@@ -221,9 +271,20 @@ export class AdminDashboardController {
       }
 
       const activeSlots = student.practicePlans[0]?.slots ?? [];
-      const outcomeCount = current.length;
+      const outcomeCount = current.length - currentPending;
       const completionRate = percentage(currentCompleted, outcomeCount);
-      const previousRate = percentage(previousCompletedForStudent, previous.length);
+      const previousOutcomeCountForStudent =
+        previousCompletedForStudent + previousSkippedForStudent + previousMissedForStudent;
+      const previousRate = percentage(previousCompletedForStudent, previousOutcomeCountForStudent);
+      const insightRecord = student.pulseInsights[0];
+      const insight = insightRecord
+        ? this.decryptPulseInsight(
+            student.id,
+            insightRecord.periodEndExclusive,
+            insightRecord.analysisEncrypted,
+            insightRecord.analysisKeyId,
+          )
+        : undefined;
       const simplify =
         activeSlots.length > 1 && outcomeCount >= 3 && (completionRate < 60 || currentMissed >= 2);
       return {
@@ -235,9 +296,31 @@ export class AdminDashboardController {
         completed: currentCompleted,
         skipped: currentSkipped,
         missed: currentMissed,
+        pending: currentPending,
         reflections: currentReflections,
         completionRate,
         trend: Math.round((completionRate - previousRate) * 10) / 10,
+        previous: {
+          completed: previousCompletedForStudent,
+          skipped: previousSkippedForStudent,
+          missed: previousMissedForStudent,
+          reflections: previousReflectionsForStudent,
+          completionRate: previousRate,
+        },
+        insight: insightRecord
+          ? {
+              tone: insightRecord.tone,
+              confidence: insightRecord.confidence,
+              suggestedAction: insightRecord.suggestedAction,
+              safetyConcern: insightRecord.safetyConcern,
+              reflectionCount: insightRecord.reflectionCount,
+              generatedAt: insightRecord.createdAt.toISOString(),
+              summary: insight?.summary,
+              strengths: insight?.strengths ?? [],
+              challenges: insight?.challenges ?? [],
+              coachTopics: insight?.coachTopics ?? [],
+            }
+          : undefined,
         openHandoffs: student.handoffs.length,
         schedule: activeSlots.map((slot) => ({
           slotKey: slot.slotKey,
@@ -251,6 +334,15 @@ export class AdminDashboardController {
     });
 
     const outcomeCount = completed + skipped + missed;
+    const currentCompletionRate = percentage(completed, outcomeCount);
+    const currentResponseRate = percentage(completed + skipped, outcomeCount);
+    const currentReflectionRate = percentage(reflections, completed);
+    const previousCompletionRate = percentage(previousCompleted, previousOutcomeCount);
+    const previousResponseRate = percentage(
+      previousCompleted + previousSkipped,
+      previousOutcomeCount,
+    );
+    const previousReflectionRate = percentage(previousReflections, previousCompleted);
     const [readingAssignments, readingPublic, meditationPublic] = await Promise.all([
       this.prisma.readingAssignment.groupBy({ by: ['status'], _count: { _all: true } }),
       this.prisma.readingPublicVisit.aggregate({
@@ -300,18 +392,29 @@ export class AdminDashboardController {
       },
       practice: {
         periodDays: 7,
+        periodStart: lastSevenStart.toISOString().slice(0, 10),
+        periodEndExclusive: today.toISOString().slice(0, 10),
         completed,
         skipped,
         missed,
-        completionRate: percentage(completed, outcomeCount),
-        responseRate: percentage(completed + skipped, outcomeCount),
-        reflectionRate: percentage(reflections, completed),
-        trend:
-          Math.round(
-            (percentage(completed, outcomeCount) -
-              percentage(previousCompleted, previousOutcomeCount)) *
-              10,
-          ) / 10,
+        pending,
+        completionRate: currentCompletionRate,
+        responseRate: currentResponseRate,
+        reflectionRate: currentReflectionRate,
+        trend: Math.round((currentCompletionRate - previousCompletionRate) * 10) / 10,
+        previous: {
+          completed: previousCompleted,
+          skipped: previousSkipped,
+          missed: previousMissed,
+          completionRate: previousCompletionRate,
+          responseRate: previousResponseRate,
+          reflectionRate: previousReflectionRate,
+        },
+        deltas: {
+          completionRate: Math.round((currentCompletionRate - previousCompletionRate) * 10) / 10,
+          responseRate: Math.round((currentResponseRate - previousResponseRate) * 10) / 10,
+          reflectionRate: Math.round((currentReflectionRate - previousReflectionRate) * 10) / 10,
+        },
         daily,
         slots: [...slotMetrics.entries()].map(([slotKey, metric]) => ({
           slotKey,
@@ -323,7 +426,8 @@ export class AdminDashboardController {
       studentPulse: studentPulse.sort((a, b) => a.completionRate - b.completionRate),
       recentMessages: inboxEvents.map((event) => {
         const normalized = event.normalizedData as Record<string, unknown>;
-        const content = this.decryptInboxContent(event.dedupeKey, normalized);
+        const rawContent = this.decryptInboxContent(event.dedupeKey, normalized);
+        const content = rawContent ? humanizePracticeResponsePayload(rawContent) : undefined;
         return {
           id: event.id,
           studentId: event.studentId ?? undefined,
@@ -428,6 +532,23 @@ export class AdminDashboardController {
         },
         dedupeKey,
       );
+    } catch {
+      return undefined;
+    }
+  }
+
+  private decryptPulseInsight(
+    studentId: string,
+    periodEndExclusive: Date,
+    encrypted: Uint8Array,
+    keyId: string,
+  ): StudentPulseOutput | undefined {
+    try {
+      const value = this.encryption.decrypt(
+        { ciphertext: Buffer.from(encrypted), keyId },
+        `student-pulse:${studentId}:${periodEndExclusive.toISOString().slice(0, 10)}`,
+      );
+      return JSON.parse(value) as StudentPulseOutput;
     } catch {
       return undefined;
     }

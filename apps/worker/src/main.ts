@@ -18,6 +18,8 @@ import { MeetingCalendarWorker } from './meeting-calendar.js';
 import { LlmAgentProcessor } from './llm-agent.js';
 import { KnowledgeIngestionProcessor } from './knowledge-ingestion.js';
 import { WeeklySummaryAiProcessor } from './weekly-summary-ai.js';
+import { StudentPulseAiProcessor } from './student-pulse-ai.js';
+import { StudentReportAiProcessor } from './student-report-ai.js';
 import { RegistrationInboundProcessor } from './registration-inbound.js';
 import { InboundIntentRouter } from './inbound-intent-router.js';
 import { AdminPanelNotificationProcessor } from './admin-panel-notification.js';
@@ -33,6 +35,8 @@ async function bootstrap(): Promise<void> {
   const llmAgent = new LlmAgentProcessor(prisma, config, systemClock);
   const knowledgeIngestion = new KnowledgeIngestionProcessor(prisma, config, systemClock);
   const weeklySummaryAi = new WeeklySummaryAiProcessor(prisma, config, systemClock);
+  const studentPulseAi = new StudentPulseAiProcessor(prisma, config, systemClock);
+  const studentReportAi = new StudentReportAiProcessor(prisma, config, systemClock);
   const registrationInbound = new RegistrationInboundProcessor(prisma, config, systemClock);
   const inboundIntentRouter = new InboundIntentRouter(llmAgent, prisma, systemClock, config);
   const adminPanelNotifications = new AdminPanelNotificationProcessor(prisma);
@@ -80,6 +84,7 @@ async function bootstrap(): Promise<void> {
               'llm.agent-reply',
               'knowledge.document-parse',
               'llm.weekly-summary',
+              'llm.student-report',
               'admin.notifications',
               'meditation.audio-render',
             ],
@@ -92,6 +97,7 @@ async function bootstrap(): Promise<void> {
         const gatedFlag: Record<string, string> = {
           'knowledge.document-parse': 'knowledge.ingestion.enabled',
           'llm.weekly-summary': 'llm.weekly-summary.enabled',
+          'llm.student-report': 'llm.student-report.enabled',
         };
         const requiredFlag = gatedFlag[event.topic];
         if (requiredFlag) {
@@ -107,6 +113,8 @@ async function bootstrap(): Promise<void> {
           versionId?: string;
           outboxEventId?: string;
           renderId?: string;
+          reportId?: string;
+          operationId?: string;
         };
         let queueName: string;
         let data: Record<string, string | undefined>;
@@ -134,6 +142,10 @@ async function bootstrap(): Promise<void> {
           case 'llm.weekly-summary':
             queueName = 'llm.weekly-summary';
             data = { meetingId: payload.meetingId };
+            break;
+          case 'llm.student-report':
+            queueName = 'llm.student-report';
+            data = { reportId: payload.reportId, operationId: payload.operationId };
             break;
           case 'admin.notifications':
             queueName = 'admin.notification';
@@ -244,6 +256,21 @@ async function bootstrap(): Promise<void> {
     for (const job of jobs)
       if (job.data.meetingId) await weeklySummaryAi.process(job.data.meetingId);
   });
+  await boss.createQueue('llm.student-pulse-daily');
+  await boss.work('llm.student-pulse-daily', async () => {
+    const result = await studentPulseAi.processAll();
+    logger.info(result, 'Daily student pulse analysis completed');
+  });
+  await boss.schedule('llm.student-pulse-daily', '15 2 * * *', {});
+  await boss.createQueue('llm.student-report');
+  await boss.work<{ reportId: string; operationId?: string }>(
+    'llm.student-report',
+    async (jobs) => {
+      for (const job of jobs)
+        if (job.data.reportId)
+          await studentReportAi.process(job.data.reportId, job.data.operationId);
+    },
+  );
   await boss.createQueue('admin.notification');
   await boss.work<{ outboxEventId: string }>('admin.notification', async (jobs) => {
     for (const job of jobs)

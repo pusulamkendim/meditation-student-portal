@@ -14,7 +14,23 @@ describe('AdminDashboardController', () => {
     const testId = '22222222-2222-4222-8222-222222222222';
     const realName = encryption.encrypt('Duygu Bulut', `student:${realId}:name`);
     const testName = encryption.encrypt('Smoke TestUser', `student:${testId}:name`);
-    const session = (date: string, status: 'COMPLETED' | 'SKIPPED' | 'MISSED') => ({
+    const pulse = encryption.encrypt(
+      JSON.stringify({
+        tone: 'NEUTRAL',
+        confidence: 0.8,
+        summary: 'Program düzeni dalgalı görünüyor.',
+        strengths: ['Pratiğe yanıt veriyor.'],
+        challenges: ['Düzenli sürdürmekte zorlanıyor.'],
+        coachTopics: ['Programı sadeleştirme'],
+        suggestedAction: 'SIMPLIFY',
+        safetyConcern: false,
+      }),
+      `student-pulse:${realId}:2026-08-05`,
+    );
+    const session = (
+      date: string,
+      status: 'COMPLETED' | 'SKIPPED' | 'MISSED' | 'AWAITING_RESPONSE',
+    ) => ({
       serviceDate: new Date(`${date}T00:00:00.000Z`),
       status,
       reflection: status === 'COMPLETED' ? { id: `reflection-${date}` } : null,
@@ -33,10 +49,11 @@ describe('AdminDashboardController', () => {
               channelAccount: { type: 'TELEGRAM' },
             },
             practiceSessions: [
-              session('2026-08-03', 'COMPLETED'),
+              session('2026-08-01', 'AWAITING_RESPONSE'),
+              session('2026-08-02', 'COMPLETED'),
+              session('2026-08-03', 'SKIPPED'),
               session('2026-08-04', 'MISSED'),
-              session('2026-08-05', 'SKIPPED'),
-              session('2026-07-29', 'COMPLETED'),
+              session('2026-07-28', 'COMPLETED'),
             ],
             practicePlans: [
               {
@@ -47,6 +64,20 @@ describe('AdminDashboardController', () => {
               },
             ],
             handoffs: [],
+            pulseInsights: [
+              {
+                periodStart: new Date('2026-07-29T00:00:00.000Z'),
+                periodEndExclusive: new Date('2026-08-05T00:00:00.000Z'),
+                tone: 'NEUTRAL',
+                confidence: 0.8,
+                suggestedAction: 'SIMPLIFY',
+                safetyConcern: false,
+                reflectionCount: 1,
+                analysisEncrypted: new Uint8Array(pulse.ciphertext),
+                analysisKeyId: pulse.keyId,
+                createdAt: new Date('2026-08-05T03:15:00.000Z'),
+              },
+            ],
           },
           {
             id: testId,
@@ -57,6 +88,7 @@ describe('AdminDashboardController', () => {
             practiceSessions: [session('2026-08-05', 'COMPLETED')],
             practicePlans: [],
             handoffs: [],
+            pulseInsights: [],
           },
         ]),
       },
@@ -98,6 +130,7 @@ describe('AdminDashboardController', () => {
       completed: 1,
       skipped: 1,
       missed: 1,
+      pending: 1,
       completionRate: 33.3,
       responseRate: 66.7,
       reflectionRate: 100,
@@ -107,6 +140,11 @@ describe('AdminDashboardController', () => {
       id: realId,
       fullName: 'Duygu Bulut',
       recommendation: 'Son 7 günlük yanıtlara göre programı tek seansa indirmeyi değerlendirin.',
+      insight: {
+        tone: 'NEUTRAL',
+        summary: 'Program düzeni dalgalı görünüyor.',
+        coachTopics: ['Programı sadeleştirme'],
+      },
     });
   });
 });

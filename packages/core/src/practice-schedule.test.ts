@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   generatePracticeSchedule,
+  humanizePracticeResponsePayload,
   parsePracticeResponsePayload,
   createPracticeResponsePayload,
   practiceTiming,
@@ -80,5 +81,7 @@ describe('practice schedule', () => {
       nonce,
       response: 'COMPLETED',
     });
+    expect(humanizePracticeResponsePayload(payload)).toBe('Yaptım');
+    expect(humanizePracticeResponsePayload('normal mesaj')).toBe('normal mesaj');
   });
 });

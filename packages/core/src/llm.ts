@@ -6,6 +6,7 @@ export const llmTaskSchema = z.enum([
   'AGENT_REPLY',
   'REFLECTION_TAGGING',
   'WEEKLY_SUMMARY',
+  'STUDENT_PULSE',
   'KNOWLEDGE_EMBEDDING',
   'RAG_QUERY_REWRITE',
   'RAG_RERANK',
@@ -132,6 +133,37 @@ export const weeklySummaryOutputSchema = z.object({
   handoffRequired: z.boolean().default(false),
 });
 export type WeeklySummaryOutput = z.infer<typeof weeklySummaryOutputSchema>;
+
+export const studentPulseOutputSchema = z.object({
+  tone: z.enum(['POSITIVE', 'NEUTRAL', 'NEGATIVE']),
+  confidence: z.number().min(0).max(1),
+  summary: z.string().min(1).max(1000),
+  strengths: z.array(z.string().min(1).max(240)).max(3),
+  challenges: z.array(z.string().min(1).max(240)).max(3),
+  coachTopics: z.array(z.string().min(1).max(240)).max(3),
+  suggestedAction: z.enum(['KEEP', 'SIMPLIFY', 'DISCUSS']),
+  safetyConcern: z.boolean().default(false),
+});
+export type StudentPulseOutput = z.infer<typeof studentPulseOutputSchema>;
+
+const studentReportNarrativeSchema = z.object({
+  text: z.string().min(1).max(1600),
+  evidenceRefs: z.array(z.string().min(1).max(160)).min(1).max(12),
+});
+
+export const studentReportOutputSchema = z.object({
+  subtitle: z.string().min(1).max(180),
+  featuredReflectionId: z.string().uuid().nullable(),
+  gentleObservation: studentReportNarrativeSchema,
+  supportPoint: studentReportNarrativeSchema,
+  weeklyEvaluation: studentReportNarrativeSchema,
+  internal: z.object({
+    confidence: z.number().min(0).max(1),
+    insufficientEvidence: z.boolean(),
+    safetyConcern: z.boolean(),
+  }),
+});
+export type StudentReportOutput = z.infer<typeof studentReportOutputSchema>;
 
 export interface LlmModelCandidate {
   id: string;

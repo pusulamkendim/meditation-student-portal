@@ -4,6 +4,7 @@ import {
   currentMeditationRenderMap,
   formatPracticeScheduleSummary,
   normalizeActiveWeekdays,
+  presentSubscriptionEndUpdate,
   PracticeService,
 } from './practice.service.js';
 
@@ -142,5 +143,46 @@ describe('practice plan settings', () => {
         [1, 3, 5],
       ),
     ).toBe('Pazartesi, Çarşamba, Cuma; sabah 08:00 (15 dk), akşam 21:00 (25 dk)');
+  });
+});
+
+describe('subscription end response', () => {
+  it('returns a JSON-safe DTO without leaking the included student record', () => {
+    const subscription = {
+      id: 'subscription-1',
+      studentId: 'student-1',
+      status: 'ACTIVE' as const,
+      startDate: new Date('2026-07-13T00:00:00.000Z'),
+      priceMinor: 400_000n,
+      currency: 'TRY',
+      version: 3,
+      student: { fullNameEncrypted: new Uint8Array([1, 2, 3]) },
+    };
+    const result = presentSubscriptionEndUpdate(
+      subscription,
+      new Date('2026-08-20T00:00:00.000Z'),
+      10,
+      0,
+    );
+
+    expect(() => JSON.stringify(result)).not.toThrow();
+    expect(result).toMatchObject({
+      id: 'subscription-1',
+      endExclusive: new Date('2026-08-20T00:00:00.000Z'),
+      priceMinor: '400000',
+      version: 4,
+      addedSessionCount: 10,
+    });
+    expect(result).not.toHaveProperty('student');
+
+    const unchanged = presentSubscriptionEndUpdate(
+      subscription,
+      new Date('2026-08-13T00:00:00.000Z'),
+      0,
+      0,
+      subscription.version,
+    );
+    expect(unchanged.version).toBe(3);
+    expect(() => JSON.stringify(unchanged)).not.toThrow();
   });
 });

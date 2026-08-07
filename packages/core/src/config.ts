@@ -49,6 +49,7 @@ export const applicationConfigSchema = z
     API_PORT: z.coerce.number().int().positive().default(3000),
     ADMIN_ORIGIN: z.string().url().optional(),
     PUBLIC_CONTENT_ORIGIN: z.string().url().optional(),
+    STUDENT_REPORT_PUBLIC_ORIGIN: z.string().url().default('https://sakinizihin.com'),
     DATABASE_URL: z.string().url(),
     REDIS_URL: z.string().url().optional(),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),

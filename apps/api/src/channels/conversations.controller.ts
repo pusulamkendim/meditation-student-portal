@@ -11,7 +11,13 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
-import { CLOCK_TOKEN, FieldEncryption, type ApplicationConfig, type Clock } from '@meditation/core';
+import {
+  CLOCK_TOKEN,
+  FieldEncryption,
+  humanizePracticeResponsePayload,
+  type ApplicationConfig,
+  type Clock,
+} from '@meditation/core';
 import { MessageIntentStatus } from '@meditation/database';
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
@@ -142,7 +148,8 @@ export class ConversationsController {
       )
         continue;
       const threadKey = `${event.channel}:${normalized.accountExternalId}:${normalized.senderHmac}`;
-      const content = this.decryptInboxField(event.dedupeKey, normalized, 'content');
+      const rawContent = this.decryptInboxField(event.dedupeKey, normalized, 'content');
+      const content = rawContent ? humanizePracticeResponsePayload(rawContent) : undefined;
       const existing = threads.get(threadKey);
       const readingInquiry =
         content?.toLocaleLowerCase('tr-TR').includes('birebir meditasyon dersleri hakkında') ??
@@ -301,7 +308,7 @@ export class ConversationsController {
           status: item.status,
           occurredAt: item.occurredAt.toISOString(),
           channelIdentityId: item.channelIdentityId,
-          content,
+          content: content ? humanizePracticeResponsePayload(content) : undefined,
           context: item.inboxEventId ? contextByInboxId.get(item.inboxEventId) : undefined,
         };
       }),
@@ -337,7 +344,7 @@ export class ConversationsController {
                 ? normalizedOccurredAt.toISOString()
                 : item.createdAt.toISOString(),
             channelIdentityId: student.defaultChannelIdentityId,
-            content,
+            content: content ? humanizePracticeResponsePayload(content) : undefined,
             context: item.contextResolution,
           };
         }),

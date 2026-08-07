@@ -5,6 +5,8 @@ import {
   type AgentReplyOutput,
   type LlmModelCandidate,
   reflectionTagOutputSchema,
+  studentReportOutputSchema,
+  studentPulseOutputSchema,
   weeklySummaryOutputSchema,
 } from './llm.js';
 
@@ -26,7 +28,13 @@ export interface LlmGenerateResult {
 }
 
 export interface StructuredGenerateInput extends LlmGenerateInput {
-  outputSchema?: 'agent-reply' | 'inbound-intent' | 'reflection-tags' | 'weekly-summary';
+  outputSchema?:
+    | 'agent-reply'
+    | 'inbound-intent'
+    | 'reflection-tags'
+    | 'weekly-summary'
+    | 'student-pulse'
+    | 'student-report';
 }
 
 export interface StructuredGenerateResult<T> {
@@ -126,7 +134,11 @@ export class GeminiPaidAdapter {
           ? reflectionTagOutputSchema.safeParse(json)
           : input.outputSchema === 'weekly-summary'
             ? weeklySummaryOutputSchema.safeParse(json)
-            : agentReplyOutputSchema.safeParse(json);
+            : input.outputSchema === 'student-pulse'
+              ? studentPulseOutputSchema.safeParse(json)
+              : input.outputSchema === 'student-report'
+                ? studentReportOutputSchema.safeParse(json)
+                : agentReplyOutputSchema.safeParse(json);
     if (!output.success)
       throw new LlmProviderError('Gemini output failed schema validation.', 'INVALID_OUTPUT');
     const usage = parsed.data.usageMetadata;

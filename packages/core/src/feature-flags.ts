@@ -6,6 +6,8 @@ export const featureFlagKeys = [
   'knowledge.rag.enabled',
   'llm.reflection-tagging.enabled',
   'llm.weekly-summary.enabled',
+  'llm.student-pulse.enabled',
+  'llm.student-report.enabled',
   'messaging.proactive.enabled',
 ] as const;
 

@@ -20,6 +20,9 @@ import {
   CheckCircle2,
   Clock3,
   CreditCard,
+  Copy,
+  Eye,
+  FileText,
   MessageCircle,
   LifeBuoy,
   NotebookPen,
@@ -29,14 +32,17 @@ import {
   Plus,
   RefreshCw,
   Send,
+  Share2,
+  Sparkles,
   Settings2,
   ShieldCheck,
   Trash2,
   UserRound,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useParams } from 'next/navigation';
-import type { FormEvent } from 'react';
+import type { CSSProperties, FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   allPracticeWeekdays,
@@ -232,6 +238,72 @@ type StudentNote = {
   updatedAt: string;
   createdBy: string;
   updatedBy: string;
+};
+
+type StudentReport = {
+  id: string;
+  studentId: string;
+  type: 'WEEKLY' | 'MONTHLY';
+  periodStart: string;
+  periodEndExclusive: string;
+  status: 'DRAFT' | 'APPROVED' | 'PUBLISHED' | 'ARCHIVED';
+  aiStatus: 'NOT_REQUESTED' | 'PENDING' | 'READY' | 'FAILED';
+  snapshot: {
+    period: { start: string; endExclusive: string; durationDays: number };
+    practice: {
+      current: {
+        planned: number;
+        completed: number;
+        skipped: number;
+        missed: number;
+        awaitingResponse: number;
+        reflections: number;
+        completionRate: number;
+        reflectionRate: number;
+      };
+      previous: { planned: number; completed: number; completionRate: number };
+      completionRateChange: number;
+      maxCompletedDayStreak: number;
+      days: Array<{
+        date: string;
+        sessions: Array<{ id: string; slot: string; status: string; durationMinutes: number }>;
+      }>;
+    };
+    subscription?: { packageWeek?: number } | null;
+    meetings: Array<{ id: string; startsAt: string; status: string }>;
+  };
+  content: {
+    subtitle: string;
+    featuredReflectionId: string | null;
+    featuredReflectionQuote?: string;
+    gentleObservation: { text: string; evidenceRefs: string[] };
+    supportPoint: { text: string; evidenceRefs: string[] };
+    weeklyEvaluation: { text: string; evidenceRefs: string[] };
+    internal: { confidence: number; insufficientEvidence: boolean; safetyConcern: boolean };
+  };
+  version: number;
+  approvedAt?: string;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  reflectionCandidates?: Array<{
+    id: string;
+    date: string;
+    slot: string;
+    meditationType?: string | null;
+    text: string;
+  }>;
+  share?: {
+    status: string;
+    expiresAt?: string;
+    viewCount: number;
+    firstOpenedAt?: string;
+    lastOpenedAt?: string;
+    publicUrl?: string;
+    messageIntentId?: string;
+    lastSentAt?: string;
+    sendCount: number;
+  } | null;
 };
 
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', {
@@ -864,6 +936,7 @@ export default function StudentDetailPage() {
         count: data?.openHandoffCount,
       },
       { key: 'notes', label: 'Notlar', icon: NotebookPen, count: data?.noteCount },
+      { key: 'reports', label: 'Karneler', icon: FileText },
       { key: 'payments', label: 'Ödemeler', icon: CreditCard, count: data?.payments.length },
       { key: 'profile', label: 'Profil ve izinler', icon: Settings2 },
     ],
@@ -1013,6 +1086,9 @@ export default function StudentDetailPage() {
           onEdit={(note) => openNoteDialog('edit', note)}
           onDelete={(note) => openNoteDialog('delete', note)}
         />
+      ) : null}
+      {activeTab === 'reports' ? (
+        <ReportsTab studentId={studentId} studentName={data.fullName ?? 'Öğrenci'} />
       ) : null}
       {activeTab === 'payments' ? (
         <PaymentsTab
@@ -1327,6 +1403,672 @@ export default function StudentDetailPage() {
       ) : null}
     </main>
   );
+}
+
+function ReportsTab({ studentId, studentName }: { studentId: string; studentName: string }) {
+  const [reports, setReports] = useState<StudentReport[]>();
+  const [selected, setSelected] = useState<StudentReport>();
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [notice, setNotice] = useState<string>();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [period, setPeriod] = useState(defaultReportPeriod);
+  const [publicUrl, setPublicUrl] = useState<string>();
+
+  const loadDetail = useCallback(async (reportId: string) => {
+    const detail = await requestJson<StudentReport>(`/v1/admin/student-reports/${reportId}`);
+    setSelected(detail);
+    setPublicUrl(detail.share?.status === 'ACTIVE' ? detail.share.publicUrl : undefined);
+    return detail;
+  }, []);
+
+  const loadReports = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(undefined);
+      const result = await requestJson<{ items: StudentReport[] }>(
+        `/v1/admin/students/${studentId}/reports`,
+      );
+      setReports(result.items);
+      return result.items;
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Karneler yüklenemedi.');
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  }, [studentId]);
+
+  useEffect(() => {
+    void loadReports().then((items) => {
+      if (items[0]) void loadDetail(items[0].id);
+    });
+  }, [loadDetail, loadReports]);
+
+  useEffect(() => {
+    if (!selected || selected.aiStatus !== 'PENDING') return;
+    const timer = window.setInterval(() => {
+      void loadDetail(selected.id).then((value) => {
+        if (value.aiStatus !== 'PENDING') {
+          setNotice(
+            value.aiStatus === 'READY' ? 'AI karne taslağı hazır.' : 'AI taslağı üretilemedi.',
+          );
+          void loadReports();
+        }
+      });
+    }, 2500);
+    return () => window.clearInterval(timer);
+  }, [loadDetail, loadReports, selected?.aiStatus, selected?.id]);
+
+  async function createReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    try {
+      setBusy(true);
+      const created = await requestJson<StudentReport>(`/v1/admin/students/${studentId}/reports`, {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({
+          type: 'WEEKLY',
+          periodStart: period.start,
+          periodEndExclusive: period.endExclusive,
+        }),
+      });
+      setCreateOpen(false);
+      setNotice('Karne taslağı oluşturuldu.');
+      await loadReports();
+      await loadDetail(created.id);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Karne oluşturulamadı.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveReport() {
+    if (!selected) return;
+    try {
+      setBusy(true);
+      const updated = await requestJson<StudentReport>(`/v1/admin/student-reports/${selected.id}`, {
+        method: 'PATCH',
+        headers: csrfHeaders(),
+        body: JSON.stringify({
+          version: selected.version,
+          subtitle: selected.content.subtitle,
+          featuredReflectionId: selected.content.featuredReflectionId,
+          gentleObservation: selected.content.gentleObservation.text,
+          supportPoint: selected.content.supportPoint.text,
+          weeklyEvaluation: selected.content.weeklyEvaluation.text,
+        }),
+      });
+      setNotice('Karne taslağı kaydedildi.');
+      await loadDetail(updated.id);
+      await loadReports();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Karne kaydedilemedi.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function generateAi() {
+    if (!selected) return;
+    try {
+      setBusy(true);
+      await requestJson(`/v1/admin/student-reports/${selected.id}/generate-ai`, {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({}),
+      });
+      await loadDetail(selected.id);
+      setNotice('AI karne taslağı kuyruğa alındı.');
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'AI taslağı başlatılamadı.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function approveReport() {
+    if (!selected) return;
+    try {
+      setBusy(true);
+      const updated = await requestJson<StudentReport>(
+        `/v1/admin/student-reports/${selected.id}/approve`,
+        {
+          method: 'POST',
+          headers: csrfHeaders(),
+          body: JSON.stringify({
+            version: selected.version,
+            acknowledgeSafety: selected.content.internal.safetyConcern,
+          }),
+        },
+      );
+      setNotice('Karne onaylandı. Artık özel bağlantı oluşturabilirsiniz.');
+      await loadDetail(updated.id);
+      await loadReports();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Karne onaylanamadı.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createShare() {
+    if (!selected) return;
+    try {
+      setBusy(true);
+      const value = await requestJson<{ publicUrl: string }>(
+        `/v1/admin/student-reports/${selected.id}/share`,
+        {
+          method: 'POST',
+          headers: csrfHeaders(),
+          body: JSON.stringify({ expiresAt: null }),
+        },
+      );
+      setPublicUrl(value.publicUrl);
+      await navigator.clipboard.writeText(value.publicUrl).catch(() => undefined);
+      setNotice('Özel bağlantı oluşturuldu ve panoya kopyalandı. Önceki bağlantı geçersizdir.');
+      await loadDetail(selected.id);
+      await loadReports();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Paylaşım bağlantısı oluşturulamadı.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendShare() {
+    if (!selected) return;
+    try {
+      setBusy(true);
+      const value = await requestJson<{ queued: boolean; channel: string }>(
+        `/v1/admin/student-reports/${selected.id}/share/send`,
+        {
+          method: 'POST',
+          headers: csrfHeaders(),
+          body: JSON.stringify({}),
+        },
+      );
+      const channel = value.channel === 'WHATSAPP' ? 'WhatsApp' : 'Telegram';
+      setNotice(`Karne bağlantısı ${channel} gönderim kuyruğuna alındı.`);
+      await loadDetail(selected.id);
+      await loadReports();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Karne öğrenciyle paylaşılamadı.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeShare() {
+    if (!selected) return;
+    try {
+      setBusy(true);
+      await requestJson(`/v1/admin/student-reports/${selected.id}/share/revoke`, {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({}),
+      });
+      setPublicUrl(undefined);
+      setNotice('Karne bağlantısı kapatıldı.');
+      await loadDetail(selected.id);
+      await loadReports();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Bağlantı kapatılamadı.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function updateContent<Key extends keyof StudentReport['content']>(
+    key: Key,
+    value: StudentReport['content'][Key],
+  ) {
+    setSelected((current) =>
+      current ? { ...current, content: { ...current.content, [key]: value } } : current,
+    );
+  }
+
+  return (
+    <div className="student-tab-content student-report-admin">
+      <div className="student-section-heading">
+        <FileText aria-hidden="true" />
+        <div>
+          <span className="eyebrow">ÖĞRENCİ KARNESİ</span>
+          <h2>Pratik dönemlerini öğrenciye uygun bir dille özetleyin</h2>
+          <p>
+            Sayısal veriler sistemden gelir; AI metinleri yalnızca onayınızdan sonra paylaşılır.
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus aria-hidden="true" /> Yeni karne
+        </Button>
+      </div>
+
+      {error ? (
+        <Alert tone="danger" title="Karneler yüklenemedi">
+          {error}
+        </Alert>
+      ) : null}
+      {loading && !reports ? <Skeleton className="student-detail-skeleton" /> : null}
+      {reports && reports.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          title="Henüz karne yok"
+          description="Tamamlanmış bir tarih aralığı seçerek ilk karneyi oluşturun."
+        />
+      ) : null}
+
+      {reports?.length ? (
+        <div className="student-report-layout">
+          <aside className="student-report-list" aria-label="Karne geçmişi">
+            {reports.map((report) => (
+              <button
+                key={report.id}
+                type="button"
+                data-selected={selected?.id === report.id}
+                onClick={() => {
+                  setPublicUrl(undefined);
+                  void loadDetail(report.id);
+                }}
+              >
+                <span>{report.type === 'WEEKLY' ? 'Haftalık karne' : 'Aylık karne'}</span>
+                <strong>{formatReportRange(report.periodStart, report.periodEndExclusive)}</strong>
+                <small>
+                  {report.status === 'DRAFT'
+                    ? 'Taslak'
+                    : report.status === 'PUBLISHED'
+                      ? 'Paylaşıma açık'
+                      : 'Onaylandı'}
+                  {report.aiStatus === 'PENDING' ? ' · AI hazırlanıyor' : ''}
+                </small>
+              </button>
+            ))}
+          </aside>
+
+          {selected ? (
+            <section className="student-report-workspace">
+              <div className="student-report-toolbar">
+                <div>
+                  <span className="eyebrow">
+                    {formatReportRange(selected.periodStart, selected.periodEndExclusive)}
+                  </span>
+                  <h3>{studentName} için haftalık karne</h3>
+                </div>
+                <div className="student-action-row">
+                  {selected.status === 'DRAFT' ? (
+                    <>
+                      <Button
+                        variant="secondary"
+                        loading={busy || selected.aiStatus === 'PENDING'}
+                        onClick={() => void generateAi()}
+                      >
+                        <Sparkles aria-hidden="true" /> AI taslak
+                      </Button>
+                      <Button variant="secondary" loading={busy} onClick={() => void saveReport()}>
+                        Kaydet
+                      </Button>
+                      <Button loading={busy} onClick={() => void approveReport()}>
+                        <Check aria-hidden="true" /> Onayla
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button variant="secondary" loading={busy} onClick={() => void createShare()}>
+                        <Share2 aria-hidden="true" />
+                        {selected.share?.status === 'ACTIVE'
+                          ? 'Bağlantıyı yenile'
+                          : 'Bağlantı oluştur'}
+                      </Button>
+                      {selected.share?.status === 'ACTIVE' ? (
+                        <>
+                          <Button loading={busy} onClick={() => void sendShare()}>
+                            <Send aria-hidden="true" /> Öğrenci ile paylaş
+                          </Button>
+                          <Button variant="ghost" loading={busy} onClick={() => void revokeShare()}>
+                            Bağlantıyı kapat
+                          </Button>
+                        </>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {selected.aiStatus === 'FAILED' ? (
+                <Alert tone="warning" title="AI taslağı oluşturulamadı">
+                  Manuel metinlerle devam edebilir veya LLM ayarlarını kontrol edip yeniden
+                  deneyebilirsiniz.
+                </Alert>
+              ) : null}
+              {selected.content.internal.safetyConcern ? (
+                <Alert tone="warning" title="Admin incelemesi gerekli">
+                  Refleksiyonlarda güvenlik açısından gözden geçirilmesi gereken açık bir ifade
+                  işaretlendi.
+                </Alert>
+              ) : null}
+              {publicUrl ? (
+                <div className="student-report-share-result">
+                  <div>
+                    <span>Özel öğrenci bağlantısı</span>
+                    <strong>{publicUrl}</strong>
+                    {selected.share?.lastSentAt ? (
+                      <small>
+                        Son gönderim {dateTimeFormatter.format(new Date(selected.share.lastSentAt))}
+                        {' · '}
+                        {selected.share.sendCount} gönderim
+                      </small>
+                    ) : null}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    onClick={() => void navigator.clipboard.writeText(publicUrl)}
+                  >
+                    <Copy aria-hidden="true" /> Kopyala
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => window.open(publicUrl, '_blank', 'noopener,noreferrer')}
+                  >
+                    <Eye aria-hidden="true" /> Aç
+                  </Button>
+                </div>
+              ) : null}
+
+              {selected.status === 'DRAFT' ? (
+                <div className="student-report-editor">
+                  <label>
+                    <span>Karne alt başlığı</span>
+                    <input
+                      value={selected.content.subtitle}
+                      maxLength={180}
+                      onChange={(event) => updateContent('subtitle', event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    <span>Öne çıkan refleksiyon</span>
+                    <select
+                      value={selected.content.featuredReflectionId ?? ''}
+                      onChange={(event) => {
+                        const reflection = selected.reflectionCandidates?.find(
+                          (item) => item.id === event.target.value,
+                        );
+                        updateContent('featuredReflectionId', reflection?.id ?? null);
+                        setSelected((current) =>
+                          current
+                            ? {
+                                ...current,
+                                content: {
+                                  ...current.content,
+                                  featuredReflectionId: reflection?.id ?? null,
+                                  featuredReflectionQuote: reflection?.text,
+                                },
+                              }
+                            : current,
+                        );
+                      }}
+                    >
+                      <option value="">Refleksiyon gösterme</option>
+                      {selected.reflectionCandidates?.map((reflection) => (
+                        <option key={reflection.id} value={reflection.id}>
+                          {formatDate(reflection.date)} ·{' '}
+                          {reflection.slot === 'MORNING'
+                            ? 'Sabah'
+                            : reflection.slot === 'EVENING'
+                              ? 'Akşam'
+                              : 'Özel'}{' '}
+                          · {reflection.text.slice(0, 72)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    <span>Nazik gözlem</span>
+                    <textarea
+                      rows={4}
+                      value={selected.content.gentleObservation.text}
+                      onChange={(event) =>
+                        updateContent('gentleObservation', {
+                          ...selected.content.gentleObservation,
+                          text: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label>
+                    <span>Destek noktası</span>
+                    <textarea
+                      rows={4}
+                      value={selected.content.supportPoint.text}
+                      onChange={(event) =>
+                        updateContent('supportPoint', {
+                          ...selected.content.supportPoint,
+                          text: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                  <label className="student-report-editor__wide">
+                    <span>Dönem değerlendirmesi</span>
+                    <textarea
+                      rows={6}
+                      value={selected.content.weeklyEvaluation.text}
+                      onChange={(event) =>
+                        updateContent('weeklyEvaluation', {
+                          ...selected.content.weeklyEvaluation,
+                          text: event.target.value,
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+              ) : null}
+
+              <ReportPreview report={selected} studentName={studentName} />
+            </section>
+          ) : null}
+        </div>
+      ) : null}
+
+      {createOpen ? (
+        <Modal
+          title="Yeni haftalık karne"
+          description="Tamamlanmış günlerden oluşan bir tarih aralığı seçin."
+          onClose={() => setCreateOpen(false)}
+          actions={
+            <>
+              <Button variant="ghost" onClick={() => setCreateOpen(false)}>
+                Vazgeç
+              </Button>
+              <Button form="student-report-create-form" type="submit" loading={busy}>
+                Taslak oluştur
+              </Button>
+            </>
+          }
+        >
+          <form
+            id="student-report-create-form"
+            className="student-modal-form"
+            onSubmit={createReport}
+          >
+            <label>
+              <span>Başlangıç günü</span>
+              <input
+                type="date"
+                required
+                value={period.start}
+                onChange={(event) =>
+                  setPeriod((current) => ({ ...current, start: event.target.value }))
+                }
+              />
+            </label>
+            <label>
+              <span>Bitiş günü</span>
+              <input
+                type="date"
+                required
+                value={period.endExclusive}
+                onChange={(event) =>
+                  setPeriod((current) => ({ ...current, endExclusive: event.target.value }))
+                }
+              />
+              <small>Bu tarih aralığa dahil değildir.</small>
+            </label>
+          </form>
+        </Modal>
+      ) : null}
+
+      {notice ? (
+        <Toast tone="info" onDismiss={() => setNotice(undefined)}>
+          {notice}
+        </Toast>
+      ) : null}
+    </div>
+  );
+}
+
+function ReportPreview({ report, studentName }: { report: StudentReport; studentName: string }) {
+  const facts = report.snapshot.practice.current;
+  const firstName = studentName.trim().split(/\s+/u)[0] || 'Öğrenci';
+  return (
+    <article className="student-report-preview">
+      <header>
+        <span>Sakin Zihin · Haftalık karne</span>
+        <h3>{firstName}&apos;nin pratik karnesi</h3>
+        <p>
+          {formatReportRange(report.periodStart, report.periodEndExclusive)} ·{' '}
+          {report.content.subtitle}
+        </p>
+        <div>
+          {report.snapshot.subscription?.packageWeek ? (
+            <small>Aylık program · {report.snapshot.subscription.packageWeek}. hafta</small>
+          ) : null}
+          <small>{report.snapshot.practice.maxCompletedDayStreak} günlük devam serisi</small>
+        </div>
+      </header>
+      <section className="student-report-score">
+        <div
+          className="student-report-ring"
+          style={{ '--report-progress': `${facts.completionRate * 3.6}deg` } as CSSProperties}
+        >
+          <strong>%{facts.completionRate}</strong>
+          <span>tamamlama</span>
+        </div>
+        <div>
+          <h4>
+            Planlanan {facts.planned} pratikten {facts.completed} tanesi tamamlandı.
+          </h4>
+          <div className="student-report-stats">
+            <span>
+              <b>{facts.planned}</b>Planlanan
+            </span>
+            <span>
+              <b>{facts.completed}</b>Tamamlanan
+            </span>
+            <span>
+              <b>{facts.skipped}</b>Yapılamadı
+            </span>
+            <span>
+              <b>{facts.missed}</b>Geri dönüş yok
+            </span>
+          </div>
+        </div>
+      </section>
+      <section>
+        <div className="student-report-days">
+          {report.snapshot.practice.days.map((day) => (
+            <div key={day.date} data-day-status={reportDayStatus(day.sessions)}>
+              <strong>{new Date(`${day.date}T00:00:00`).getDate()}</strong>
+              <span>
+                {new Intl.DateTimeFormat('tr-TR', { weekday: 'short' }).format(
+                  new Date(`${day.date}T00:00:00`),
+                )}
+              </span>
+              <div>
+                {day.sessions.length ? (
+                  day.sessions.map((session) => (
+                    <i
+                      key={session.id}
+                      data-status={session.status}
+                      title={`${session.slot} · ${label(session.status)}`}
+                    >
+                      {session.status === 'COMPLETED' ? (
+                        <Check aria-hidden="true" />
+                      ) : session.status === 'MISSED' || session.status === 'SKIPPED' ? (
+                        <X aria-hidden="true" />
+                      ) : (
+                        <Clock3 aria-hidden="true" />
+                      )}
+                    </i>
+                  ))
+                ) : (
+                  <i data-status="EMPTY" aria-label="Bu gün için pratik yok">
+                    <span aria-hidden="true">–</span>
+                  </i>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+      {report.content.featuredReflectionQuote ? (
+        <blockquote>
+          <span>Bu hafta öne çıkan deneyim</span>“{report.content.featuredReflectionQuote}”
+        </blockquote>
+      ) : null}
+      <section className="student-report-observations">
+        <div>
+          <span>Nazik gözlem</span>
+          <p>{report.content.gentleObservation.text}</p>
+        </div>
+        <div>
+          <span>Destek noktası</span>
+          <p>{report.content.supportPoint.text}</p>
+        </div>
+      </section>
+      <section className="student-report-evaluation">
+        <span>Hafta değerlendirmesi</span>
+        <p>{report.content.weeklyEvaluation.text}</p>
+      </section>
+      {report.snapshot.meetings[0] ? (
+        <footer>
+          <CalendarClock aria-hidden="true" />
+          <div>
+            <span>Haftalık birebir görüşme</span>
+            <strong>{formatDateTime(report.snapshot.meetings[0].startsAt)}</strong>
+          </div>
+          <small>{label(report.snapshot.meetings[0].status)}</small>
+        </footer>
+      ) : null}
+    </article>
+  );
+}
+
+function reportDayStatus(sessions: Array<{ status: string }>) {
+  if (!sessions.length) return 'EMPTY';
+  if (sessions.some((session) => session.status === 'MISSED')) return 'MISSED';
+  if (sessions.some((session) => session.status === 'SKIPPED')) return 'SKIPPED';
+  if (sessions.every((session) => session.status === 'COMPLETED')) return 'COMPLETED';
+  return 'PENDING';
+}
+
+function defaultReportPeriod() {
+  const end = new Date();
+  const start = new Date(end);
+  start.setDate(start.getDate() - 7);
+  return { start: localDateInput(start), endExclusive: localDateInput(end) };
+}
+
+function localDateInput(date: Date) {
+  const offset = date.getTimezoneOffset();
+  return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 10);
+}
+
+function formatReportRange(start: string, endExclusive: string) {
+  const end = new Date(`${endExclusive}T00:00:00`);
+  end.setDate(end.getDate() - 1);
+  return `${formatDate(start)} – ${dateFormatter.format(end)}`;
 }
 
 function Overview({

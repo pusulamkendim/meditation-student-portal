@@ -47,6 +47,7 @@ export const systemEventKeys = [
   'MEET_LINK_UNAVAILABLE',
   'STUDENT_CONTEXT_RESPONSE',
   'WEEKLY_SUMMARY_SHARED',
+  'STUDENT_REPORT_SHARED',
   'READING_ASSIGNED',
   'READING_REMINDER',
   'READING_COMPLETED_ACK',
@@ -201,6 +202,7 @@ const variableSchemas = {
   MEET_LINK_UNAVAILABLE: textVariables('startsAtText'),
   STUDENT_CONTEXT_RESPONSE: textVariables('answer', 'section'),
   WEEKLY_SUMMARY_SHARED: textVariables('summaryText'),
+  STUDENT_REPORT_SHARED: personalizedTextVariables('periodText', 'reportUrl'),
   READING_ASSIGNED: personalizedTextVariables(
     'readingTitle',
     'readingUrl',
