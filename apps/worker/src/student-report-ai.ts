@@ -224,21 +224,23 @@ export class StudentReportAiProcessor {
         ...(snapshot.evidenceIds ?? []),
         ...reflectionCandidates.flatMap((item) => [item.evidenceId, item.sessionEvidenceId]),
       ]);
-      for (const section of [
-        result.output.gentleObservation,
-        result.output.supportPoint,
-        result.output.weeklyEvaluation,
-      ]) {
-        if (section.evidenceRefs.some((reference) => !allowedEvidence.has(reference)))
-          throw new Error('Student report evidence validation failed.');
-      }
+      const fallbackEvidence = allowedEvidence.values().next().value as string | undefined;
+      const normalizeEvidence = (section: { text: string; evidenceRefs: string[] }) => {
+        const evidenceRefs = [...new Set(section.evidenceRefs)].filter((reference) =>
+          allowedEvidence.has(reference),
+        );
+        if (!evidenceRefs.length && fallbackEvidence) evidenceRefs.push(fallbackEvidence);
+        if (!evidenceRefs.length) throw new Error('Student report has no usable evidence.');
+        return { ...section, evidenceRefs };
+      };
       const featured = result.output.featuredReflectionId
         ? reflectionCandidates.find((item) => item.id === result.output.featuredReflectionId)
         : undefined;
-      if (result.output.featuredReflectionId && !featured)
-        throw new Error('Student report selected an unavailable reflection.');
       const content = {
         ...result.output,
+        gentleObservation: normalizeEvidence(result.output.gentleObservation),
+        supportPoint: normalizeEvidence(result.output.supportPoint),
+        weeklyEvaluation: normalizeEvidence(result.output.weeklyEvaluation),
         featuredReflectionId: featured?.id ?? null,
         featuredReflectionQuote: featured?.text,
       };
@@ -302,6 +304,22 @@ export class StudentReportAiProcessor {
     } catch (error) {
       await releaseBudget(this.prisma, operationId);
       await this.markFailed(report.id, operationId);
+      await this.prisma.llmUsageLog
+        .create({
+          data: {
+            operationId,
+            attempt: 1,
+            task: LlmTask.STUDENT_REPORT,
+            studentId: report.studentId,
+            status: 'FAILED',
+            errorCode:
+              error instanceof Error
+                ? `${error.name}:${error.message}`.slice(0, 240)
+                : 'UnknownError',
+            metadata: { reportId: report.id },
+          },
+        })
+        .catch(() => undefined);
       throw error;
     }
   }

@@ -30,7 +30,7 @@ describe('StudentReportAiProcessor', () => {
         },
         supportPoint: {
           text: 'Ritmi birlikte ve acele etmeden sürdürebiliriz.',
-          evidenceRefs: ['practice:summary'],
+          evidenceRefs: ['invented:evidence'],
         },
         weeklyEvaluation: {
           text: 'Bu hafta pratiğin içinde yeniden başlama deneyimi belirginleşti.',
@@ -144,8 +144,12 @@ describe('StudentReportAiProcessor', () => {
         { ciphertext: Buffer.from(update.data.contentEncrypted), keyId: update.data.contentKeyId },
         'student-report:report-1:v2',
       ),
-    ) as { featuredReflectionQuote: string };
+    ) as {
+      featuredReflectionQuote: string;
+      supportPoint: { evidenceRefs: string[] };
+    };
     expect(saved.featuredReflectionQuote).toBe(reflectionText);
+    expect(saved.supportPoint.evidenceRefs).toEqual(['practice:summary']);
     expect(update.data.featuredReflectionId).toBe(reflectionId);
     expect(createUsage).toHaveBeenCalledWith({
       data: expect.objectContaining({ task: 'STUDENT_REPORT', totalTokens: 270 }),

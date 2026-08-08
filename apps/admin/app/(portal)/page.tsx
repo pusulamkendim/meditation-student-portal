@@ -16,7 +16,16 @@ import {
   Minus,
   RefreshCw,
 } from 'lucide-react';
-import { Alert, Badge, Button, EmptyState, Metric, PageHeader, Skeleton } from '@meditation/ui';
+import {
+  Alert,
+  Badge,
+  Button,
+  EmptyState,
+  Metric,
+  Modal,
+  PageHeader,
+  Skeleton,
+} from '@meditation/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -159,12 +168,6 @@ const reasonLabels: Record<string, string> = {
   PROACTIVE_MESSAGING_PAUSED: 'Öğrencinin otomatik mesajları duraklatılmış.',
 };
 
-const toneLabels: Record<PulseInsight['tone'], string> = {
-  POSITIVE: 'Pozitif',
-  NEUTRAL: 'Nötr',
-  NEGATIVE: 'Negatif',
-};
-
 const actionLabels: Record<PulseInsight['suggestedAction'], string> = {
   KEEP: 'Programı koru',
   SIMPLIFY: 'Sadeleştirmeyi değerlendir',
@@ -198,6 +201,7 @@ export default function HomePage() {
   const [data, setData] = useState<DashboardData>();
   const [error, setError] = useState<string>();
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedPulse, setSelectedPulse] = useState<DashboardData['studentPulse'][number]>();
 
   const load = useCallback(async (quiet = false) => {
     if (!quiet) setRefreshing(true);
@@ -414,7 +418,7 @@ export default function HomePage() {
               <div>
                 <span>ÖĞRENCİ DURUMLARI</span>
                 <h2>Haftalık takip özeti</h2>
-                <p>Pratik düzeni, önceki döneme göre değişim ve son refleksiyonların genel tonu</p>
+                <p>Pratik düzeni, önceki döneme göre değişim ve haftalık takip önerisi</p>
               </div>
               <a href="/students">
                 Öğrencileri aç <ArrowRight />
@@ -426,11 +430,11 @@ export default function HomePage() {
                 <span>Program</span>
                 <span>Pratik</span>
                 <span>Değişim</span>
-                <span>Refleksiyon tonu ve durum</span>
+                <span>Durum</span>
               </div>
               {data.studentPulse.map((student) => (
-                <a key={student.id} href={`/students/${student.id}`}>
-                  <span className="dashboard-student-name">
+                <div className="dashboard-pulse-row" key={student.id}>
+                  <a className="dashboard-student-name" href={`/students/${student.id}`}>
                     <strong>{name(student.fullName, student.id)}</strong>
                     <small>
                       {student.channel ?? 'Kanal yok'} ·{' '}
@@ -438,7 +442,7 @@ export default function HomePage() {
                         ? new Date(student.lastInboundAt).toLocaleDateString('tr-TR')
                         : 'Mesaj yok'}
                     </small>
-                  </span>
+                  </a>
                   <span className="dashboard-schedule">
                     {student.schedule.length
                       ? student.schedule
@@ -457,42 +461,28 @@ export default function HomePage() {
                     <Trend value={student.trend} />
                     <small>Önceki %{student.previous.completionRate}</small>
                   </span>
-                  <span className="dashboard-pulse-status">
-                    {student.insight ? (
-                      <>
-                        <span
-                          className={`dashboard-tone is-${student.insight.tone.toLocaleLowerCase('en-US')}`}
-                        >
-                          {toneLabels[student.insight.tone]} · %
-                          {Math.round(student.insight.confidence * 100)}
-                        </span>
-                        <small>
-                          {student.insight.summary ?? actionLabels[student.insight.suggestedAction]}
-                        </small>
-                        {student.insight.safetyConcern ? (
-                          <em className="is-safety">Güvenlik açısından görüşmede ele alın.</em>
-                        ) : null}
-                        {student.insight.coachTopics[0] ? (
-                          <em>Görüşme: {student.insight.coachTopics[0]}</em>
-                        ) : null}
-                      </>
-                    ) : (
-                      <>
-                        <span className="dashboard-tone is-empty">Analiz yok</span>
-                        <small>
-                          {student.reflections
-                            ? 'Günlük analiz henüz hazırlanmadı.'
-                            : 'Yeterli refleksiyon bulunmuyor.'}
-                        </small>
-                      </>
-                    )}
-                    {student.recommendation ? (
-                      <em>{student.recommendation}</em>
-                    ) : student.openHandoffs ? (
-                      <em>Admin yanıtı bekleniyor.</em>
-                    ) : null}
-                  </span>
-                </a>
+                  {student.insight ? (
+                    <button
+                      className="dashboard-pulse-status"
+                      type="button"
+                      onClick={() => setSelectedPulse(student)}
+                    >
+                      <span
+                        className={`dashboard-action is-${student.insight.suggestedAction.toLocaleLowerCase('en-US')}`}
+                      >
+                        {actionLabels[student.insight.suggestedAction]}
+                      </span>
+                      <small>Analizi görüntüle</small>
+                    </button>
+                  ) : (
+                    <span className="dashboard-pulse-status is-empty">
+                      <span>Analiz yok</span>
+                      <small>
+                        {student.reflections ? 'Hazırlanıyor' : 'Refleksiyon bulunmuyor'}
+                      </small>
+                    </span>
+                  )}
+                </div>
               ))}
             </div>
           </section>
@@ -665,6 +655,84 @@ export default function HomePage() {
           </section>
         </>
       )}
+
+      {selectedPulse?.insight ? (
+        <Modal
+          title={`${name(selectedPulse.fullName, selectedPulse.id)} · Haftalık analiz`}
+          description={`Son 7 tam gün · ${new Date(selectedPulse.insight.generatedAt).toLocaleString('tr-TR')}`}
+          onClose={() => setSelectedPulse(undefined)}
+          actions={
+            <>
+              <Button variant="secondary" onClick={() => setSelectedPulse(undefined)}>
+                Kapat
+              </Button>
+              <Button onClick={() => (window.location.href = `/students/${selectedPulse.id}`)}>
+                Öğrenciyi aç
+              </Button>
+            </>
+          }
+        >
+          <div className="dashboard-pulse-modal">
+            <span
+              className={`dashboard-action is-${selectedPulse.insight.suggestedAction.toLocaleLowerCase('en-US')}`}
+            >
+              {actionLabels[selectedPulse.insight.suggestedAction]}
+            </span>
+            <section>
+              <h3>Genel değerlendirme</h3>
+              <p>{selectedPulse.insight.summary}</p>
+            </section>
+            <div className="dashboard-pulse-modal-grid">
+              <section>
+                <h3>Güçlü sinyaller</h3>
+                {selectedPulse.insight.strengths.length ? (
+                  <ul>
+                    {selectedPulse.insight.strengths.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>Belirgin bir güçlü sinyal bulunmuyor.</p>
+                )}
+              </section>
+              <section>
+                <h3>Takip konuları</h3>
+                {selectedPulse.insight.challenges.length ? (
+                  <ul>
+                    {selectedPulse.insight.challenges.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p>Ek takip gerektiren bir konu bulunmuyor.</p>
+                )}
+              </section>
+            </div>
+            <section>
+              <h3>Görüşmede ele alınabilecekler</h3>
+              {selectedPulse.insight.coachTopics.length ? (
+                <ul>
+                  {selectedPulse.insight.coachTopics.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p>Özel bir görüşme gündemi bulunmuyor.</p>
+              )}
+            </section>
+            {selectedPulse.recommendation ? (
+              <Alert tone="info" title="Program önerisi">
+                {selectedPulse.recommendation}
+              </Alert>
+            ) : null}
+            {selectedPulse.insight.safetyConcern ? (
+              <Alert tone="danger" title="Öncelikli değerlendirme">
+                Güvenlik açısından görüşmede öncelikli olarak ele alın.
+              </Alert>
+            ) : null}
+          </div>
+        </Modal>
+      ) : null}
     </main>
   );
 }

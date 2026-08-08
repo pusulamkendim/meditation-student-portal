@@ -1,4 +1,4 @@
-import { CalendarClock, Check, Clock3, Sprout, X } from 'lucide-react';
+import { Check, Clock3, Sprout, X } from 'lucide-react';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import type { CSSProperties } from 'react';
@@ -62,7 +62,6 @@ export default async function StudentReportPage({
   if (!response.ok) notFound();
   const report = (await response.json()) as PublicReport;
   const facts = report.snapshot.practice.current;
-  const meeting = report.snapshot.meetings[0];
 
   return (
     <main className="public-report-page">
@@ -196,17 +195,6 @@ export default async function StudentReportPage({
           <p>{report.content.weeklyEvaluation}</p>
         </section>
 
-        {meeting ? (
-          <section className="public-report-meeting">
-            <CalendarClock aria-hidden="true" />
-            <div>
-              <span>Haftalık birebir görüşme</span>
-              <strong>{formatDateTime(meeting.startsAt)}</strong>
-            </div>
-            <small>{statusLabel(meeting.status)}</small>
-          </section>
-        ) : null}
-
         <footer>
           Bu karne, paylaştığın deneyimler ve sistemdeki pratik kayıtları temel alınarak yargılayıcı
           olmayan bir dille hazırlanmıştır.
@@ -220,16 +208,6 @@ function formatRange(start: string, endExclusive: string) {
   const end = new Date(`${endExclusive}T00:00:00`);
   end.setDate(end.getDate() - 1);
   return `${dateFormatter.format(new Date(`${start}T00:00:00`))} – ${dateFormatter.format(end)}`;
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat('tr-TR', {
-    day: 'numeric',
-    month: 'long',
-    weekday: 'long',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
 }
 
 function statusLabel(status: string) {

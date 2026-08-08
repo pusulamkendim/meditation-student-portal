@@ -1126,6 +1126,110 @@ export class PracticeService {
     };
   }
 
+  async updateOutcome(
+    sessionId: string,
+    status: 'COMPLETED' | 'SKIPPED' | 'MISSED',
+    expectedVersion: number,
+    reflection: string | null | undefined,
+    reason: string,
+    adminId: string,
+  ) {
+    const now = this.clock.now();
+    return this.prisma.$transaction(async (tx) => {
+      const session = await tx.practiceSession.findUniqueOrThrow({
+        where: { id: sessionId },
+        include: { reflection: true },
+      });
+      if (session.version !== expectedVersion)
+        throw new ConflictException('Practice session state conflict.');
+      if (
+        session.status === PracticeSessionStatus.CANCELLED ||
+        session.status === PracticeSessionStatus.SUPPRESSED
+      )
+        throw new BadRequestException(
+          'Cancelled or suppressed sessions cannot receive an outcome.',
+        );
+      if (session.startAt > now)
+        throw new BadRequestException('A future practice cannot be marked as completed.');
+      if (status !== PracticeSessionStatus.COMPLETED && reflection?.trim())
+        throw new BadRequestException('Reflection can only be stored for a completed practice.');
+
+      const changed = await tx.practiceSession.updateMany({
+        where: { id: session.id, version: expectedVersion, status: session.status },
+        data: {
+          status,
+          replyNonceHmac: null,
+          version: { increment: 1 },
+        },
+      });
+      if (changed.count !== 1) throw new ConflictException('Practice session state conflict.');
+
+      const normalizedReflection = reflection?.trim() ?? '';
+      if (status === PracticeSessionStatus.COMPLETED && normalizedReflection) {
+        const consent = await tx.consent.findFirst({
+          where: { studentId: session.studentId, scope: ConsentScope.REFLECTION_STORAGE },
+          orderBy: { occurredAt: 'desc' },
+        });
+        if (consent?.status !== ConsentStatus.GRANTED)
+          throw new BadRequestException('Reflection storage consent is required.');
+        const encrypted = this.encryption.encrypt(
+          normalizedReflection,
+          `practice:${session.id}:reflection`,
+        );
+        await tx.practiceReflection.upsert({
+          where: { practiceSessionId: session.id },
+          create: {
+            practiceSessionId: session.id,
+            contentEncrypted: new Uint8Array(encrypted.ciphertext),
+            contentKeyId: encrypted.keyId,
+          },
+          update: {
+            contentEncrypted: new Uint8Array(encrypted.ciphertext),
+            contentKeyId: encrypted.keyId,
+          },
+        });
+      } else if (status !== PracticeSessionStatus.COMPLETED || reflection === null) {
+        await tx.practiceReflection.deleteMany({ where: { practiceSessionId: session.id } });
+      }
+
+      await tx.messageIntent.updateMany({
+        where: {
+          payload: { path: ['practiceSessionId'], equals: session.id },
+          status: { in: ['PENDING', 'CLAIMED'] },
+        },
+        data: { status: 'SUPPRESSED', suppressionReason: 'ADMIN_OUTCOME_UPDATED' },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorType: AuditActorType.ADMIN,
+          actorId: adminId,
+          action: 'PRACTICE_OUTCOME_UPDATED',
+          entityType: 'PracticeSession',
+          entityId: session.id,
+          reason,
+          safeDiff: {
+            previousStatus: session.status,
+            status,
+            reflectionChanged:
+              reflection !== undefined ||
+              (status !== PracticeSessionStatus.COMPLETED && Boolean(session.reflection)),
+          },
+          requestId: `practice-outcome-${session.id}-${now.getTime()}`,
+          correlationId: `practice-${session.practicePlanId}`,
+        },
+      });
+      return {
+        id: session.id,
+        status,
+        version: expectedVersion + 1,
+        reflection:
+          status === PracticeSessionStatus.COMPLETED
+            ? normalizedReflection || undefined
+            : undefined,
+      };
+    });
+  }
+
   async respond(
     sessionId: string,
     studentId: string,

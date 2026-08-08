@@ -142,19 +142,18 @@ describe('GeminiPaidAdapter', () => {
       weeklyEvaluation: { text: 'Bu hafta ritmini korudun.', evidenceRefs: ['practice:summary'] },
       internal: { confidence: 0.82, insufficientEvidence: false, safetyConcern: false },
     };
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              candidates: [{ content: { parts: [{ text: JSON.stringify(output) }] } }],
-              usageMetadata: { promptTokenCount: 24, candidatesTokenCount: 20 },
-            }),
-            { status: 200 },
-          ),
-      ),
-    );
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      void input;
+      void init;
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: JSON.stringify(output) }] } }],
+          usageMetadata: { promptTokenCount: 24, candidatesTokenCount: 20 },
+        }),
+        { status: 200 },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
 
     const result = await new GeminiPaidAdapter('test-key').generateJson<StudentReportOutput>({
       model: {
@@ -172,5 +171,12 @@ describe('GeminiPaidAdapter', () => {
 
     expect(result.output.gentleObservation.evidenceRefs).toEqual(['practice:summary']);
     expect(result.totalTokens).toBe(44);
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      generationConfig: { responseJsonSchema?: unknown };
+    };
+    expect(request.generationConfig.responseJsonSchema).toMatchObject({
+      type: 'object',
+      required: expect.arrayContaining(['subtitle', 'gentleObservation', 'internal']),
+    });
   });
 });

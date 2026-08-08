@@ -482,6 +482,14 @@ export default function StudentDetailPage() {
   const [practiceDialog, setPracticeDialog] = useState<'reschedule' | 'cancel' | 'restore'>();
   const [selectedPractice, setSelectedPractice] = useState<PracticeSession>();
   const [practiceDate, setPracticeDate] = useState('');
+  const [practiceOutcomeOpen, setPracticeOutcomeOpen] = useState(false);
+  const [practiceOutcome, setPracticeOutcome] = useState<'COMPLETED' | 'SKIPPED' | 'MISSED'>(
+    'COMPLETED',
+  );
+  const [practiceReflection, setPracticeReflection] = useState('');
+  const [practiceOutcomeReason, setPracticeOutcomeReason] = useState(
+    'Pratik kaydı admin tarafından güncellendi.',
+  );
   const [meetingDialog, setMeetingDialog] = useState<'create' | 'reschedule' | 'status'>();
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting>();
   const [meetingDate, setMeetingDate] = useState('');
@@ -736,6 +744,50 @@ export default function StudentDetailPage() {
     setSelectedPractice(undefined);
     setPracticeDate('');
     setPracticeReason('');
+  }
+
+  function openPracticeOutcome(session: PracticeSession) {
+    setSelectedPractice(session);
+    setPracticeOutcome(
+      ['COMPLETED', 'SKIPPED', 'MISSED'].includes(session.status)
+        ? (session.status as 'COMPLETED' | 'SKIPPED' | 'MISSED')
+        : 'COMPLETED',
+    );
+    setPracticeReflection(session.reflection?.content ?? '');
+    setPracticeOutcomeReason('Pratik kaydı admin tarafından güncellendi.');
+    setPracticeOutcomeOpen(true);
+  }
+
+  function closePracticeOutcome() {
+    setPracticeOutcomeOpen(false);
+    setSelectedPractice(undefined);
+    setPracticeReflection('');
+  }
+
+  async function submitPracticeOutcome(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedPractice || !practiceOutcomeReason.trim()) return;
+    try {
+      setBusy(true);
+      await requestJson(`/v1/admin/practice-sessions/${selectedPractice.id}/outcome`, {
+        method: 'PATCH',
+        headers: csrfHeaders(),
+        body: JSON.stringify({
+          status: practiceOutcome,
+          expectedVersion: selectedPractice.version,
+          reflection:
+            practiceOutcome === 'COMPLETED' ? practiceReflection.trim() || null : undefined,
+          reason: practiceOutcomeReason.trim(),
+        }),
+      });
+      setNotice('Pratik durumu güncellendi.');
+      closePracticeOutcome();
+      await load();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Pratik durumu güncellenemedi.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submitMeeting(event: FormEvent<HTMLFormElement>) {
@@ -1041,6 +1093,7 @@ export default function StudentDetailPage() {
           onReschedule={openPracticeReschedule}
           onCancel={(session) => openPracticeDialog(session, 'cancel')}
           onRestore={(session) => openPracticeDialog(session, 'restore')}
+          onEditOutcome={openPracticeOutcome}
         />
       ) : null}
       {activeTab === 'meetings' ? (
@@ -1245,6 +1298,70 @@ export default function StudentDetailPage() {
                 maxLength={500}
                 value={practiceReason}
                 onChange={(event) => setPracticeReason(event.target.value)}
+              />
+            </label>
+          </form>
+        </Modal>
+      ) : null}
+
+      {practiceOutcomeOpen && selectedPractice ? (
+        <Modal
+          title="Pratik kaydını düzenle"
+          description="Durumu ve öğrenci tarafından paylaşılan refleksiyonu aynı kayıtta yönetin."
+          onClose={closePracticeOutcome}
+          actions={
+            <>
+              <Button variant="ghost" onClick={closePracticeOutcome}>
+                Vazgeç
+              </Button>
+              <Button form="practice-outcome-form" type="submit" loading={busy}>
+                Kaydet
+              </Button>
+            </>
+          }
+        >
+          <form
+            id="practice-outcome-form"
+            className="student-modal-form"
+            onSubmit={submitPracticeOutcome}
+          >
+            <label>
+              <span>Pratik durumu</span>
+              <select
+                value={practiceOutcome}
+                onChange={(event) =>
+                  setPracticeOutcome(event.target.value as 'COMPLETED' | 'SKIPPED' | 'MISSED')
+                }
+              >
+                <option value="COMPLETED">Tamamlandı</option>
+                <option value="SKIPPED">Yapılamadı</option>
+                <option value="MISSED">Geri dönüş alınmadı</option>
+              </select>
+            </label>
+            {practiceOutcome === 'COMPLETED' ? (
+              <label>
+                <span>Refleksiyon</span>
+                <textarea
+                  maxLength={4000}
+                  rows={6}
+                  value={practiceReflection}
+                  onChange={(event) => setPracticeReflection(event.target.value)}
+                  placeholder="Öğrencinin pratik sonrası paylaşımını yazın..."
+                />
+                <small>{practiceReflection.length} / 4000</small>
+              </label>
+            ) : (
+              <Alert tone="warning">
+                Bu durum kaydedildiğinde varsa mevcut refleksiyon kaydı kaldırılır.
+              </Alert>
+            )}
+            <label>
+              <span>İşlem nedeni</span>
+              <textarea
+                required
+                maxLength={500}
+                value={practiceOutcomeReason}
+                onChange={(event) => setPracticeOutcomeReason(event.target.value)}
               />
             </label>
           </form>
@@ -2031,16 +2148,6 @@ function ReportPreview({ report, studentName }: { report: StudentReport; student
         <span>Hafta değerlendirmesi</span>
         <p>{report.content.weeklyEvaluation.text}</p>
       </section>
-      {report.snapshot.meetings[0] ? (
-        <footer>
-          <CalendarClock aria-hidden="true" />
-          <div>
-            <span>Haftalık birebir görüşme</span>
-            <strong>{formatDateTime(report.snapshot.meetings[0].startsAt)}</strong>
-          </div>
-          <small>{label(report.snapshot.meetings[0].status)}</small>
-        </footer>
-      ) : null}
     </article>
   );
 }
@@ -2260,6 +2367,7 @@ function PracticesTab({
   onReschedule,
   onCancel,
   onRestore,
+  onEditOutcome,
 }: {
   data: Detail;
   planEditing: boolean;
@@ -2275,6 +2383,7 @@ function PracticesTab({
   onReschedule: (session: PracticeSession) => void;
   onCancel: (session: PracticeSession) => void;
   onRestore: (session: PracticeSession) => void;
+  onEditOutcome: (session: PracticeSession) => void;
 }) {
   const plan = data.practicePlan;
   const history = data.practice.sessions
@@ -2506,6 +2615,7 @@ function PracticesTab({
                 onReschedule={practiceTab === 'planned' ? onReschedule : undefined}
                 onCancel={practiceTab === 'planned' ? onCancel : undefined}
                 onRestore={practiceTab === 'cancelled' ? onRestore : undefined}
+                onEditOutcome={practiceTab === 'history' ? onEditOutcome : undefined}
                 busy={busy}
               />
             ))}
@@ -2538,6 +2648,7 @@ function PracticeRow({
   onReschedule,
   onCancel,
   onRestore,
+  onEditOutcome,
   busy = false,
 }: {
   session: PracticeSession;
@@ -2545,6 +2656,7 @@ function PracticeRow({
   onReschedule?: (session: PracticeSession) => void;
   onCancel?: (session: PracticeSession) => void;
   onRestore?: (session: PracticeSession) => void;
+  onEditOutcome?: (session: PracticeSession) => void;
   busy?: boolean;
 }) {
   return (
@@ -2581,8 +2693,19 @@ function PracticeRow({
           ) : null}
         </div>
       ) : null}
-      {!compact && (onReschedule || onCancel || onRestore) ? (
+      {!compact && (onReschedule || onCancel || onRestore || onEditOutcome) ? (
         <div className="student-row-actions student-session-actions">
+          {onEditOutcome ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => onEditOutcome(session)}
+            >
+              <Pencil aria-hidden="true" />
+              Durumu düzenle
+            </Button>
+          ) : null}
           {onReschedule ? (
             <Button variant="ghost" size="sm" disabled={busy} onClick={() => onReschedule(session)}>
               <CalendarClock aria-hidden="true" />

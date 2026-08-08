@@ -190,8 +190,11 @@ test('shows daily actions, student status and content metrics without horizontal
   await expect(page.getByRole('heading', { name: 'Haftalık takip özeti' })).toBeVisible();
   await expect(page.getByText('ÖĞRENCİ DURUMLARI')).toBeVisible();
   await expect(page.getByText('Son öğrenci mesajları')).toBeVisible();
-  await expect(page.getByText('Nötr · %82')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Sadeleştirmeyi değerlendir/ })).toBeVisible();
+  await page.getByRole('button', { name: /Sadeleştirmeyi değerlendir/ }).click();
+  await expect(page.getByRole('dialog', { name: /Seden Kıras · Haftalık analiz/ })).toBeVisible();
   await expect(page.getByText('Programı sadeleştirme')).toBeVisible();
+  await page.getByRole('button', { name: 'Kapat', exact: true }).click();
   await expect(
     page.getByText('Merhaba Duygu, saat 10:00 pratiğine 10 dakika kaldı.'),
   ).toBeVisible();

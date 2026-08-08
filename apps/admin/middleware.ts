@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 
 const publicHosts = new Set(['sakinzihin.com', 'www.sakinzihin.com']);
-const publicPrefixes = ['/oku/', '/meditasyon/'];
+const publicPrefixes = ['/oku/', '/meditasyon/', '/karne/'];
 const publicFiles = new Set(['/robots.txt', '/sitemap.xml']);
 
 export function middleware(request: NextRequest) {

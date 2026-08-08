@@ -143,7 +143,7 @@ describe('StudentReportService approval', () => {
         DATA_ENCRYPTION_KEYS_JSON: JSON.stringify({ test: key.toString('base64') }),
         ACTIVE_DATA_KEY_ID: 'test',
         LOOKUP_HMAC_KEY: randomBytes(32).toString('base64'),
-        STUDENT_REPORT_PUBLIC_ORIGIN: 'https://sakinizihin.com',
+        STUDENT_REPORT_PUBLIC_ORIGIN: 'https://sakinzihin.com',
       } as ApplicationConfig,
       new FakeClock('2026-08-07T08:00:00.000Z'),
       { createIntent: vi.fn() } as never,
@@ -234,7 +234,7 @@ describe('StudentReportService approval', () => {
         DATA_ENCRYPTION_KEYS_JSON: JSON.stringify({ test: key.toString('base64') }),
         ACTIVE_DATA_KEY_ID: 'test',
         LOOKUP_HMAC_KEY: randomBytes(32).toString('base64'),
-        STUDENT_REPORT_PUBLIC_ORIGIN: 'https://sakinizihin.com',
+        STUDENT_REPORT_PUBLIC_ORIGIN: 'https://sakinzihin.com',
       } as ApplicationConfig,
       new FakeClock('2026-08-07T08:00:00.000Z'),
       messages as never,
@@ -243,7 +243,7 @@ describe('StudentReportService approval', () => {
     await expect(service.sendShare(reportId, 'admin-1')).resolves.toEqual({
       queued: true,
       messageIntentId: 'intent-1',
-      reportUrl: `https://sakinizihin.com/karne/${token}`,
+      reportUrl: `https://sakinzihin.com/karne/${token}`,
       channel: 'WHATSAPP',
     });
     expect(messages.createIntent).toHaveBeenCalledWith(
@@ -254,7 +254,7 @@ describe('StudentReportService approval', () => {
         variables: {
           studentDisplayName: ' Ayşe',
           periodText: '31 Temmuz 2026 – 6 Ağustos 2026',
-          reportUrl: `https://sakinizihin.com/karne/${token}`,
+          reportUrl: `https://sakinzihin.com/karne/${token}`,
         },
       }),
     );

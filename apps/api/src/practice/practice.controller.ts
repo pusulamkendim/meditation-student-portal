@@ -245,6 +245,26 @@ export class PracticeController {
       request.admin!.id,
     );
   }
+  @Patch('admin/practice-sessions/:id/outcome')
+  @UseGuards(AdminSessionGuard, AdminCsrfGuard)
+  updateOutcome(@Param('id') id: string, @Body() body: unknown, @Req() request: FastifyRequest) {
+    const value = z
+      .object({
+        status: z.enum(['COMPLETED', 'SKIPPED', 'MISSED']),
+        expectedVersion: z.number().int().positive(),
+        reflection: z.string().trim().max(4000).nullable().optional(),
+        reason: z.string().trim().min(1).max(500),
+      })
+      .parse(body);
+    return this.practice.updateOutcome(
+      id,
+      value.status,
+      value.expectedVersion,
+      value.reflection,
+      value.reason,
+      request.admin!.id,
+    );
+  }
   @Post('admin/students/:id/practice-sessions/cancel-range')
   @UseGuards(AdminSessionGuard, AdminCsrfGuard)
   cancelRange(@Param('id') id: string, @Body() body: unknown, @Req() request: FastifyRequest) {

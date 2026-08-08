@@ -70,6 +70,72 @@ const responseSchema = z.object({
     .optional(),
 });
 
+const evidenceSectionJsonSchema = {
+  type: 'object',
+  properties: {
+    text: { type: 'string' },
+    evidenceRefs: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 12 },
+  },
+  required: ['text', 'evidenceRefs'],
+  additionalProperties: false,
+} as const;
+
+const structuredOutputJsonSchemas = {
+  'student-pulse': {
+    type: 'object',
+    properties: {
+      tone: { type: 'string', enum: ['POSITIVE', 'NEUTRAL', 'NEGATIVE', 'MIXED'] },
+      confidence: { type: 'number', minimum: 0, maximum: 1 },
+      summary: { type: 'string' },
+      strengths: { type: 'array', items: { type: 'string' }, maxItems: 5 },
+      challenges: { type: 'array', items: { type: 'string' }, maxItems: 5 },
+      coachTopics: { type: 'array', items: { type: 'string' }, maxItems: 5 },
+      suggestedAction: { type: 'string', enum: ['KEEP', 'SIMPLIFY', 'DISCUSS'] },
+      safetyConcern: { type: 'boolean' },
+    },
+    required: [
+      'tone',
+      'confidence',
+      'summary',
+      'strengths',
+      'challenges',
+      'coachTopics',
+      'suggestedAction',
+      'safetyConcern',
+    ],
+    additionalProperties: false,
+  },
+  'student-report': {
+    type: 'object',
+    properties: {
+      subtitle: { type: 'string' },
+      featuredReflectionId: { type: ['string', 'null'] },
+      gentleObservation: evidenceSectionJsonSchema,
+      supportPoint: evidenceSectionJsonSchema,
+      weeklyEvaluation: evidenceSectionJsonSchema,
+      internal: {
+        type: 'object',
+        properties: {
+          confidence: { type: 'number', minimum: 0, maximum: 1 },
+          insufficientEvidence: { type: 'boolean' },
+          safetyConcern: { type: 'boolean' },
+        },
+        required: ['confidence', 'insufficientEvidence', 'safetyConcern'],
+        additionalProperties: false,
+      },
+    },
+    required: [
+      'subtitle',
+      'featuredReflectionId',
+      'gentleObservation',
+      'supportPoint',
+      'weeklyEvaluation',
+      'internal',
+    ],
+    additionalProperties: false,
+  },
+} as const;
+
 export class LlmProviderError extends Error {
   constructor(
     message: string,
@@ -103,6 +169,9 @@ export class GeminiPaidAdapter {
           temperature: input.temperature ?? 0.2,
           maxOutputTokens: input.maxOutputTokens,
           responseMimeType: 'application/json',
+          ...(input.outputSchema === 'student-pulse' || input.outputSchema === 'student-report'
+            ? { responseJsonSchema: structuredOutputJsonSchemas[input.outputSchema] }
+            : {}),
         },
       }),
     });

@@ -29,8 +29,15 @@ const session = {
 function createService(overrides: Record<string, unknown> = {}) {
   const tx = {
     practiceSession: {
-      findUniqueOrThrow: vi.fn().mockResolvedValue({ ...session, ...overrides }),
+      findUniqueOrThrow: vi.fn().mockResolvedValue({ ...session, reflection: null, ...overrides }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    },
+    consent: {
+      findFirst: vi.fn().mockResolvedValue({ status: 'GRANTED' }),
+    },
+    practiceReflection: {
+      upsert: vi.fn().mockResolvedValue({}),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     messageIntent: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     auditLog: { create: vi.fn().mockResolvedValue({}) },
@@ -99,6 +106,72 @@ describe('PracticeService.reschedule', () => {
         'admin-1',
       ),
     ).rejects.toThrow('state conflict');
+  });
+});
+
+describe('PracticeService.updateOutcome', () => {
+  it('marks a past practice completed and stores an encrypted manual reflection', async () => {
+    const { service, tx } = createService({
+      startAt: new Date('2026-07-13T06:00:00.000Z'),
+      status: PracticeSessionStatus.AWAITING_RESPONSE,
+    });
+
+    await expect(
+      service.updateOutcome(
+        session.id,
+        'COMPLETED',
+        session.version,
+        'Nefese dönmek bugün daha kolaydı.',
+        'Admin tarafından düzeltildi.',
+        'admin-1',
+      ),
+    ).resolves.toMatchObject({ status: PracticeSessionStatus.COMPLETED, version: 3 });
+
+    expect(tx.practiceReflection.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { practiceSessionId: session.id } }),
+    );
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'PRACTICE_OUTCOME_UPDATED' }),
+      }),
+    );
+  });
+
+  it('removes a reflection when the practice is changed to missed', async () => {
+    const { service, tx } = createService({
+      startAt: new Date('2026-07-13T06:00:00.000Z'),
+      status: PracticeSessionStatus.COMPLETED,
+      reflection: { id: 'reflection-1' },
+    });
+
+    await service.updateOutcome(
+      session.id,
+      'MISSED',
+      session.version,
+      undefined,
+      'Yanlış kayıt düzeltildi.',
+      'admin-1',
+    );
+
+    expect(tx.practiceReflection.deleteMany).toHaveBeenCalledWith({
+      where: { practiceSessionId: session.id },
+    });
+  });
+
+  it('rejects reflection text for a non-completed practice', async () => {
+    const { service, tx } = createService({ startAt: new Date('2026-07-13T06:00:00.000Z') });
+
+    await expect(
+      service.updateOutcome(
+        session.id,
+        'SKIPPED',
+        session.version,
+        'Bu metin saklanmamalı.',
+        'Admin düzeltmesi.',
+        'admin-1',
+      ),
+    ).rejects.toThrow('Reflection can only be stored');
+    expect(tx.practiceSession.updateMany).not.toHaveBeenCalled();
   });
 });
 

@@ -9,12 +9,14 @@ const corsHeaders = {
 
 const studentId = '10000000-0000-4000-8000-000000000001';
 const subscriptionId = '20000000-0000-4000-8000-000000000001';
+const practiceSessionId = '50000000-0000-4000-8000-000000000001';
 
 test('updates membership end date and publishes an independent weekday plan', async ({
   page,
 }, testInfo) => {
   let subscriptionPayload: Record<string, unknown> | undefined;
   let planPayload: Record<string, unknown> | undefined;
+  let outcomePayload: Record<string, unknown> | undefined;
   const detail = {
     id: studentId,
     fullName: 'Ayşe Yılmaz',
@@ -78,7 +80,18 @@ test('updates membership end date and publishes an independent weekday plan', as
       pending: 12,
       cancelled: 0,
       complianceRate: 80,
-      sessions: [],
+      sessions: [
+        {
+          id: practiceSessionId,
+          serviceDate: '2026-07-12',
+          startAt: '2026-07-12T05:00:00.000Z',
+          durationMinutes: 15,
+          status: 'AWAITING_RESPONSE',
+          version: 2,
+          slot: 'MORNING',
+          localTime: '08:00',
+        },
+      ],
     },
     meetings: [],
     completedMeetingCount: 1,
@@ -145,6 +158,25 @@ test('updates membership end date and publishes an independent weekday plan', as
       body: JSON.stringify(detail.practicePlan),
     });
   });
+  await page.route(`**/v1/admin/practice-sessions/${practiceSessionId}/outcome`, async (route) => {
+    outcomePayload = route.request().postDataJSON() as Record<string, unknown>;
+    detail.practice.sessions[0] = {
+      ...detail.practice.sessions[0],
+      status: String(outcomePayload.status),
+      version: 3,
+      reflection: {
+        content: String(outcomePayload.reflection),
+        createdAt: '2026-07-13T08:00:00.000Z',
+        tags: [],
+      },
+    } as never;
+    return route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      headers: corsHeaders,
+      body: JSON.stringify({ id: practiceSessionId, status: 'COMPLETED', version: 3 }),
+    });
+  });
 
   await page.goto(`/students/${studentId}`);
   await expect(page.getByRole('heading', { name: 'Ayşe Yılmaz' })).toBeVisible();
@@ -184,6 +216,22 @@ test('updates membership end date and publishes an independent weekday plan', as
         expect.objectContaining({ slotKey: 'EVENING', durationMinutes: 25 }),
       ],
     });
+
+  await page.getByRole('button', { name: 'Durumu düzenle' }).click();
+  const outcomeDialog = page.getByRole('dialog', { name: 'Pratik kaydını düzenle' });
+  await outcomeDialog.getByLabel('Pratik durumu').selectOption('COMPLETED');
+  await outcomeDialog.getByLabel('Refleksiyon').fill('Nefese dönmek bugün daha kolaydı.');
+  await outcomeDialog.getByLabel('İşlem nedeni').fill('Öğrenci mesajı sonradan işlendi.');
+  await outcomeDialog.getByRole('button', { name: 'Kaydet' }).click();
+  await expect
+    .poll(() => outcomePayload)
+    .toMatchObject({
+      status: 'COMPLETED',
+      expectedVersion: 2,
+      reflection: 'Nefese dönmek bugün daha kolaydı.',
+      reason: 'Öğrenci mesajı sonradan işlendi.',
+    });
+  await expect(page.getByText('Nefese dönmek bugün daha kolaydı.')).toBeVisible();
   const dimensions = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,

@@ -29,6 +29,7 @@ Return exactly one JSON object with these fields:
   "suggestedAction": "KEEP" | "SIMPLIFY" | "DISCUSS",
   "safetyConcern": boolean
 }
+Write summary, strengths, challenges, and coachTopics in clear Turkish.
 Do not translate field names or enum values. Do not add fields or markdown.`;
 
 type PulseAdapter = Pick<GeminiPaidAdapter, 'generateJson'>;

@@ -174,6 +174,7 @@ test('shows an editable evidence-based student report without horizontal overflo
     page.locator('.student-report-days i[data-status="COMPLETED"] svg').first(),
   ).toBeVisible();
   await expect(page.locator('.student-report-days i[data-status="MISSED"] svg')).toBeVisible();
+  await expect(page.getByText('Haftalık birebir görüşme')).toHaveCount(0);
 
   const dimensions = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
@@ -191,7 +192,7 @@ test('queues an active report link for the student default channel', async ({ pa
       status: 'ACTIVE',
       viewCount: 0,
       sendCount: 0,
-      publicUrl: 'https://sakinizihin.com/karne/public-test-token',
+      publicUrl: 'https://sakinzihin.com/karne/public-test-token',
     },
   };
   await page.route(`**/v1/admin/students/${studentId}/reports`, (route) =>
