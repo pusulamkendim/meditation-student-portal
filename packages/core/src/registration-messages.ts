@@ -53,7 +53,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PAYMENT_ACTION_REQUIRED',
     content:
-      'Ödeme kontrolünde küçük bir desteğine ihtiyacım oldu. {{reference}} referanslı bildirim için şu bilgiyi paylaşabilir misin: {{actionText}}',
+      'Ödeme kontrolünde küçük bir desteğine ihtiyacım oldu. {{reference}} referanslı bildirim için şu bilgiyi paylaşabilir misin: {{actionText}} Yardımın için teşekkür ederim.',
   },
   {
     eventKey: 'PRACTICE_CANCELLED',
@@ -68,7 +68,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PRACTICE_RESCHEDULED',
     content:
-      'Pratik saatini güncelledim. Eski saat {{previousStartsAtText}}, yeni saat {{startsAtText}}. Süremiz {{durationText}}.',
+      'Pratik saatini güncelledim. Eski saat {{previousStartsAtText}}, yeni saat {{startsAtText}}. Süremiz {{durationText}}. Bundan sonraki hatırlatmaları bu saate göre göndereceğim.',
   },
   {
     eventKey: 'PRACTICE_PLAN_CONFIRMATION_REQUEST',
@@ -123,7 +123,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PRACTICE_PAUSED',
     content:
-      'Pratik programını şimdilik duraklattım. Bu süre boyunca hatırlatma mesajı göndermeyeceğim. {{resumeAtText}}',
+      'Pratik programını şimdilik duraklattım. Bu süre boyunca hatırlatma mesajı göndermeyeceğim. Yeniden başlattığımda sana bilgi vereceğim.',
   },
   {
     eventKey: 'PRACTICE_RESUMED',
@@ -138,7 +138,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'MEETING_SCHEDULED',
     content:
-      'Merhaba{{studentDisplayName}}, görüşmemiz {{startsAtText}} için planlandı. Google Meet bağlantın:\n{{meetUrl}}',
+      'Merhaba{{studentDisplayName}}, görüşmemiz {{startsAtText}} için planlandı. Google Meet bağlantın:\n{{meetUrl}}\n\nGörüşmede buluşmak üzere.',
   },
   {
     eventKey: 'MEETING_REMINDER_24H',
@@ -148,27 +148,27 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'MEETING_REMINDER_1H',
     content:
-      'Merhaba{{studentDisplayName}}, görüşmemize 1 saat kaldı. Görüşme saati: {{startsAtText}}\n\nHazır olduğunda şu Google Meet bağlantısından katılabilirsin:\n{{meetUrl}}',
+      'Merhaba{{studentDisplayName}}, görüşmemize 1 saat kaldı. Görüşme saati: {{startsAtText}}\n\nHazır olduğunda şu Google Meet bağlantısından katılabilirsin:\n{{meetUrl}}\n\nGörüşmede buluşmak üzere.',
   },
   {
     eventKey: 'MEETING_RESCHEDULED',
     content:
-      'Merhaba{{studentDisplayName}}, görüşme saatini güncelledim. Önceki saat {{previousStartsAtText}}, yeni saat {{startsAtText}}.\n\nGoogle Meet bağlantın:\n{{meetUrl}}',
+      'Merhaba{{studentDisplayName}}, görüşme saatini güncelledim. Önceki saat {{previousStartsAtText}}, yeni saat {{startsAtText}}.\n\nGoogle Meet bağlantın:\n{{meetUrl}}\n\nGörüşmede buluşmak üzere.',
   },
   {
     eventKey: 'MEETING_CANCELLED',
     content:
-      '{{startsAtText}} için planlanan görüşmemizi iptal ettim. Yeni bir görüşme zamanı belirlediğimizde sana tekrar bilgi vereceğim.',
+      'Görüşme güncellemesi: {{startsAtText}} için planlanan görüşmemizi iptal ettim. Yeni bir görüşme zamanı belirlediğimizde sana tekrar bilgi vereceğim.',
   },
   {
     eventKey: 'MEETING_COMPLETED',
     content:
-      'Bugünkü görüşmemiz için teşekkür ederim. Konuştuğumuz noktaları önümüzdeki pratiklerinde birlikte takip edeceğiz. {{nextMeetingAtText}}',
+      'Bugünkü görüşmemiz için teşekkür ederim. Konuştuğumuz noktaları önümüzdeki pratiklerinde birlikte takip edeceğiz.',
   },
   {
     eventKey: 'MEETING_NO_SHOW',
     content:
-      '{{startsAtText}} tarihindeki görüşmemizde buluşamadık. Her şey yolundaysa bana kısaca haber verebilirsin. Uygun olduğunda yeni görüşme zamanını birlikte belirleyebiliriz.',
+      'Görüşme notu: {{startsAtText}} tarihindeki görüşmemizde buluşamadık. Her şey yolundaysa bana kısaca haber verebilirsin. Uygun olduğunda yeni görüşme zamanını birlikte belirleyebiliriz.',
   },
   {
     eventKey: 'READING_ASSIGNED',
@@ -188,7 +188,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'DRAWING_SHARED',
     content:
-      'Merhaba{{studentDisplayName}}, seninle “{{drawingTitle}}” başlıklı çizimi paylaşıyorum. Çizimi yakınlaştırarak ve ekranda hareket ettirerek inceleyebilirsin.\n\nÇizimi aç: {{drawingUrl}}',
+      'Merhaba{{studentDisplayName}}, seninle “{{drawingTitle}}” başlıklı çizimi paylaşıyorum. Çizimi yakınlaştırarak ve ekranda hareket ettirerek inceleyebilirsin.\n\nÇizimi aç: {{drawingUrl}}\n\nUygun olduğunda inceleyebilirsin.',
   },
   {
     eventKey: 'STUDENT_REPORT_SHARED',
