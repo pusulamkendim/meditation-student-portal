@@ -193,7 +193,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'STUDENT_REPORT_SHARED',
     content:
-      'Merhaba{{studentDisplayName}}, {{periodText}} dönemine ait pratik karnen hazır. Bu dönemdeki pratik düzenini ve öne çıkan noktaları aşağıdaki bağlantıdan inceleyebilirsin.\n\nKarneni aç: {{reportUrl}}\n\nGörüşmemizde birlikte değerlendirebiliriz.',
+      'Merhaba{{studentDisplayName}}, {{periodText}} dönemine ait pratik karnen hazır. Karneni şu bağlantıdan inceleyebilirsin: {{reportUrl}}\n\nBu bağlantı kişisel karnene erişim sağlar.',
   },
 ] as const;
 

@@ -32,7 +32,7 @@ const targets = {
   MEETING_CANCELLED: ['meeting_cancelled_tr', 'UTILITY'],
   MEETING_COMPLETED: ['meeting_completed_tr', 'UTILITY'],
   MEETING_NO_SHOW: ['meeting_no_show_tr', 'UTILITY'],
-  STUDENT_REPORT_SHARED: ['student_report_shared_tr', 'MARKETING'],
+  STUDENT_REPORT_SHARED: ['student_report_ready_v3_tr', 'UTILITY'],
   READING_ASSIGNED: ['reading_assigned_tr', 'MARKETING'],
   READING_REMINDER: ['reading_reminder_tr', 'UTILITY'],
   DRAWING_SHARED: ['drawing_shared_tr', 'MARKETING'],
