@@ -1,7 +1,6 @@
 import {
   FieldEncryption,
   LookupHmac,
-  endOfLocalServiceDate,
   parsePracticeResponsePayload,
   renderMessageTemplate,
   resolveMessageVariant,
@@ -351,8 +350,7 @@ export async function processPracticeResponse(
       (session.status !== PracticeSessionStatus.AWAITING_RESPONSE && !canSkipReminder) ||
       (!canSkipReminder && !session.replyNonceHmac) ||
       (parsedPayload && !lookup.verify(parsedPayload.nonce, session.replyNonceHmac ?? '')) ||
-      (!canSkipReminder && now < session.startAt) ||
-      now >= endOfLocalServiceDate(session.serviceDate, session.student.timezone)
+      (!canSkipReminder && now < session.startAt)
     )
       return false;
     const response =

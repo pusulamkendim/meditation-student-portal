@@ -335,6 +335,17 @@ export class RegistrationInboundProcessor {
             deliveredAt: now,
           },
         });
+        await tx.consent.create({
+          data: {
+            studentId: student.id,
+            scope: ConsentScope.REFLECTION_STORAGE,
+            status: ConsentStatus.GRANTED,
+            textVersion: PRIVACY_NOTICE_VERSION,
+            channel: inbox.channel,
+            externalMessageId,
+            occurredAt: now,
+          },
+        });
         await this.updateStep(tx, student.id, student.version, RegistrationStep.CHANNEL_OPT_IN);
         return {
           eventKey: 'CHANNEL_OPT_IN_REQUEST',
@@ -362,16 +373,16 @@ export class RegistrationInboundProcessor {
         const accepted = acceptancePattern.test(answer);
         if (!accepted && !declinePattern.test(answer))
           return this.promptForCurrentStep(tx, student);
-        await tx.consent.createMany({
-          data: [ConsentScope.AGENT_REPLY_AI, ConsentScope.REFLECTION_STORAGE].map((scope) => ({
+        await tx.consent.create({
+          data: {
             studentId: student.id,
-            scope,
+            scope: ConsentScope.AGENT_REPLY_AI,
             status: accepted ? ConsentStatus.GRANTED : ConsentStatus.WITHDRAWN,
             textVersion: AI_CONSENT_VERSION,
             channel: inbox.channel,
             externalMessageId,
             occurredAt: now,
-          })),
+          },
         });
         await this.updateStep(tx, student.id, student.version, RegistrationStep.NAME);
         return { eventKey: 'NAME_REQUEST', variables: {} };

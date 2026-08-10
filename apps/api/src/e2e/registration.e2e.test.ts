@@ -629,7 +629,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
         where: {
           studentId: started.studentId,
           scope: ConsentScope.REFLECTION_STORAGE,
-          status: ConsentStatus.WITHDRAWN,
+          status: ConsentStatus.GRANTED,
         },
       }),
     ).toBe(1);
@@ -2170,6 +2170,32 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
       [current.sessionId]: 'COMPLETED',
       [otherSession.id]: 'AWAITING_RESPONSE',
     });
+  });
+
+  it('FLOW-03E accepts a signed practice button on the next day within the response window', async () => {
+    const current = await preparePracticeStage('CHECKIN');
+    const checkin = await prisma.messageIntent.findFirstOrThrow({
+      where: {
+        studentId: current.studentId,
+        payload: { path: ['eventKey'], equals: 'PRACTICE_CHECKIN' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const quickReplies = (checkin.payload as { quickReplies: Array<{ id: string; title: string }> })
+      .quickReplies;
+    const completedPayload = quickReplies.find((reply) => reply.title === 'Yaptım')!.id;
+
+    clock.advanceTo('2026-07-16T04:15:00.000Z');
+    const attempt = await pressPracticeButton(current.senderId, completedPayload);
+    await dispatchPending(current.studentId);
+
+    expect(attempt).toMatchObject({ route: 'practice.inbound', processed: true });
+    expect(
+      (await prisma.practiceSession.findUniqueOrThrow({ where: { id: current.sessionId } })).status,
+    ).toBe('COMPLETED');
+    expect(
+      (await prisma.inboxEvent.findUniqueOrThrow({ where: { id: attempt.inboxId } })).studentId,
+    ).toBe(current.studentId);
   });
 
   it('FLOW-04 observes practice-independent questions after activation', async () => {
