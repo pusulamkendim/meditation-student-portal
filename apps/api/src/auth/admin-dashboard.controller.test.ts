@@ -33,6 +33,7 @@ describe('AdminDashboardController', () => {
     ) => ({
       serviceDate: new Date(`${date}T00:00:00.000Z`),
       status,
+      durationMinutes: 20,
       reflection: status === 'COMPLETED' ? { id: `reflection-${date}` } : null,
       practiceSlot: { slotKey: 'MORNING' },
     });
@@ -131,9 +132,11 @@ describe('AdminDashboardController', () => {
       skipped: 1,
       missed: 1,
       pending: 1,
+      completedMinutes: 20,
       completionRate: 33.3,
       responseRate: 66.7,
       reflectionRate: 100,
+      previous: { completedMinutes: 20 },
     });
     expect(result.studentPulse).toHaveLength(1);
     expect(result.studentPulse[0]).toMatchObject({

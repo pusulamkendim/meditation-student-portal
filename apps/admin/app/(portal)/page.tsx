@@ -35,6 +35,7 @@ type Comparison = {
   skipped: number;
   missed: number;
   pending?: number;
+  completedMinutes?: number;
   completionRate: number;
   responseRate?: number;
   reflectionRate?: number;
@@ -145,6 +146,13 @@ type DashboardData = {
     };
   };
 };
+
+function formatMeditationDuration(minutes: number) {
+  if (minutes < 60) return `${minutes} dk`;
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  return remainder ? `${hours} sa ${remainder} dk` : `${hours} sa`;
+}
 
 const sourceLabels = {
   READING: 'Okumadan geldi',
@@ -291,21 +299,22 @@ export default function HomePage() {
                   <Trend value={data.practice.deltas.completionRate} />
                 </div>
                 <div>
-                  <span>Yanıt</span>
-                  <strong>%{data.practice.responseRate}</strong>
-                  <small>Önceki %{data.practice.previous.responseRate}</small>
-                  <Trend value={data.practice.deltas.responseRate} />
-                </div>
-                <div>
                   <span>Refleksiyon</span>
                   <strong>%{data.practice.reflectionRate}</strong>
                   <small>Önceki %{data.practice.previous.reflectionRate}</small>
                   <Trend value={data.practice.deltas.reflectionRate} />
                 </div>
                 <div>
-                  <span>Tamamlanan</span>
+                  <span>Tamamlanan Pratik</span>
                   <strong>{data.practice.completed}</strong>
                   <small>Önceki {data.practice.previous.completed}</small>
+                </div>
+                <div>
+                  <span>Meditasyon Süresi</span>
+                  <strong>{formatMeditationDuration(data.practice.completedMinutes ?? 0)}</strong>
+                  <small>
+                    Önceki {formatMeditationDuration(data.practice.previous.completedMinutes ?? 0)}
+                  </small>
                 </div>
               </div>
               <div className="dashboard-chart-legend" aria-label="Pratik sonucu renkleri">

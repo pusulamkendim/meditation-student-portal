@@ -76,6 +76,7 @@ export class AdminDashboardController {
               select: {
                 serviceDate: true,
                 status: true,
+                durationMinutes: true,
                 reflection: { select: { id: true } },
                 practiceSlot: { select: { slotKey: true } },
               },
@@ -207,10 +208,12 @@ export class AdminDashboardController {
     let missed = 0;
     let pending = 0;
     let reflections = 0;
+    let completedMinutes = 0;
     let previousCompleted = 0;
     let previousSkipped = 0;
     let previousMissed = 0;
     let previousReflections = 0;
+    let previousCompletedMinutes = 0;
     let previousOutcomeCount = 0;
     const slotMetrics = new Map<string, { completed: number; total: number }>();
 
@@ -228,6 +231,9 @@ export class AdminDashboardController {
         (session) => session.status === 'AWAITING_RESPONSE',
       ).length;
       const currentReflections = current.filter((session) => session.reflection).length;
+      const currentCompletedMinutes = current
+        .filter((session) => session.status === 'COMPLETED')
+        .reduce((total, session) => total + session.durationMinutes, 0);
       const previousCompletedForStudent = previous.filter(
         (session) => session.status === 'COMPLETED',
       ).length;
@@ -238,16 +244,21 @@ export class AdminDashboardController {
         (session) => session.status === 'MISSED',
       ).length;
       const previousReflectionsForStudent = previous.filter((session) => session.reflection).length;
+      const previousCompletedMinutesForStudent = previous
+        .filter((session) => session.status === 'COMPLETED')
+        .reduce((total, session) => total + session.durationMinutes, 0);
 
       completed += currentCompleted;
       skipped += currentSkipped;
       missed += currentMissed;
       pending += currentPending;
       reflections += currentReflections;
+      completedMinutes += currentCompletedMinutes;
       previousCompleted += previousCompletedForStudent;
       previousSkipped += previousSkippedForStudent;
       previousMissed += previousMissedForStudent;
       previousReflections += previousReflectionsForStudent;
+      previousCompletedMinutes += previousCompletedMinutesForStudent;
       previousOutcomeCount += previous.filter(
         (session) => session.status !== 'AWAITING_RESPONSE',
       ).length;
@@ -398,6 +409,7 @@ export class AdminDashboardController {
         skipped,
         missed,
         pending,
+        completedMinutes,
         completionRate: currentCompletionRate,
         responseRate: currentResponseRate,
         reflectionRate: currentReflectionRate,
@@ -406,6 +418,7 @@ export class AdminDashboardController {
           completed: previousCompleted,
           skipped: previousSkipped,
           missed: previousMissed,
+          completedMinutes: previousCompletedMinutes,
           completionRate: previousCompletionRate,
           responseRate: previousResponseRate,
           reflectionRate: previousReflectionRate,

@@ -17,6 +17,7 @@ const dashboard = {
     skipped: 2,
     missed: 4,
     pending: 1,
+    completedMinutes: 240,
     completionRate: 66.7,
     responseRate: 77.8,
     reflectionRate: 75,
@@ -25,6 +26,7 @@ const dashboard = {
       completed: 9,
       skipped: 3,
       missed: 6,
+      completedMinutes: 180,
       completionRate: 50,
       responseRate: 66.7,
       reflectionRate: 55.6,
@@ -189,6 +191,8 @@ test('shows daily actions, student status and content metrics without horizontal
   await expect(page.getByRole('heading', { name: 'Genel Bakış' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Haftalık takip özeti' })).toBeVisible();
   await expect(page.getByText('ÖĞRENCİ DURUMLARI')).toBeVisible();
+  await expect(page.getByText('Meditasyon Süresi')).toBeVisible();
+  await expect(page.getByText('4 sa', { exact: true })).toBeVisible();
   await expect(page.getByText('Son öğrenci mesajları')).toBeVisible();
   await expect(page.getByRole('button', { name: /Sadeleştirmeyi değerlendir/ })).toBeVisible();
   await page.getByRole('button', { name: /Sadeleştirmeyi değerlendir/ }).click();
