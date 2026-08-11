@@ -15,6 +15,7 @@ import {
 import {
   Archive,
   AudioLines,
+  BarChart3,
   Check,
   Clock3,
   Copy,
@@ -968,7 +969,7 @@ export default function MeditationsPage() {
                     title="Herkese açık paylaşım"
                     description="Instagram ve diğer kanallarda paylaşılabilen global meditasyon bağlantısını yönetin."
                   >
-                    <section className="meditation-public-section meditation-public-dialog-content">
+                    <div className="reading-public-share meditation-public-dialog-content">
                       {detail.status !== 'PUBLISHED' ? (
                         <Alert tone="info">
                           Global bağlantı oluşturmak için meditasyonu yayınlayın.
@@ -1015,6 +1016,60 @@ export default function MeditationsPage() {
                               </div>
                             </div>
                           ) : null}
+
+                          {publicShare ? (
+                            <section className="reading-public-analytics meditation-public-analytics">
+                              <header>
+                                <div>
+                                  <BarChart3 aria-hidden="true" />
+                                  <div>
+                                    <span className="eyebrow">Anonim istatistikler</span>
+                                    <strong>Meditasyon performansı</strong>
+                                  </div>
+                                </div>
+                                <small>Global bağlantı etkileşimi</small>
+                              </header>
+                              <div>
+                                <article>
+                                  <span>Tekil ziyaretçi</span>
+                                  <strong>{publicShare.metrics.uniqueVisitors}</strong>
+                                </article>
+                                <article>
+                                  <span>Başlatma</span>
+                                  <strong>{publicShare.metrics.starts}</strong>
+                                </article>
+                                <article>
+                                  <span>Tamamlama</span>
+                                  <strong>{publicShare.metrics.completions}</strong>
+                                </article>
+                                <article>
+                                  <span>Tamamlanma</span>
+                                  <strong>%{publicShare.metrics.completionRate}</strong>
+                                </article>
+                                <article>
+                                  <span>Tamamlanan süre</span>
+                                  <strong>{publicShare.metrics.completedMinutes} dk</strong>
+                                </article>
+                                <article>
+                                  <span>Yönlendirme gösterimi</span>
+                                  <strong>{publicShare.metrics.ctaViews}</strong>
+                                </article>
+                                <article>
+                                  <span>WhatsApp tıklaması</span>
+                                  <strong>{publicShare.metrics.ctaClicks}</strong>
+                                </article>
+                                <article>
+                                  <span>Tıklama oranı</span>
+                                  <strong>%{publicShare.metrics.ctaClickRate}</strong>
+                                </article>
+                              </div>
+                            </section>
+                          ) : (
+                            <Alert tone="info">
+                              Bağlantı oluşturulduğunda meditasyon öğrenci hesabı gerektirmeden
+                              açılabilir.
+                            </Alert>
+                          )}
 
                           <div className="meditation-public-settings">
                             <TextField
@@ -1112,7 +1167,7 @@ export default function MeditationsPage() {
                             </div>
                           ) : null}
 
-                          <div className="meditation-public-actions">
+                          <div className="modal-actions reading-public-actions meditation-public-actions">
                             {publicShare ? (
                               <Button
                                 variant="secondary"
@@ -1131,46 +1186,9 @@ export default function MeditationsPage() {
                               {publicShare ? 'Paylaşımı kaydet' : 'Global bağlantı oluştur'}
                             </Button>
                           </div>
-
-                          {publicShare ? (
-                            <div className="meditation-public-metrics">
-                              <article>
-                                <span>Tekil ziyaretçi</span>
-                                <strong>{publicShare.metrics.uniqueVisitors}</strong>
-                              </article>
-                              <article>
-                                <span>Başlatma</span>
-                                <strong>{publicShare.metrics.starts}</strong>
-                              </article>
-                              <article>
-                                <span>Tamamlama</span>
-                                <strong>{publicShare.metrics.completions}</strong>
-                              </article>
-                              <article>
-                                <span>Tamamlama oranı</span>
-                                <strong>%{publicShare.metrics.completionRate}</strong>
-                              </article>
-                              <article>
-                                <span>Tamamlanan süre</span>
-                                <strong>{publicShare.metrics.completedMinutes} dk</strong>
-                              </article>
-                              <article>
-                                <span>Yönlendirme gösterimi</span>
-                                <strong>{publicShare.metrics.ctaViews}</strong>
-                              </article>
-                              <article>
-                                <span>WhatsApp tıklaması</span>
-                                <strong>{publicShare.metrics.ctaClicks}</strong>
-                              </article>
-                              <article>
-                                <span>Tıklama oranı</span>
-                                <strong>%{publicShare.metrics.ctaClickRate}</strong>
-                              </article>
-                            </div>
-                          ) : null}
                         </>
                       )}
-                    </section>
+                    </div>
                   </Modal>
                 ) : null}
               </>

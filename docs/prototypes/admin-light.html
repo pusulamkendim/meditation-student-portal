@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sakin Zihin · Yönetim</title>
+<meta name="robots" content="noindex" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+  :root{
+    /* mum ışığı konsepti · krem/kum tonlu açık tema
+       koyu temadaki altın vurgular burada da sürer, yüzeyler ışıkta yıkanır */
+    --ink:#2b2318;
+    --scene:#efe8db;
+    --canvas:#f6f0e5;            /* uygulama zemini · sıcak krem */
+    --surface:#fbf7ee;           /* kart · hafif aydınlık krem */
+    --surface-2:#f0e8d7;         /* hover / satır */
+    --ivory:#2b2318;
+    --muted:#87795f;
+    --border:#e6dcc7;
+    --border-strong:#cfc0a2;
+    --gold:#c99551;              /* mum altını */
+    --gold-2:#b07a2e;
+    --gold-soft:#f6ead2;
+    --ok:#4f8f6b;  --ok-soft:#e4efe6;
+    --warn:#a8762c; --warn-soft:#f8efd8;
+    --danger:#b05a4a; --danger-soft:#f8e8e2;
+    --info:#5b7f90; --info-soft:#e7eef0;
+    --focus:0 0 0 3px rgb(201 149 81 / 28%);
+    --serif:'Lora','Didot','Bodoni 72',Georgia,serif;
+    --sans:'Inter','SF Pro Text',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --tr:150ms ease; --r:8px; --ctrl:40px; --sbw:250px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--scene);color:var(--ivory);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+
+  .layout{display:grid;grid-template-columns:var(--sbw) 1fr;min-height:100vh;position:relative}
+
+  /* ambient arkaplan · mum sıcağı */
+  .ambient{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(130% 100% at 50% -10%,rgb(214 162 94 / 16%) 0%,var(--scene) 62%)}
+
+  /* ---------- sidebar ---------- */
+  .side{position:relative;z-index:2;background:rgb(251 247 238 / 92%);backdrop-filter:blur(6px);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .side .brand{display:flex;align-items:center;gap:10px;padding:22px 20px 18px;font-weight:750;font-size:.9rem}
+  .side .brand svg{width:20px;height:20px;color:var(--gold-2)}
+  .side nav{flex:1;overflow:auto;padding:0 12px 16px;display:grid;gap:2px}
+  .side nav .grp{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);opacity:.8;padding:16px 12px 7px}
+  .side nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:6px;color:var(--muted);text-decoration:none;font-size:.82rem;font-weight:550;border:1px solid transparent;transition:all var(--tr)}
+  .side nav a svg{width:16px;height:16px;flex:0 0 auto;opacity:.92}
+  .side nav a:hover{color:var(--ink);background:var(--surface-2)}
+  .side nav a.active{color:var(--gold-2);background:var(--gold-soft);border-color:rgb(176 122 46 / 22%)}
+  .side .foot{padding:16px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:11px;font-size:.78rem}
+  .side .foot .ava{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#ad7b3d,var(--gold));color:var(--surface);display:grid;place-items:center;font-size:.7rem;font-weight:800}
+  .side .foot small{display:block;color:var(--muted)}
+
+  /* ---------- main ---------- */
+  .main{position:relative;z-index:1;overflow:auto}
+  .topbar{position:sticky;top:0;z-index:5;background:rgb(251 247 238 / 92%);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:11px 30px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .crumb{font-size:.78rem;color:var(--muted)}
+  .crumb b{color:var(--ink);font-weight:650}
+  .search{display:flex;align-items:center;gap:8px;min-width:200px;height:var(--ctrl);padding:0 14px;border:1px solid var(--border);border-radius:999px;background:var(--surface)}
+  .search svg{width:15px;height:15px;color:var(--muted)}
+  .search input{flex:1;background:none;border:0;outline:none;color:var(--ink);font:inherit;font-size:.78rem}
+  .search input::placeholder{color:var(--muted)}
+  .topbar .right{display:flex;gap:10px;align-items:center}
+
+  .btn{display:inline-flex;align-items:center;gap:7px;min-height:var(--ctrl);padding:0 18px;border-radius:8px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;border:1px solid transparent;transition:all var(--tr);text-decoration:none}
+  .btn svg{width:15px;height:15px}
+  .btn.pri{border-color:#bd8847;background:linear-gradient(105deg,#ad7b3d,var(--gold) 50%,#d29b53);color:var(--surface);box-shadow:inset 0 1px rgb(255 255 255 / 26%),0 10px 24px rgb(122 85 33 / 24%)}
+  .btn.pri:hover{filter:brightness(1.05)}
+  .btn.ghost{border-color:var(--border-strong);background:var(--surface);color:var(--ink)}
+  .btn.ghost:hover{border-color:var(--gold);color:var(--gold-2)}
+  .btn.danger{background:var(--danger-soft);color:var(--danger)}
+  .btn:focus-visible,.seg:focus-visible{outline:none;box-shadow:var(--focus)}
+
+  .seg{display:flex;border:1px solid var(--border-strong);border-radius:8px;overflow:hidden}
+  .seg button{border:0;background:transparent;padding:0 15px;min-height:36px;font:inherit;font-size:.76rem;font-weight:600;color:var(--muted);cursor:pointer}
+  .seg button.on{background:var(--gold-soft);color:var(--gold-2)}
+
+  .content{max-width:1240px;padding:26px 30px 50px}
+
+  .ph{margin-bottom:20px}
+  .ph .k{color:var(--gold-2);font-size:.62rem;font-weight:760;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px}
+  .ph h1{margin:0;font-family:var(--serif);font-weight:500;font-size:clamp(1.7rem,3.4vw,2.3rem);letter-spacing:0}
+  .ph .sub{margin:7px 0 0;color:var(--muted);font-size:.82rem}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 8px 24px rgb(122 85 33 / 10%);padding:18px}
+  .card + .card{margin-top:14px}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+  .card-head h2{margin:0;font-family:var(--serif);font-weight:500;font-size:1.06rem;letter-spacing:0}
+  .card-head .hint{color:var(--muted);font-size:.74rem}
+
+  .metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;display:grid;gap:3px;position:relative;overflow:hidden;box-shadow:0 1px 2px rgb(122 85 33 / 7%)}
+  .metric::before{content:"";position:absolute;inset:0 auto 0 0;width:2px;background:linear-gradient(180deg,transparent,var(--gold),transparent);opacity:0;transition:opacity var(--tr)}
+  .metric:hover::before{opacity:.7}
+  .metric .lbl{color:var(--muted);font-size:.7rem;font-weight:650}
+  .metric .val{font-variant-numeric:tabular-nums;font-size:1.45rem;font-weight:740;color:var(--ink)}
+  .metric .del{font-size:.68rem;display:inline-flex;align-items:center;gap:5px;margin-top:4px}
+  .del .up{color:var(--ok)} .del .w{color:var(--warn)}
+  .metric .ic{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:1px solid var(--border-strong);color:var(--gold-2);display:grid;place-items:center;opacity:.9}
+  .metric .ic svg{width:15px;height:15px}
+
+  .chips{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .chip{font-size:.72rem;font-weight:650;padding:8px 14px;border-radius:999px;border:1px solid var(--border);color:var(--muted);background:var(--surface);cursor:pointer}
+  .chip.on{color:var(--gold-2);border-color:rgb(176 122 46 / 42%);background:var(--gold-soft)}
+
+  table{width:100%;border-collapse:collapse;font-size:.8rem}
+  th{color:var(--muted);font-size:.64rem;text-transform:uppercase;letter-spacing:.08em;font-weight:760;text-align:left;padding:10px 12px;border-bottom:1px solid var(--border)}
+  td{padding:12px;border-bottom:1px solid rgb(43 35 24 / 8%)}
+  tbody tr{transition:background var(--tr)}
+  tbody tr:hover{background:var(--surface-2)}
+  tr.today td:first-child{box-shadow:inset 2px 0 0 var(--gold)}
+  .stu{display:flex;align-items:center;gap:11px}
+  .stu .ava{width:34px;height:34px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:.72rem;font-weight:750;color:var(--surface);background:linear-gradient(135deg,#ad7b3d,var(--gold))}
+  .stu .ava.alt{background:linear-gradient(135deg,#5b7f90,#9db9c6)}
+  .stu .nm{font-weight:650;color:var(--ink)}
+  .stu .sm{color:var(--muted);font-size:.7rem}
+
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:.66rem;font-weight:700;border-radius:999px;padding:4px 11px;white-space:nowrap}
+  .badge svg{width:11px;height:11px}
+  .b-ok{background:var(--ok-soft);color:var(--ok)}
+  .b-warn{background:var(--warn-soft);color:var(--warn)}
+  .b-danger{background:var(--danger-soft);color:var(--danger)}
+  .b-info{background:var(--info-soft);color:var(--info)}
+  .b-mute{background:var(--surface-2);color:var(--muted)}
+
+  .tnum{font-variant-numeric:tabular-nums;color:var(--ink)}
+  .muted{color:var(--muted)}
+  .rowlink{width:30px;height:30px;border-radius:50%;border:1px solid var(--border-strong);display:grid;place-items:center;color:var(--muted);cursor:pointer;transition:all var(--tr)}
+  .rowlink:hover{color:var(--surface);border-color:var(--gold);background:linear-gradient(105deg,#ad7b3d,var(--gold))}
+
+  .tfoot{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:14px;color:var(--muted);font-size:.76rem}
+  .pages{display:flex;gap:6px}
+  .pages span{width:30px;height:30px;border-radius:50%;border:1px solid var(--border);display:grid;place-items:center;font-size:.74rem;cursor:pointer}
+  .pages span.on{background:var(--gold-soft);border-color:rgb(176 122 46 / 44%);color:var(--gold-2)}
+
+  .split{display:grid;grid-template-columns:1fr 300px;gap:14px;align-items:start;margin-top:14px}
+  .rail{display:grid;gap:14px}
+  .q-item{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;padding:11px 0;border-bottom:1px solid rgb(43 35 24 / 8%)}
+  .q-item:last-child{border-bottom:0}
+  .q-item .who{font-size:.82rem;font-weight:620}
+  .q-item .what{color:var(--muted);font-size:.7rem;margin-top:2px}
+  .q-item .go{width:28px;height:28px;border-radius:50%;border:1px solid var(--border-strong);display:grid;place-items:center;color:var(--gold-2);cursor:pointer}
+  .q-item .go svg{width:13px;height:13px}
+
+  @media(max-width:960px){
+    .layout{grid-template-columns:1fr}
+    .side{display:none}
+    .metrics{grid-template-columns:repeat(2,1fr)}
+    .split{grid-template-columns:1fr}
+    .search{display:none}
+    .topbar{padding:10px 18px}
+    .content{padding:20px 18px 40px}
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+<div class="layout">
+
+  <aside class="side">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 3-1 5-4 6-1 3 0 5 2 6 1 3 4 5 6 5-1-3 1-5 3-6 1-3 0-5-2-6-1-2-3-4-5-5z"/></svg>
+      Sakin Zihin
+    </div>
+    <nav>
+      <span class="grp">Genel</span>
+      <a class="active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Genel bakış</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 8.5a3.2 3.2 0 010 0M20 20c0-2.6-1.6-4.8-4-5.7"/></svg>Öğrenciler</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M2 10h20"/></svg>Ödemeler</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Pratik</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/></svg>Görüşmeler</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-8.5 8.5 8.5 8.5 0 01-3.7-.86L3 21l1.9-5.7a8.5 8.5 0 1116.1-3.8z"/></svg>Konuşmalar</a>
+      <span class="grp">İçerik</span>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V2H6.5A2.5 2.5 0 004 4.5z"/><path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/></svg>Okumalar</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 3-1 5-4 6-1 3 0 5 2 6 1 3 4 5 6 5-1-3 1-5 3-6 1-3 0-5-2-6-1-2-3-4-5-5z"/></svg>Meditasyonlar</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/><circle cx="12" cy="12" r="3.5"/></svg>LLM Platformu</a>
+      <span class="grp">Sistem</span>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>Operations</a>
+    </nav>
+    <div class="foot">
+      <span class="ava">N</span>
+      <div><span style="font-weight:650">Necip</span><small>Yönetici · admin@example.com</small></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Yönetim / <b>Genel bakış</b></div>
+      <div class="right">
+        <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input placeholder="Öğrenci, ödeme, konuşma…"/></label>
+        <button class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2.4"/><circle cx="19" cy="12" r="2.4"/><circle cx="5" cy="12" r="2.4"/></svg>Filtreler</button>
+        <button class="btn pri"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Yeni öğrenci</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="ph">
+        <div class="k">Mum ışığında yönetim</div>
+        <h1>Genel Bakış</h1>
+        <p class="sub">Bugünkü öğrenci, pratik ve ödeme durumu — tek bakışta.</p>
+      </div>
+
+      <div class="metrics">
+        <div class="metric">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 8.5a3.2 3.2 0 010 0M20 20c0-2.6-1.6-4.8-4-5.7"/></svg></span>
+          <span class="lbl">Aktif öğrenci</span>
+          <span class="val">14</span>
+          <span class="del"><span class="up">▲ 1</span> bu ay</span>
+        </div>
+        <div class="metric">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M2 10h20"/></svg></span>
+          <span class="lbl">Ödeme incelemesi</span>
+          <span class="val" style="color:var(--warn)">3</span>
+          <span class="del"><span class="w">●</span> bekleyen onay</span>
+        </div>
+        <div class="metric">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>
+          <span class="lbl">Bugünkü pratik</span>
+          <span class="val">21</span>
+          <span class="del">9 sabah · 12 akşam</span>
+        </div>
+        <div class="metric">
+          <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-8.5 8.5 8.5 8.5 0 01-3.7-.86L3 21l1.9-5.7a8.5 8.5 0 1116.1-3.8z"/></svg></span>
+          <span class="lbl">Açık destek</span>
+          <span class="val" style="color:var(--danger)">4</span>
+          <span class="del"><span class="up">▲ 2</span> yanıtını bekliyor</span>
+        </div>
+      </div>
+
+      <div class="split">
+        <div class="card">
+          <div class="card-head">
+            <h2>Öğrenciler</h2>
+            <span class="hint">14 aktif · 6 inceleme bekliyor</span>
+          </div>
+          <div class="chips">
+            <span class="chip on">Tümü</span><span class="chip">Yeni kayıt</span><span class="chip">Ödeme bekliyor</span><span class="chip">Aktif</span><span class="chip">Askıda</span>
+          </div>
+          <table>
+            <thead><tr><th>Öğrenci</th><th>Durum</th><th>Program</th><th>Son pratik</th><th>Görüşme</th><th></th></tr></thead>
+            <tbody>
+              <tr class="today">
+                <td><div class="stu"><span class="ava">DF</span><div><div class="nm">Defne Yılmaz</div><div class="sm">3. hafta · WhatsApp</div></div></div></td>
+                <td><span class="badge b-ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Aktif</span></td>
+                <td class="tnum">10 Tem – 9 Ağu</td>
+                <td class="tnum">Bugün 07:30</td>
+                <td class="muted">6 Ağu · 18:30</td>
+                <td><span class="rowlink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></td>
+              </tr>
+              <tr>
+                <td><div class="stu"><span class="ava alt">MY</span><div><div class="nm">Mert Akdoğan</div><div class="sm">yeni kayıt · Telegram</div></div></div></td>
+                <td><span class="badge b-warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>Ödeme bekliyor</span></td>
+                <td class="tnum">onay bekliyor</td>
+                <td class="muted">—</td>
+                <td class="muted">—</td>
+                <td><span class="rowlink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></td>
+              </tr>
+              <tr>
+                <td><div class="stu"><span class="ava">EK</span><div><div class="nm">Elif Kaya</div><div class="sm">8. hafta · WhatsApp</div></div></div></td>
+                <td><span class="badge b-ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Aktif</span></td>
+                <td class="tnum">5 Tem – 4 Ağu</td>
+                <td class="tnum">Dün 20:10</td>
+                <td class="muted">5 Ağu · 19:00</td>
+                <td><span class="rowlink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></td>
+              </tr>
+              <tr>
+                <td><div class="stu"><span class="ava alt">CS</span><div><div class="nm">Cem Su</div><div class="sm">yeni kayıt · WhatsApp</div></div></div></td>
+                <td><span class="badge b-warn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>Ödeme bekliyor</span></td>
+                <td class="tnum">onay bekliyor</td>
+                <td class="muted">—</td>
+                <td class="muted">—</td>
+                <td><span class="rowlink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></td>
+              </tr>
+              <tr>
+                <td><div class="stu"><span class="ava">AS</span><div><div class="nm">Aylin Şen</div><div class="sm">2. hafta · Telegram</div></div></div></td>
+                <td><span class="badge b-info"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>Askıda</span></td>
+                <td class="tnum">5 Tem – 4 Ağu</td>
+                <td class="muted">3 gün önce</td>
+                <td class="muted">—</td>
+                <td><span class="rowlink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="tfoot">
+            <span>5 / 20 öğrenci gösteriliyor</span>
+            <div class="pages"><span>1</span><span class="on">2</span><span>3</span><span>→</span></div>
+          </div>
+        </div>
+
+        <div class="rail">
+          <div class="card">
+            <div class="card-head"><h2>Bekleyen işlemler</h2><span class="badge b-warn">3</span></div>
+            <div class="q-item">
+              <div style="min-width:34px;min-height:34px;width:34px;height:34px;border-radius:50%;background:var(--warn-soft);color:var(--warn);display:grid;place-items:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="width:15px;height:15px"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M2 10h20"/></svg></div>
+              <div><div class="who">Mert Akdoğan</div><div class="what">Ödeme onayı · 4.000 TL</div></div>
+              <span class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+            </div>
+            <div class="q-item">
+              <div style="min-width:34px;min-height:34px;width:34px;height:34px;border-radius:50%;background:var(--danger-soft);color:var(--danger);display:grid;place-items:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M21 11.5a8.38 8.38 0 01-8.5 8.5 8.5 8.5 0 01-3.7-.86L3 21l1.9-5.7a8.5 8.5 0 1116.1-3.8z"/></svg></div>
+              <div><div class="who">Açık destek</div><div class="what">Bilgi bankası handoff · 2 mesaj</div></div>
+              <span class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+            </div>
+            <div class="q-item">
+              <div style="min-width:34px;min-height:34px;width:34px;height:34px;border-radius:50%;background:var(--warn-soft);color:var(--warn);display:grid;place-items:center"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><path d="M12 9v4M12 17h.01"/><path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L13.7 3.9a2 2 0 00-3.4 0z"/></svg></div>
+              <div><div class="who">Karne taslağı</div><div class="what">Defne'nin karne onayı bekliyor</div></div>
+              <span class="go"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-head"><h2>Bugünkü görüşmeler</h2></div>
+            <div class="q-item">
+              <div style="font-size:.82rem;font-weight:650" class="tnum">18:30</div>
+              <div><div class="who">Defne Yılmaz</div><div class="what">Meet · Google takvime senkron</div></div>
+              <span class="badge b-ok">Hazır</span>
+            </div>
+            <div class="q-item">
+              <div style="font-size:.82rem;font-weight:650" class="tnum">19:00</div>
+              <div><div class="who">Elif Kaya</div><div class="what">Meet · bağlantı gönderildi</div></div>
+              <span class="badge b-info">Planlı</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -77,6 +77,21 @@ export class PracticeController {
         planRevision: item.practicePlan.revision,
         meditationType: item.meditationType,
         cancellationReason: item.cancellationReason,
+        reflection: item.reflection
+          ? {
+              content: this.decryptReflection(
+                item.id,
+                item.reflection.contentEncrypted,
+                item.reflection.contentKeyId,
+              ),
+              createdAt: item.reflection.createdAt.toISOString(),
+              tags: item.reflection.tags.map((tag) => ({
+                tag: tag.tag,
+                confidence: tag.confidence,
+                taxonomyVersion: tag.taxonomyVersion,
+              })),
+            }
+          : undefined,
         reflectionTags:
           item.reflection?.tags.map((tag) => ({
             tag: tag.tag,
@@ -97,6 +112,17 @@ export class PracticeController {
       return this.encryption.decrypt(
         { ciphertext: Buffer.from(encrypted), keyId },
         `student:${studentId}:name`,
+      );
+    } catch {
+      return undefined;
+    }
+  }
+
+  private decryptReflection(sessionId: string, encrypted: Uint8Array, keyId: string) {
+    try {
+      return this.encryption.decrypt(
+        { ciphertext: Buffer.from(encrypted), keyId },
+        `practice:${sessionId}:reflection`,
       );
     } catch {
       return undefined;

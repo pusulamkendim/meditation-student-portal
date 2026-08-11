@@ -119,6 +119,8 @@ export default function KnowledgePage() {
   const [versionDetails, setVersionDetails] = useState<VersionDetails>();
   const [query, setQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchResult[]>();
+  const [createBaseOpen, setCreateBaseOpen] = useState(false);
+  const [baseName, setBaseName] = useState('');
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<Notice>();
   const [busy, setBusy] = useState(false);
@@ -149,9 +151,11 @@ export default function KnowledgePage() {
   }, [loadDocuments]);
 
   async function createBase() {
-    const name = window.prompt('Bilgi bankası adı');
-    if (!name?.trim()) return;
-    await mutate('/v1/admin/knowledge/bases', { name: name.trim() });
+    if (!baseName.trim()) return;
+    const created = await mutate('/v1/admin/knowledge/bases', { name: baseName.trim() });
+    if (!created) return;
+    setCreateBaseOpen(false);
+    setBaseName('');
     await loadBases();
   }
   async function mutate(path: string, body: unknown, method = 'POST') {
@@ -285,7 +289,8 @@ export default function KnowledgePage() {
                 <Button
                   variant="ghost"
                   aria-label="Yeni bilgi bankası"
-                  onClick={() => void createBase()}
+                  title="Yeni bilgi bankası"
+                  onClick={() => setCreateBaseOpen(true)}
                 >
                   <BookOpen />
                 </Button>
@@ -331,6 +336,7 @@ export default function KnowledgePage() {
                           aria-checked={stage === level.value}
                           data-selected={stage === level.value}
                           key={level.value}
+                          title={level.description}
                           onClick={() => setStage(level.value)}
                         >
                           <strong>{level.label}</strong>
@@ -518,6 +524,34 @@ export default function KnowledgePage() {
               </div>
             ) : null}
           </div>
+        </Modal>
+      ) : null}
+      {createBaseOpen ? (
+        <Modal
+          title="Yeni bilgi bankası"
+          description="Kaynakları konu veya kullanım amacına göre aynı bankada gruplayın."
+          onClose={() => setCreateBaseOpen(false)}
+          actions={
+            <>
+              <Button variant="secondary" onClick={() => setCreateBaseOpen(false)}>
+                Vazgeç
+              </Button>
+              <Button disabled={!baseName.trim() || busy} onClick={() => void createBase()}>
+                <BookOpen /> Oluştur
+              </Button>
+            </>
+          }
+        >
+          <TextField
+            autoFocus
+            label="Bilgi bankası adı"
+            value={baseName}
+            maxLength={120}
+            onChange={(event) => setBaseName(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void createBase();
+            }}
+          />
         </Modal>
       ) : null}
     </main>

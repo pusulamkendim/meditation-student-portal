@@ -10,6 +10,29 @@ const dashboard = {
     openHandoffs: 1,
     todayMeetings: 1,
   },
+  dailyCheckIns: {
+    responded: 2,
+    reflections: 1,
+    unanswered: 1,
+    students: [
+      {
+        studentId: 'student-1',
+        fullName: 'Seden Kıras',
+        channel: 'TELEGRAM',
+        responded: 0,
+        reflections: 0,
+        unanswered: 1,
+      },
+      {
+        studentId: 'student-2',
+        fullName: 'Duygu Bulut',
+        channel: 'TELEGRAM',
+        responded: 2,
+        reflections: 1,
+        unanswered: 0,
+      },
+    ],
+  },
   practice: {
     periodStart: '2026-07-29',
     periodEndExclusive: '2026-08-05',
@@ -55,6 +78,7 @@ const dashboard = {
       completed: 3,
       skipped: 1,
       missed: 3,
+      nonCompletionStreak: 3,
       pending: 0,
       reflections: 2,
       completionRate: 42.9,
@@ -93,6 +117,7 @@ const dashboard = {
       completed: 5,
       skipped: 1,
       missed: 0,
+      nonCompletionStreak: 0,
       pending: 1,
       reflections: 5,
       completionRate: 83.3,
@@ -188,14 +213,26 @@ test('shows daily actions, student status and content metrics without horizontal
 }, testInfo) => {
   await page.goto('/');
 
-  await expect(page.getByRole('heading', { name: 'Genel Bakış' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Haftalık takip özeti' })).toBeVisible();
-  await expect(page.getByText('ÖĞRENCİ DURUMLARI')).toBeVisible();
-  await expect(page.getByText('Meditasyon Süresi')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Bugünün ritminde 4 konu dikkat istiyor.' }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Öğrenci ritmi' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Bugünün akışı' })).toBeVisible();
+  await expect(page.getByText('Meditasyon süresi')).toBeVisible();
   await expect(page.getByText('4 sa', { exact: true })).toBeVisible();
   await expect(page.getByText('Son öğrenci mesajları')).toBeVisible();
-  await expect(page.getByRole('button', { name: /Sadeleştirmeyi değerlendir/ })).toBeVisible();
-  await page.getByRole('button', { name: /Sadeleştirmeyi değerlendir/ }).click();
+  await expect(page.getByText('Seden Kıras · birebir görüşme')).toBeVisible();
+  await expect(page.getByText('Seden Kıras · check-in takibi')).toBeVisible();
+  await expect(page.getByText('Sonuçlanan son 3 pratik üst üste tamamlanmadı.')).toBeVisible();
+  await expect(page.getByText('Seden Kıras mesaj gönderdi')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Check-in ve refleksiyon' })).toBeVisible();
+  await expect(page.getByText('2 check-in · 1 refleksiyon')).toBeVisible();
+  await expect(page.getByText('1 yanıt bekliyor', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: /Ödeme incelemesi/ })).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Seden Kıras: Sadeleştirmeyi değerlendir' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Seden Kıras: Sadeleştirmeyi değerlendir' }).click();
   await expect(page.getByRole('dialog', { name: /Seden Kıras · Haftalık analiz/ })).toBeVisible();
   await expect(page.getByText('Programı sadeleştirme')).toBeVisible();
   await page.getByRole('button', { name: 'Kapat', exact: true }).click();

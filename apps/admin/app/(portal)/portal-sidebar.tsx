@@ -13,7 +13,6 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquareText,
-  Palette,
   PencilRuler,
   ShieldAlert,
   Sprout,
@@ -24,35 +23,36 @@ import {
 type NavigationItem = { href: string; label: string; icon: LucideIcon };
 const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
   {
-    label: 'Genel',
-    items: [{ href: '/', label: 'Genel bakış', icon: LayoutDashboard }],
-  },
-  {
-    label: 'Öğrenci yönetimi',
+    label: 'Çalışma alanı',
     items: [
+      { href: '/', label: 'Bugünün ritmi', icon: LayoutDashboard },
       { href: '/students', label: 'Öğrenciler', icon: Users },
-      { href: '/payments', label: 'Ödemeler', icon: CreditCard },
-      { href: '/practice', label: 'Pratikler', icon: Activity },
-      { href: '/meetings', label: 'Görüşmeler', icon: CalendarDays },
       { href: '/conversations', label: 'Konuşmalar', icon: MessageSquareText },
     ],
   },
   {
-    label: 'İçerik ve AI',
+    label: 'Program',
     items: [
-      { href: '/standard-messages', label: 'Mesaj şablonları', icon: FileText },
+      { href: '/practice', label: 'Pratikler', icon: Activity },
+      { href: '/meetings', label: 'Görüşmeler', icon: CalendarDays },
+      { href: '/payments', label: 'Ödemeler', icon: CreditCard },
+    ],
+  },
+  {
+    label: 'İçerik',
+    items: [
       { href: '/meditations', label: 'Meditasyonlar', icon: AudioLines },
-      { href: '/knowledge', label: 'Bilgi bankası', icon: BookOpen },
       { href: '/readings', label: 'Okumalar', icon: BookMarked },
+      { href: '/knowledge', label: 'Bilgi bankası', icon: BookOpen },
       { href: '/drawings', label: 'Çizimler', icon: PencilRuler },
-      { href: '/llm', label: 'LLM platformu', icon: BrainCircuit },
     ],
   },
   {
     label: 'Sistem',
     items: [
+      { href: '/standard-messages', label: 'Mesaj şablonları', icon: FileText },
+      { href: '/llm', label: 'LLM platformu', icon: BrainCircuit },
       { href: '/operations', label: 'Operasyon', icon: ShieldAlert },
-      { href: '/ui-preview', label: 'UI sistemi', icon: Palette },
     ],
   },
 ];
@@ -70,7 +70,7 @@ export function PortalSidebar() {
           <Sprout aria-hidden="true" />
         </span>
         <span className="brand-text">
-          Meditasyon<small>Öğrenci yönetimi</small>
+          Sakin Zihin<small>yönetim stüdyosu</small>
         </span>
       </div>
       <nav aria-label="Ana menü">
@@ -98,7 +98,11 @@ export function PortalSidebar() {
         ))}
       </nav>
       <div className="sidebar-footer">
-        <span className="sidebar-status-dot" /> Sistem çevrimiçi
+        <span className="sidebar-profile">N</span>
+        <span>
+          <strong>Necip Sülbü</strong>
+          <small>Yönetici</small>
+        </span>
       </div>
     </aside>
   );

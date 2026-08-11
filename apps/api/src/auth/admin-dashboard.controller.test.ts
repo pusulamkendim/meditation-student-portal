@@ -32,6 +32,7 @@ describe('AdminDashboardController', () => {
       status: 'COMPLETED' | 'SKIPPED' | 'MISSED' | 'AWAITING_RESPONSE',
     ) => ({
       serviceDate: new Date(`${date}T00:00:00.000Z`),
+      startAt: new Date(`${date}T09:00:00.000Z`),
       status,
       durationMinutes: 20,
       reflection: status === 'COMPLETED' ? { id: `reflection-${date}` } : null,
@@ -50,11 +51,14 @@ describe('AdminDashboardController', () => {
               channelAccount: { type: 'TELEGRAM' },
             },
             practiceSessions: [
+              session('2026-07-28', 'COMPLETED'),
               session('2026-08-01', 'AWAITING_RESPONSE'),
               session('2026-08-02', 'COMPLETED'),
               session('2026-08-03', 'SKIPPED'),
               session('2026-08-04', 'MISSED'),
-              session('2026-07-28', 'COMPLETED'),
+              session('2026-08-04', 'MISSED'),
+              session('2026-08-05', 'COMPLETED'),
+              session('2026-08-05', 'AWAITING_RESPONSE'),
             ],
             practicePlans: [
               {
@@ -95,7 +99,10 @@ describe('AdminDashboardController', () => {
       },
       payment: { count: vi.fn().mockResolvedValue(0) },
       inboxEvent: { findMany: vi.fn().mockResolvedValue([]) },
-      messageIntent: { findMany: vi.fn().mockResolvedValue([]) },
+      messageIntent: {
+        findMany: vi.fn().mockResolvedValue([]),
+        count: vi.fn().mockResolvedValue(0),
+      },
       handoff: { findMany: vi.fn().mockResolvedValue([]) },
       weeklyMeeting: { findMany: vi.fn().mockResolvedValue([]) },
       readingAssignment: { groupBy: vi.fn().mockResolvedValue([]) },
@@ -130,11 +137,11 @@ describe('AdminDashboardController', () => {
     expect(result.practice).toMatchObject({
       completed: 1,
       skipped: 1,
-      missed: 1,
+      missed: 2,
       pending: 1,
       completedMinutes: 20,
-      completionRate: 33.3,
-      responseRate: 66.7,
+      completionRate: 25,
+      responseRate: 50,
       reflectionRate: 100,
       previous: { completedMinutes: 20 },
     });
@@ -142,6 +149,7 @@ describe('AdminDashboardController', () => {
     expect(result.studentPulse[0]).toMatchObject({
       id: realId,
       fullName: 'Duygu Bulut',
+      nonCompletionStreak: 3,
       recommendation: 'Son 7 günlük yanıtlara göre programı tek seansa indirmeyi değerlendirin.',
       insight: {
         tone: 'NEUTRAL',
@@ -149,5 +157,39 @@ describe('AdminDashboardController', () => {
         coachTopics: ['Programı sadeleştirme'],
       },
     });
+    expect(result.dailyCheckIns).toMatchObject({
+      responded: 1,
+      reflections: 1,
+      unanswered: 1,
+      students: [
+        {
+          studentId: realId,
+          fullName: 'Duygu Bulut',
+          responded: 1,
+          reflections: 1,
+          unanswered: 1,
+        },
+      ],
+    });
+    expect(prisma.messageIntent.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          updatedAt: {
+            gte: new Date('2026-08-04T21:00:00.000Z'),
+            lt: new Date('2026-08-05T21:00:00.000Z'),
+          },
+        }),
+      }),
+    );
+    expect(prisma.weeklyMeeting.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          startsAt: {
+            gte: new Date('2026-08-04T21:00:00.000Z'),
+            lt: new Date('2026-08-05T21:00:00.000Z'),
+          },
+        },
+      }),
+    );
   });
 });

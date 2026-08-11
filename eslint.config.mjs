@@ -9,6 +9,16 @@ export default tseslint.config(
   ...tseslint.configs.recommended,
   prettier,
   {
+    files: ['scripts/**/*.{js,mjs,cjs}'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        fetch: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
+  {
     files: ['apps/admin/**/*.{ts,tsx}'],
     plugins: { '@next/next': next },
     settings: { next: { rootDir: 'apps/admin' } },

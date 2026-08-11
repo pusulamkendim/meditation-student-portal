@@ -8,6 +8,7 @@ import {
   LifeBuoy,
   Radio,
   RefreshCw,
+  Send,
   ShieldCheck,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
@@ -92,7 +93,9 @@ const tone = (status: string): 'success' | 'warning' | 'danger' | 'neutral' =>
 export default function OperationsPage() {
   const [data, setData] = useState<Data>();
   const [error, setError] = useState<string>();
-  const [activeTab, setActiveTab] = useState<'ACTION' | 'CHANNEL' | 'NOTIFICATIONS'>('ACTION');
+  const [activeTab, setActiveTab] = useState<'ACTION' | 'DELIVERY' | 'CHANNEL' | 'NOTIFICATIONS'>(
+    'ACTION',
+  );
   const load = useCallback(async () => {
     setError(undefined);
     try {
@@ -140,13 +143,13 @@ export default function OperationsPage() {
               icon={AlertTriangle}
               label="Başarısız"
               value={data.counts.failed}
-              detail="İnceleme gerekiyor"
+              detail="Teslim edilemedi"
             />
             <Metric
               icon={ShieldCheck}
               label="Bastırılan"
               value={data.counts.suppressed}
-              detail="Politika nedeniyle"
+              detail="Politika kaydı"
             />
             <Metric
               icon={LifeBuoy}
@@ -158,7 +161,11 @@ export default function OperationsPage() {
           <nav className="workspace-tabs operation-tabs" aria-label="Operasyon görünümleri">
             <button data-active={activeTab === 'ACTION'} onClick={() => setActiveTab('ACTION')}>
               <AlertTriangle aria-hidden="true" /> Aksiyon gerekenler
-              <small>{data.counts.failed + data.counts.pending + data.counts.openHandoffs}</small>
+              <small>{data.counts.openHandoffs}</small>
+            </button>
+            <button data-active={activeTab === 'DELIVERY'} onClick={() => setActiveTab('DELIVERY')}>
+              <Send aria-hidden="true" /> Gönderim sorunları
+              <small>{data.counts.pending + data.counts.failed + data.counts.suppressed}</small>
             </button>
             <button data-active={activeTab === 'CHANNEL'} onClick={() => setActiveTab('CHANNEL')}>
               <Radio aria-hidden="true" /> Kanal hareketleri <small>{data.webhooks.length}</small>
@@ -172,77 +179,85 @@ export default function OperationsPage() {
           </nav>
 
           {activeTab === 'ACTION' ? (
-            <div className="operations-grid operations-grid--readable">
-              <section className="operation-section">
-                <div className="section-heading">
-                  <div>
-                    <h2>Yanıt bekleyen handover’lar</h2>
-                    <p>Öğrenciye admin yanıtı verilmesi gereken konuşmalar.</p>
-                  </div>
-                  <Badge tone={data.handoffs.length ? 'warning' : 'success'}>
-                    {data.handoffs.length}
-                  </Badge>
+            <section className="operation-section operation-section--wide">
+              <div className="section-heading">
+                <div>
+                  <h2>Yanıt bekleyen handover’lar</h2>
+                  <p>Öğrenci sayfasından yanıt vererek kapatabileceğiniz konuşmalar.</p>
                 </div>
-                {data.handoffs.length ? (
-                  <div className="operation-list">
-                    {data.handoffs.map((handoff) => (
-                      <article key={handoff.id}>
-                        <div>
-                          <a href={`/students/${handoff.studentId}`}>
-                            <strong>{studentName(handoff.student)}</strong>
-                          </a>
-                          <small>{new Date(handoff.createdAt).toLocaleString('tr-TR')}</small>
-                        </div>
-                        <Badge tone="warning">Yanıt bekliyor</Badge>
-                        <p className="operation-handoff-reason">{handoff.reason}</p>
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState icon={LifeBuoy} title="Açık handover yok" />
-                )}
-              </section>
-              <section className="operation-section">
-                <div className="section-heading">
-                  <div>
-                    <h2>İşlem gerektiren mesajlar</h2>
-                    <p>Bekleyen, gönderilemeyen veya politika nedeniyle durdurulan mesajlar.</p>
-                  </div>
+                <Badge tone={data.handoffs.length ? 'warning' : 'success'}>
+                  {data.handoffs.length}
+                </Badge>
+              </div>
+              {data.handoffs.length ? (
+                <div className="operation-list">
+                  {data.handoffs.map((handoff) => (
+                    <article key={handoff.id}>
+                      <div>
+                        <a href={`/students/${handoff.studentId}`}>
+                          <strong>{studentName(handoff.student)}</strong>
+                        </a>
+                        <small>{new Date(handoff.createdAt).toLocaleString('tr-TR')}</small>
+                      </div>
+                      <Badge tone="warning">Yanıt bekliyor</Badge>
+                      <p className="operation-handoff-reason">{handoff.reason}</p>
+                    </article>
+                  ))}
                 </div>
-                {data.recentIntents.length ? (
-                  <div className="operation-list">
-                    {data.recentIntents.map((item) => (
-                      <article key={item.id}>
-                        <div>
-                          <a href={`/students/${item.student.id}`}>
-                            <strong>{studentName(item.student)}</strong>
-                          </a>
-                          <small>
-                            {categoryLabels[item.category] ?? item.category} ·{' '}
-                            {new Date(item.updatedAt).toLocaleString('tr-TR')}
-                          </small>
-                        </div>
-                        <Badge tone={tone(item.status)}>
-                          {statusLabels[item.status] ?? item.status}
-                        </Badge>
-                        {item.suppressionReason ? (
-                          <p>{reasonLabels[item.suppressionReason] ?? item.suppressionReason}</p>
-                        ) : null}
-                        {item.preview ? (
-                          <p className="operation-message-preview">{item.preview}</p>
-                        ) : null}
-                      </article>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState
-                    icon={Inbox}
-                    title="Kuyruk temiz"
-                    description="İncelenecek mesaj niyeti bulunmuyor."
-                  />
-                )}
-              </section>
-            </div>
+              ) : (
+                <EmptyState
+                  icon={LifeBuoy}
+                  title="Açık handover yok"
+                  description="Öğrenci yanıtı bekleyen bir konu bulunmuyor."
+                />
+              )}
+            </section>
+          ) : null}
+
+          {activeTab === 'DELIVERY' ? (
+            <section className="operation-section operation-section--wide">
+              <div className="section-heading">
+                <div>
+                  <h2>Gönderim görünümü</h2>
+                  <p>
+                    Bekleyen, gönderilemeyen ve politika nedeniyle bastırılan son teknik kayıtlar.
+                    Panelden kapatılmaz; teslimat sorunlarının nedenini görmeniz içindir.
+                  </p>
+                </div>
+              </div>
+              {data.recentIntents.length ? (
+                <div className="operation-list">
+                  {data.recentIntents.map((item) => (
+                    <article key={item.id}>
+                      <div>
+                        <a href={`/students/${item.student.id}`}>
+                          <strong>{studentName(item.student)}</strong>
+                        </a>
+                        <small>
+                          {categoryLabels[item.category] ?? item.category} ·{' '}
+                          {new Date(item.updatedAt).toLocaleString('tr-TR')}
+                        </small>
+                      </div>
+                      <Badge tone={tone(item.status)}>
+                        {statusLabels[item.status] ?? item.status}
+                      </Badge>
+                      {item.suppressionReason ? (
+                        <p>{reasonLabels[item.suppressionReason] ?? item.suppressionReason}</p>
+                      ) : null}
+                      {item.preview ? (
+                        <p className="operation-message-preview">{item.preview}</p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon={Inbox}
+                  title="Gönderim sorunu yok"
+                  description="Son kayıtlarda bekleyen veya gönderilemeyen mesaj bulunmuyor."
+                />
+              )}
+            </section>
           ) : null}
 
           {activeTab === 'CHANNEL' ? (

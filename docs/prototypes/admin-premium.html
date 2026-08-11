@@ -1,0 +1,747 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex" />
+  <title>Sakin Zihin · Yönetim Stüdyosu</title>
+  <style>
+    :root {
+      --night: #071411;
+      --night-soft: #0a1b17;
+      --panel: #0d211c;
+      --panel-raised: #112821;
+      --paper: #f2eadc;
+      --paper-soft: #d8cdbb;
+      --muted: #9f9b8f;
+      --line: rgb(232 220 197 / 14%);
+      --line-strong: rgb(232 220 197 / 28%);
+      --brass: #c99a58;
+      --brass-soft: #e0b879;
+      --sage: #87ad91;
+      --sage-soft: rgb(135 173 145 / 14%);
+      --rose: #d4877c;
+      --rose-soft: rgb(212 135 124 / 13%);
+      --blue: #91aeb2;
+      --blue-soft: rgb(145 174 178 / 13%);
+      --sidebar: 216px;
+      --radius: 8px;
+      --sans: Inter, "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+      --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+      --shadow: 0 26px 70px rgb(0 0 0 / 22%);
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: dark; }
+    body {
+      min-width: 320px;
+      min-height: 100vh;
+      margin: 0;
+      background: var(--night);
+      color: var(--paper);
+      font-family: var(--sans);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    a { color: inherit; }
+    svg { display: block; }
+
+    .shell {
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--line);
+      background: #06110f;
+      overflow: hidden;
+    }
+    .brand {
+      min-height: 104px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 22px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand-mark {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgb(201 154 88 / 55%);
+      border-radius: 50%;
+      color: var(--brass-soft);
+    }
+    .brand-mark svg { width: 19px; height: 19px; }
+    .brand-name { font-family: var(--serif); font-size: 1.05rem; }
+    .brand-caption { margin-top: 2px; color: var(--muted); font-size: .68rem; }
+
+    .nav-scroll { flex: 1; overflow: auto; padding: 20px 12px; }
+    .nav-group + .nav-group { margin-top: 24px; }
+    .nav-title {
+      padding: 0 10px 8px;
+      color: #777d72;
+      font-size: .62rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+    .nav-item {
+      position: relative;
+      width: 100%;
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 5px;
+      background: transparent;
+      color: #aaa99d;
+      text-align: left;
+      font-size: .77rem;
+      cursor: pointer;
+    }
+    .nav-item + .nav-item { margin-top: 2px; }
+    .nav-item svg { width: 16px; height: 16px; flex: 0 0 auto; }
+    .nav-item:hover { background: rgb(255 255 255 / 4%); color: var(--paper); }
+    .nav-item.active { background: rgb(201 154 88 / 10%); color: var(--brass-soft); }
+    .nav-item.active::before {
+      content: "";
+      position: absolute;
+      left: -12px;
+      width: 2px;
+      height: 20px;
+      background: var(--brass);
+    }
+    .nav-count {
+      min-width: 20px;
+      margin-left: auto;
+      color: var(--rose);
+      font-size: .65rem;
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+
+    .profile {
+      min-height: 72px;
+      display: grid;
+      grid-template-columns: 32px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-top: 1px solid var(--line);
+    }
+    .profile-avatar {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--paper);
+      color: var(--night);
+      font-family: var(--serif);
+      font-weight: 700;
+    }
+    .profile strong { display: block; font-size: .73rem; }
+    .profile small { display: block; margin-top: 2px; color: var(--muted); font-size: .63rem; }
+
+    .icon-button {
+      width: 36px;
+      height: 36px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: transparent;
+      cursor: pointer;
+    }
+    .icon-button:hover { border-color: var(--line-strong); background: rgb(255 255 255 / 4%); }
+    .icon-button svg { width: 16px; height: 16px; }
+
+    .workspace { min-width: 0; background: var(--night-soft); }
+    .masthead {
+      position: sticky;
+      z-index: 10;
+      top: 0;
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 0 34px;
+      border-bottom: 1px solid var(--line);
+      background: rgb(10 27 23 / 93%);
+      backdrop-filter: blur(16px);
+    }
+    .mast-path { color: var(--muted); font-size: .72rem; }
+    .mast-path strong { color: var(--paper); font-weight: 600; }
+    .mast-actions { display: flex; align-items: center; gap: 8px; }
+    .date { margin-right: 10px; color: var(--paper-soft); font-size: .7rem; }
+    .system-state { display: inline-flex; align-items: center; gap: 6px; color: var(--sage); font-size: .68rem; }
+    .system-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--sage); }
+
+    .mobile-brand, .mobile-dock { display: none; }
+    .page { max-width: 1500px; margin: 0 auto; padding: 34px 36px 64px; }
+    .page-intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 28px;
+      margin-bottom: 32px;
+    }
+    .eyebrow { margin: 0 0 7px; color: var(--brass); font-size: .69rem; font-weight: 700; }
+    h1 {
+      margin: 0;
+      max-width: 700px;
+      font-family: var(--serif);
+      font-size: 2.75rem;
+      font-weight: 400;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+    .intro-copy { max-width: 620px; margin: 10px 0 0; color: var(--muted); font-size: .8rem; line-height: 1.65; }
+    .primary-action {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      padding: 0 16px;
+      border: 1px solid var(--brass);
+      border-radius: 6px;
+      background: var(--brass);
+      color: #10150f;
+      font-weight: 750;
+      font-size: .75rem;
+      cursor: pointer;
+    }
+    .primary-action:hover { background: var(--brass-soft); }
+    .primary-action svg { width: 16px; height: 16px; }
+
+    .pulse {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .pulse-item { min-height: 114px; padding: 20px 24px; }
+    .pulse-item + .pulse-item { border-left: 1px solid var(--line); }
+    .pulse-label { color: var(--muted); font-size: .67rem; }
+    .pulse-value {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      margin-top: 11px;
+      font-family: var(--serif);
+      font-size: 2rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .pulse-meta { margin-top: 5px; color: var(--paper-soft); font-size: .66rem; }
+    .trend-up { color: var(--sage); }
+    .trend-down { color: var(--rose); }
+
+    .legend {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 16px;
+      min-height: 38px;
+      color: var(--muted);
+      font-size: .63rem;
+    }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .legend i { width: 6px; height: 6px; border-radius: 50%; }
+
+    .desk {
+      display: grid;
+      grid-template-columns: minmax(0, 1.6fr) minmax(290px, .72fr);
+      border-top: 1px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .desk-main { min-width: 0; padding-right: 30px; }
+    .desk-rail { min-width: 0; padding-left: 30px; border-left: 1px solid var(--line); }
+    .section-head {
+      min-height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .section-index { display: flex; align-items: center; gap: 12px; }
+    .index-no { color: var(--brass); font-family: var(--serif); font-size: .85rem; }
+    .section-head h2 { margin: 0; font-family: var(--serif); font-size: 1.23rem; font-weight: 500; }
+    .section-head p { margin: 3px 0 0; color: var(--muted); font-size: .64rem; }
+    .text-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      background: transparent;
+      color: var(--brass-soft);
+      font-size: .69rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .text-action svg { width: 14px; height: 14px; }
+
+    .student-row {
+      width: 100%;
+      display: grid;
+      grid-template-columns: minmax(190px, 1.2fr) minmax(170px, .95fr) minmax(160px, .8fr) auto;
+      align-items: center;
+      gap: 20px;
+      min-height: 87px;
+      padding: 13px 2px;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      background: transparent;
+      text-align: left;
+      cursor: pointer;
+    }
+    .student-row:hover { background: rgb(255 255 255 / 2.5%); }
+    .student-id { display: grid; grid-template-columns: 35px minmax(0, 1fr); gap: 11px; align-items: center; }
+    .student-avatar {
+      width: 35px;
+      height: 35px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      color: var(--paper-soft);
+      font-family: var(--serif);
+      font-size: .8rem;
+    }
+    .student-id strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .77rem; }
+    .student-id small { display: block; margin-top: 4px; color: var(--muted); font-size: .62rem; }
+    .rhythm { min-width: 0; }
+    .rhythm-top { display: flex; justify-content: space-between; gap: 10px; color: var(--paper-soft); font-size: .65rem; }
+    .rhythm-track { height: 3px; margin-top: 8px; overflow: hidden; background: rgb(255 255 255 / 7%); }
+    .rhythm-fill { height: 100%; background: var(--sage); }
+    .rhythm-fill.warn { background: var(--brass); }
+    .rhythm-fill.risk { background: var(--rose); }
+    .signal { display: flex; align-items: center; gap: 8px; color: var(--paper-soft); font-size: .67rem; }
+    .signal-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sage); }
+    .signal-dot.warn { background: var(--brass); }
+    .signal-dot.risk { background: var(--rose); }
+    .row-arrow { width: 30px; height: 30px; display: grid; place-items: center; color: var(--muted); }
+    .row-arrow svg { width: 15px; height: 15px; }
+
+    .timeline { position: relative; padding: 10px 0 18px 18px; }
+    .timeline::before { content: ""; position: absolute; top: 27px; bottom: 30px; left: 3px; width: 1px; background: var(--line-strong); }
+    .event { position: relative; padding: 12px 0 17px 16px; }
+    .event::before {
+      content: "";
+      position: absolute;
+      top: 18px;
+      left: -18px;
+      width: 7px;
+      height: 7px;
+      border: 2px solid var(--night-soft);
+      border-radius: 50%;
+      background: var(--blue);
+    }
+    .event.urgent::before { background: var(--rose); }
+    .event.next::before { background: var(--brass); }
+    .event-time { color: var(--muted); font-size: .61rem; font-variant-numeric: tabular-nums; }
+    .event strong { display: block; margin-top: 5px; font-size: .74rem; line-height: 1.35; }
+    .event p { margin: 4px 0 0; color: var(--muted); font-size: .63rem; line-height: 1.5; }
+    .event-link { margin-top: 8px; padding: 0; border: 0; background: transparent; color: var(--brass-soft); font-size: .63rem; cursor: pointer; }
+
+    .lower-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(310px, .75fr); gap: 30px; padding-top: 32px; }
+    .lower-section { min-width: 0; }
+    .lower-section .section-head { min-height: 60px; }
+    .attention-row {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+      padding: 15px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .attention-icon {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      color: var(--brass-soft);
+    }
+    .attention-icon svg { width: 14px; height: 14px; }
+    .attention-row strong { display: block; font-size: .73rem; }
+    .attention-row p { margin: 4px 0 0; color: var(--muted); font-size: .64rem; line-height: 1.5; }
+    .attention-state { margin-top: 3px; color: var(--rose); font-size: .61rem; }
+
+    .content-stat { padding: 15px 0; border-bottom: 1px solid var(--line); }
+    .content-stat-top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+    .content-stat strong { font-size: .72rem; }
+    .content-stat b { font-family: var(--serif); font-size: 1.25rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .content-stat p { margin: 4px 0 0; color: var(--muted); font-size: .62rem; }
+
+    dialog {
+      width: min(480px, calc(100vw - 32px));
+      margin: auto;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      background: var(--panel-raised);
+      color: var(--paper);
+      box-shadow: var(--shadow);
+    }
+    dialog::backdrop { background: rgb(2 8 7 / 75%); backdrop-filter: blur(5px); }
+    .drawer-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; padding: 24px; border-bottom: 1px solid var(--line); }
+    .drawer-head h3 { margin: 0; font-family: var(--serif); font-size: 1.45rem; font-weight: 500; }
+    .drawer-head p { margin: 5px 0 0; color: var(--muted); font-size: .67rem; }
+    .drawer-body { padding: 24px; }
+    .drawer-note { margin: 0 0 20px; color: var(--paper-soft); font-family: var(--serif); font-size: 1rem; line-height: 1.6; }
+    .drawer-facts { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .drawer-fact { padding: 14px 10px 14px 0; }
+    .drawer-fact + .drawer-fact { padding-left: 12px; border-left: 1px solid var(--line); }
+    .drawer-fact small { display: block; color: var(--muted); font-size: .58rem; }
+    .drawer-fact strong { display: block; margin-top: 5px; font-size: .76rem; }
+    .drawer-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 22px; }
+    .secondary-action {
+      min-height: 38px;
+      padding: 0 14px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--paper);
+      font-weight: 700;
+      font-size: .7rem;
+      cursor: pointer;
+    }
+
+    @media (max-width: 1120px) {
+      .student-row { grid-template-columns: minmax(180px, 1.1fr) minmax(150px, .9fr) minmax(130px, .7fr) auto; gap: 14px; }
+      .lower-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .masthead { padding: 0 20px; }
+      .mobile-brand { display: flex; align-items: center; gap: 8px; font-family: var(--serif); }
+      .mast-path, .date { display: none; }
+      .page { padding: 26px 20px 90px; }
+      .pulse { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .pulse-item:nth-child(3) { border-left: 0; border-top: 1px solid var(--line); }
+      .pulse-item:nth-child(4) { border-top: 1px solid var(--line); }
+      .desk { grid-template-columns: 1fr; }
+      .desk-main { padding-right: 0; }
+      .desk-rail { padding-left: 0; border-top: 1px solid var(--line-strong); border-left: 0; }
+      .mobile-dock {
+        position: fixed;
+        z-index: 20;
+        right: 12px;
+        bottom: 12px;
+        left: 12px;
+        min-height: 58px;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        padding: 6px;
+        border: 1px solid var(--line-strong);
+        border-radius: 8px;
+        background: rgb(6 17 15 / 94%);
+        backdrop-filter: blur(16px);
+        box-shadow: var(--shadow);
+      }
+      .mobile-dock button { display: grid; place-items: center; gap: 2px; border: 0; background: transparent; color: var(--muted); font-size: .54rem; }
+      .mobile-dock button.active { color: var(--brass-soft); }
+      .mobile-dock svg { width: 17px; height: 17px; }
+    }
+    @media (max-width: 640px) {
+      .page-intro { grid-template-columns: 1fr; align-items: start; margin-bottom: 24px; }
+      h1 { font-size: 2.15rem; }
+      .primary-action { width: 100%; justify-content: center; }
+      .pulse-item { min-height: 100px; padding: 17px 14px; }
+      .pulse-value { font-size: 1.65rem; }
+      .legend { justify-content: flex-start; overflow-x: auto; }
+      .student-row { grid-template-columns: minmax(0, 1fr) auto; min-height: 94px; }
+      .student-row .rhythm { grid-column: 1 / -1; padding-left: 46px; }
+      .student-row .signal { grid-column: 1; padding-left: 46px; }
+      .student-row .row-arrow { grid-column: 2; grid-row: 1; }
+      .section-head { min-height: 70px; }
+      .desk-main, .desk-rail { min-width: 0; }
+      .lower-grid { gap: 22px; padding-top: 22px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20H4Z"/><path d="M9 20v-6h6v6"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 6.5a3 3 0 0 1 0 5.8M17 15c2.3.5 4 2.5 4 5"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.7-.9L3 21l1.9-5.7A8.5 8.5 0 1 1 21 11.5Z"/></symbol>
+    <symbol id="i-wave" viewBox="0 0 24 24"><path d="M3 12h3l2-7 4 14 3-10 2 3h4"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></symbol>
+    <symbol id="i-card" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/></symbol>
+    <symbol id="i-audio" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v18H7.5A3.5 3.5 0 0 0 4 23ZM20 5.5A3.5 3.5 0 0 0 16.5 2H13v18h3.5A3.5 3.5 0 0 1 20 23Z"/></symbol>
+    <symbol id="i-report" viewBox="0 0 24 24"><path d="M5 3h14v18H5zM8 7h8M8 11h8M8 15h5"/></symbol>
+    <symbol id="i-message" viewBox="0 0 24 24"><path d="M4 4h16v13H9l-5 4Z"/><path d="M8 8h8M8 12h5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19ZM12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-leaf" viewBox="0 0 24 24"><path d="M12 21V9M12 14c-5 0-8-3-8-8 5 0 8 3 8 8ZM12 10c0-4 2.7-7 8-7 0 5-3 8-8 8"/></symbol>
+  </svg>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark"><svg fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><use href="#i-leaf"/></svg></span>
+        <div><div class="brand-name">Sakin Zihin</div><div class="brand-caption">yönetim stüdyosu</div></div>
+      </div>
+
+      <div class="nav-scroll">
+        <nav class="nav-group" aria-label="Çalışma alanı">
+          <div class="nav-title">Çalışma alanı</div>
+          <button class="nav-item active"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-home"/></svg>Bugünün ritmi</button>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-users"/></svg>Öğrenciler</button>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-chat"/></svg>Konuşmalar<span class="nav-count">4</span></button>
+        </nav>
+        <nav class="nav-group" aria-label="Program">
+          <div class="nav-title">Program</div>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-wave"/></svg>Pratikler</button>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-calendar"/></svg>Görüşmeler</button>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-card"/></svg>Ödemeler<span class="nav-count">2</span></button>
+        </nav>
+        <nav class="nav-group" aria-label="İçerik">
+          <div class="nav-title">İçerik</div>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-audio"/></svg>Meditasyonlar</button>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-book"/></svg>Okumalar</button>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-report"/></svg>Karneler</button>
+        </nav>
+        <nav class="nav-group" aria-label="Sistem">
+          <div class="nav-title">Sistem</div>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-message"/></svg>Mesajlar</button>
+          <button class="nav-item"><svg fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-settings"/></svg>Operasyon<span class="nav-count">3</span></button>
+        </nav>
+      </div>
+
+      <div class="profile">
+        <span class="profile-avatar">N</span>
+        <div><strong>Necip Sülbü</strong><small>Yönetici</small></div>
+        <button class="icon-button" title="Hesap menüsü" aria-label="Hesap menüsü"><svg fill="currentColor"><use href="#i-more"/></svg></button>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="masthead">
+        <div class="mobile-brand"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7"><use href="#i-leaf"/></svg>Sakin Zihin</div>
+        <div class="mast-path">Çalışma alanı&nbsp; / &nbsp;<strong>Bugünün ritmi</strong></div>
+        <div class="mast-actions">
+          <span class="date">10 Ağustos 2026, Pazartesi</span>
+          <span class="system-state">Sistem çevrimiçi</span>
+          <button class="icon-button" id="searchButton" title="Ara" aria-label="Ara"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-search"/></svg></button>
+          <button class="icon-button" title="Bildirimler" aria-label="Bildirimler"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-bell"/></svg></button>
+        </div>
+      </header>
+
+      <div class="page">
+        <section class="page-intro">
+          <div>
+            <p class="eyebrow">Pazartesi · 09:42</p>
+            <h1>Bugünün ritmi sakin, üç konu dikkat istiyor.</h1>
+            <p class="intro-copy">Öğrencilerin son yedi günlük pratiği, bugünkü görüşmeler ve yanıt bekleyen konuşmalar tek çalışma yüzeyinde.</p>
+          </div>
+          <button class="primary-action"><svg fill="none" stroke="currentColor" stroke-width="2"><use href="#i-plus"/></svg>Yeni öğrenci</button>
+        </section>
+
+        <section class="pulse" aria-label="Son yedi gün pratik takibi">
+          <div class="pulse-item">
+            <div class="pulse-label">Tamamlama</div>
+            <div class="pulse-value">%68 <small class="trend-up">↑ 6</small></div>
+            <div class="pulse-meta">Geçen hafta %62</div>
+          </div>
+          <div class="pulse-item">
+            <div class="pulse-label">Refleksiyon</div>
+            <div class="pulse-value">%54 <small class="trend-up">↑ 9</small></div>
+            <div class="pulse-meta">14 anlamlı paylaşım</div>
+          </div>
+          <div class="pulse-item">
+            <div class="pulse-label">Tamamlanan pratik</div>
+            <div class="pulse-value">26 <small class="trend-down">↓ 2</small></div>
+            <div class="pulse-meta">8 öğrenci katkı verdi</div>
+          </div>
+          <div class="pulse-item">
+            <div class="pulse-label">Meditasyon süresi</div>
+            <div class="pulse-value">8 sa 40 dk</div>
+            <div class="pulse-meta">Geçen haftadan 55 dk fazla</div>
+          </div>
+        </section>
+
+        <div class="legend" aria-label="Durum renkleri">
+          <span><i style="background:var(--sage)"></i>Planı koru</span>
+          <span><i style="background:var(--brass)"></i>Yakın takip</span>
+          <span><i style="background:var(--rose)"></i>Programı sadeleştir</span>
+        </div>
+
+        <section class="desk">
+          <div class="desk-main">
+            <header class="section-head">
+              <div class="section-index"><span class="index-no">01</span><div><h2>Öğrenci ritmi</h2><p>Son yedi gün ve bir önceki haftaya göre değişim</p></div></div>
+              <button class="text-action">Tüm öğrenciler <svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-arrow"/></svg></button>
+            </header>
+
+            <button class="student-row" data-student="Duygu Bulut" data-note="Duygu son hafta düzenli ilerledi. Bedensel duyumları daha ayrıntılı tarif ediyor; programı değiştirmek için belirgin bir sinyal yok.">
+              <span class="student-id"><span class="student-avatar">DB</span><span><strong>Duygu Bulut</strong><small>3. hafta · Telegram</small></span></span>
+              <span class="rhythm"><span class="rhythm-top"><span>5 / 7 tamamlandı</span><span>%71</span></span><span class="rhythm-track"><span class="rhythm-fill" style="display:block;width:71%"></span></span></span>
+              <span class="signal"><i class="signal-dot"></i>Planı koru</span>
+              <span class="row-arrow"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-arrow"/></svg></span>
+            </button>
+            <button class="student-row" data-student="Seden Kıraş" data-note="Seden'in tamamlama oranı geriledi ve iki pratik halen yanıt bekliyor. Bir sonraki görüşmede programın tek seansa indirilmesi değerlendirilebilir.">
+              <span class="student-id"><span class="student-avatar">SK</span><span><strong>Seden Kıraş</strong><small>5. hafta · Telegram</small></span></span>
+              <span class="rhythm"><span class="rhythm-top"><span>5 / 12 tamamlandı</span><span>%42</span></span><span class="rhythm-track"><span class="rhythm-fill risk" style="display:block;width:42%"></span></span></span>
+              <span class="signal"><i class="signal-dot risk"></i>Programı sadeleştir</span>
+              <span class="row-arrow"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-arrow"/></svg></span>
+            </button>
+            <button class="student-row" data-student="Dilge Sağtaş" data-note="Dilge'nin pratiğe dönüşü iyileşiyor. Duygu düzenleme ile ilgili refleksiyonları görüşmede ele almak ve mevcut ritmi yakın takip etmek uygun.">
+              <span class="student-id"><span class="student-avatar">DS</span><span><strong>Dilge Sağtaş</strong><small>4. hafta · WhatsApp</small></span></span>
+              <span class="rhythm"><span class="rhythm-top"><span>4 / 7 tamamlandı</span><span>%57</span></span><span class="rhythm-track"><span class="rhythm-fill warn" style="display:block;width:57%"></span></span></span>
+              <span class="signal"><i class="signal-dot warn"></i>Yakın takip</span>
+              <span class="row-arrow"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-arrow"/></svg></span>
+            </button>
+            <button class="student-row" data-student="Kübra Taşar" data-note="Kübra yeni programına güçlü başladı. İlk iki pratiği tamamladı ve uykululuk sonrasında farkındalığın arttığını paylaştı.">
+              <span class="student-id"><span class="student-avatar">KT</span><span><strong>Kübra Taşar</strong><small>1. hafta · WhatsApp</small></span></span>
+              <span class="rhythm"><span class="rhythm-top"><span>2 / 2 tamamlandı</span><span>%100</span></span><span class="rhythm-track"><span class="rhythm-fill" style="display:block;width:100%"></span></span></span>
+              <span class="signal"><i class="signal-dot"></i>Planı koru</span>
+              <span class="row-arrow"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-arrow"/></svg></span>
+            </button>
+          </div>
+
+          <aside class="desk-rail">
+            <header class="section-head">
+              <div class="section-index"><span class="index-no">02</span><div><h2>Bugünün akışı</h2><p>Yaklaşan ve yanıt isteyen işler</p></div></div>
+            </header>
+            <div class="timeline">
+              <article class="event urgent">
+                <span class="event-time">Şimdi · 09:42</span>
+                <strong>2 konuşma yanıt bekliyor</strong>
+                <p>Yunus Emre bir refleksiyon, kayıtlı olmayan bir kişi genel mesaj gönderdi.</p>
+                <button class="event-link">Konuşmaları aç</button>
+              </article>
+              <article class="event next">
+                <span class="event-time">10:30</span>
+                <strong>Kübra Taşar · birebir görüşme</strong>
+                <p>Google Meet bağlantısı gönderildi. Son özet hazır.</p>
+                <button class="event-link">Görüşme notunu aç</button>
+              </article>
+              <article class="event">
+                <span class="event-time">13:00</span>
+                <strong>Pratik kontrolü</strong>
+                <p>5 sabah pratiğinden 3'ü tamamlandı, 2 yanıt bekliyor.</p>
+                <button class="event-link">Pratikleri incele</button>
+              </article>
+              <article class="event next">
+                <span class="event-time">18:30</span>
+                <strong>Duygu Bulut · birebir görüşme</strong>
+                <p>Geçen haftanın refleksiyon özeti görüşmeye hazır.</p>
+                <button class="event-link">Hazırlığı görüntüle</button>
+              </article>
+            </div>
+          </aside>
+        </section>
+
+        <section class="lower-grid">
+          <div class="lower-section">
+            <header class="section-head">
+              <div class="section-index"><span class="index-no">03</span><div><h2>Dikkat isteyenler</h2><p>Bugün müdahale gerektiren operasyonlar</p></div></div>
+              <button class="text-action">Operasyonu aç <svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-arrow"/></svg></button>
+            </header>
+            <div class="attention-row">
+              <span class="attention-icon"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-card"/></svg></span>
+              <div><strong>İki ödeme onay bekliyor</strong><p>Yeni paket başlangıçları onay sonrasında planlanacak.</p></div>
+              <span class="attention-state">Bugün</span>
+            </div>
+            <div class="attention-row">
+              <span class="attention-icon"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-alert"/></svg></span>
+              <div><strong>Seden'in programı gözden geçirilmeli</strong><p>Tamamlama oranı geçen haftaya göre 12 puan düştü.</p></div>
+              <span class="attention-state">Yakın takip</span>
+            </div>
+            <div class="attention-row">
+              <span class="attention-icon"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-message"/></svg></span>
+              <div><strong>Bir handover yönetici yanıtı bekliyor</strong><p>Öğrenci, görüşme saatiyle ilgili kişisel destek istedi.</p></div>
+              <span class="attention-state">37 dk</span>
+            </div>
+          </div>
+
+          <div class="lower-section">
+            <header class="section-head">
+              <div class="section-index"><span class="index-no">04</span><div><h2>İçerik etkisi</h2><p>Son yedi gün</p></div></div>
+              <button class="text-action">Detaylar <svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-arrow"/></svg></button>
+            </header>
+            <div class="content-stat"><div class="content-stat-top"><strong>Okuma tamamlayanlar</strong><b>18</b></div><p>“Buddha'nın Aydınlanma Gecesi” en çok okunan içerik</p></div>
+            <div class="content-stat"><div class="content-stat-top"><strong>Global meditasyon</strong><b>47</b></div><p>32 tekil ziyaret · %64 tamamlanma</p></div>
+            <div class="content-stat"><div class="content-stat-top"><strong>Program ilgisi</strong><b>6</b></div><p>Okuma ve meditasyon CTA mesajları</p></div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </div>
+
+  <nav class="mobile-dock" aria-label="Mobil menü">
+    <button class="active"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-home"/></svg>Bugün</button>
+    <button><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-users"/></svg>Öğrenciler</button>
+    <button><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-chat"/></svg>Mesajlar</button>
+    <button><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-more"/></svg>Daha fazla</button>
+  </nav>
+
+  <dialog id="studentDialog">
+    <div class="drawer-head">
+      <div><h3 id="drawerStudent">Öğrenci analizi</h3><p>Son 7 tam gün · günlük oluşturulan özet</p></div>
+      <button class="icon-button" id="closeDialog" title="Kapat" aria-label="Kapat"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-close"/></svg></button>
+    </div>
+    <div class="drawer-body">
+      <p class="drawer-note" id="drawerNote"></p>
+      <div class="drawer-facts">
+        <div class="drawer-fact"><small>Tamamlama</small><strong>%71</strong></div>
+        <div class="drawer-fact"><small>Refleksiyon</small><strong>4 kayıt</strong></div>
+        <div class="drawer-fact"><small>Durum</small><strong>Planı koru</strong></div>
+      </div>
+      <div class="drawer-actions"><button class="secondary-action">Öğrenci sayfası</button><button class="primary-action">Mesaj gönder</button></div>
+    </div>
+  </dialog>
+
+  <dialog id="searchDialog">
+    <div class="drawer-head"><div><h3>Hızlı erişim</h3><p>Öğrenci, konuşma veya işlem ara</p></div><button class="icon-button" id="closeSearch" title="Kapat" aria-label="Kapat"><svg fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-close"/></svg></button></div>
+    <div class="drawer-body"><label style="display:flex;align-items:center;gap:10px;min-height:46px;padding:0 14px;border:1px solid var(--line-strong);border-radius:6px"><svg width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"><use href="#i-search"/></svg><input autofocus placeholder="Ara…" style="width:100%;border:0;outline:0;background:transparent;color:var(--paper)" /></label></div>
+  </dialog>
+
+  <script>
+    const studentDialog = document.getElementById('studentDialog');
+    document.querySelectorAll('.student-row').forEach((row) => {
+      row.addEventListener('click', () => {
+        document.getElementById('drawerStudent').textContent = row.dataset.student;
+        document.getElementById('drawerNote').textContent = row.dataset.note;
+        studentDialog.showModal();
+      });
+    });
+    document.getElementById('closeDialog').addEventListener('click', () => studentDialog.close());
+    const searchDialog = document.getElementById('searchDialog');
+    document.getElementById('searchButton').addEventListener('click', () => searchDialog.showModal());
+    document.getElementById('closeSearch').addEventListener('click', () => searchDialog.close());
+    document.querySelectorAll('.nav-item').forEach((item) => item.addEventListener('click', () => {
+      document.querySelectorAll('.nav-item').forEach((nav) => nav.classList.remove('active'));
+      item.classList.add('active');
+    }));
+  </script>
+</body>
+</html>

@@ -8,6 +8,7 @@ import {
   humanizePracticeResponsePayload,
   type StudentPulseOutput,
 } from '@meditation/core';
+import type { Prisma } from '@meditation/database';
 import type { FastifyRequest } from 'fastify';
 
 import { PrismaService } from '../database/prisma.service.js';
@@ -24,6 +25,12 @@ function serviceDate(date: Date) {
   }).formatToParts(date);
   const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return new Date(`${values.year}-${values.month}-${values.day}T00:00:00.000Z`);
+}
+
+function istanbulDayBounds(serviceDay: Date) {
+  const date = serviceDay.toISOString().slice(0, 10);
+  const start = new Date(`${date}T00:00:00.000+03:00`);
+  return { start, end: new Date(start.getTime() + dayMilliseconds) };
 }
 
 function percentage(value: number, total: number) {
@@ -47,144 +54,153 @@ export class AdminDashboardController {
   async dashboard(@Req() request: FastifyRequest) {
     const now = this.clock.now();
     const today = serviceDate(now);
+    const tomorrow = new Date(today.getTime() + dayMilliseconds);
+    const todayBounds = istanbulDayBounds(today);
     const lastSevenStart = new Date(today.getTime() - 7 * dayMilliseconds);
     const previousSevenStart = new Date(today.getTime() - 14 * dayMilliseconds);
     const recentThreshold = new Date(now.getTime() - dayMilliseconds);
+    const messageProblemWhere = {
+      updatedAt: { gte: todayBounds.start, lt: todayBounds.end },
+      OR: [
+        { status: { in: ['FAILED', 'DELIVERY_UNKNOWN'] } },
+        {
+          status: 'SUPPRESSED',
+          suppressionReason: {
+            in: ['WHATSAPP_TEMPLATE_REQUIRED', 'STUDENT_INACTIVE', 'PROACTIVE_MESSAGING_PAUSED'],
+          },
+        },
+      ],
+    } satisfies Prisma.MessageIntentWhereInput;
 
-    const [students, paymentReviewCount, inboxEvents, failedIntents, openHandoffs, meetings] =
-      await Promise.all([
-        this.prisma.student.findMany({
-          where: { status: 'ACTIVE' },
-          orderBy: { createdAt: 'asc' },
-          select: {
-            id: true,
-            fullNameEncrypted: true,
-            fullNameKeyId: true,
-            curriculumStage: true,
-            defaultChannelIdentity: {
-              select: {
-                lastInboundAt: true,
-                channelAccount: { select: { type: true } },
-              },
+    const [
+      students,
+      paymentReviewCount,
+      inboxEvents,
+      failedIntents,
+      failedIntentCount,
+      openHandoffs,
+      meetings,
+    ] = await Promise.all([
+      this.prisma.student.findMany({
+        where: { status: 'ACTIVE' },
+        orderBy: { createdAt: 'asc' },
+        select: {
+          id: true,
+          fullNameEncrypted: true,
+          fullNameKeyId: true,
+          curriculumStage: true,
+          defaultChannelIdentity: {
+            select: {
+              lastInboundAt: true,
+              channelAccount: { select: { type: true } },
             },
-            practiceSessions: {
-              where: {
-                serviceDate: { gte: previousSevenStart, lt: today },
-                status: { in: ['COMPLETED', 'SKIPPED', 'MISSED', 'AWAITING_RESPONSE'] },
-              },
-              orderBy: { serviceDate: 'asc' },
-              select: {
-                serviceDate: true,
-                status: true,
-                durationMinutes: true,
-                reflection: { select: { id: true } },
-                practiceSlot: { select: { slotKey: true } },
-              },
+          },
+          practiceSessions: {
+            where: {
+              serviceDate: { gte: previousSevenStart, lt: tomorrow },
+              status: { in: ['COMPLETED', 'SKIPPED', 'MISSED', 'AWAITING_RESPONSE'] },
             },
-            practicePlans: {
-              where: { status: 'ACTIVE' },
-              take: 1,
-              orderBy: { revision: 'desc' },
-              select: {
-                slots: {
-                  where: { active: true },
-                  orderBy: { slotKey: 'asc' },
-                  select: { slotKey: true, localTime: true, durationMinutes: true },
-                },
-              },
+            orderBy: { startAt: 'asc' },
+            select: {
+              serviceDate: true,
+              startAt: true,
+              status: true,
+              durationMinutes: true,
+              reflection: { select: { id: true } },
+              practiceSlot: { select: { slotKey: true } },
             },
-            handoffs: { where: { status: 'OPEN' }, select: { id: true } },
-            pulseInsights: {
-              take: 1,
-              orderBy: { createdAt: 'desc' },
-              select: {
-                periodStart: true,
-                periodEndExclusive: true,
-                tone: true,
-                confidence: true,
-                suggestedAction: true,
-                safetyConcern: true,
-                reflectionCount: true,
-                analysisEncrypted: true,
-                analysisKeyId: true,
-                createdAt: true,
+          },
+          practicePlans: {
+            where: { status: 'ACTIVE' },
+            take: 1,
+            orderBy: { revision: 'desc' },
+            select: {
+              slots: {
+                where: { active: true },
+                orderBy: { slotKey: 'asc' },
+                select: { slotKey: true, localTime: true, durationMinutes: true },
               },
             },
           },
-        }),
-        this.prisma.payment.count({ where: { status: 'REPORTED' } }),
-        this.prisma.inboxEvent.findMany({
-          where: { eventType: 'MESSAGE_RECEIVED', createdAt: { gte: recentThreshold } },
-          take: 12,
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            studentId: true,
-            channel: true,
-            dedupeKey: true,
-            normalizedData: true,
-            createdAt: true,
-            student: { select: { fullNameEncrypted: true, fullNameKeyId: true } },
-          },
-        }),
-        this.prisma.messageIntent.findMany({
-          where: {
-            OR: [
-              { status: { in: ['FAILED', 'DELIVERY_UNKNOWN'] } },
-              {
-                status: 'SUPPRESSED',
-                suppressionReason: {
-                  in: [
-                    'WHATSAPP_TEMPLATE_REQUIRED',
-                    'STUDENT_INACTIVE',
-                    'PROACTIVE_MESSAGING_PAUSED',
-                  ],
-                },
-              },
-            ],
-          },
-          take: 8,
-          orderBy: { updatedAt: 'desc' },
-          select: {
-            id: true,
-            studentId: true,
-            category: true,
-            status: true,
-            suppressionReason: true,
-            payload: true,
-            updatedAt: true,
-            channelIdentity: { select: { channelAccount: { select: { type: true } } } },
-            student: { select: { fullNameEncrypted: true, fullNameKeyId: true } },
-          },
-        }),
-        this.prisma.handoff.findMany({
-          where: { status: 'OPEN' },
-          take: 8,
-          orderBy: { createdAt: 'desc' },
-          select: {
-            id: true,
-            studentId: true,
-            reason: true,
-            createdAt: true,
-            student: { select: { fullNameEncrypted: true, fullNameKeyId: true } },
-          },
-        }),
-        this.prisma.weeklyMeeting.findMany({
-          where: { startsAt: { gte: now, lt: new Date(now.getTime() + dayMilliseconds) } },
-          orderBy: { startsAt: 'asc' },
-          select: {
-            id: true,
-            startsAt: true,
-            endsAt: true,
-            status: true,
-            meetingSeries: {
-              select: {
-                student: { select: { id: true, fullNameEncrypted: true, fullNameKeyId: true } },
-              },
+          handoffs: { where: { status: 'OPEN' }, select: { id: true } },
+          pulseInsights: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              periodStart: true,
+              periodEndExclusive: true,
+              tone: true,
+              confidence: true,
+              suggestedAction: true,
+              safetyConcern: true,
+              reflectionCount: true,
+              analysisEncrypted: true,
+              analysisKeyId: true,
+              createdAt: true,
             },
           },
-        }),
-      ]);
+        },
+      }),
+      this.prisma.payment.count({ where: { status: 'REPORTED' } }),
+      this.prisma.inboxEvent.findMany({
+        where: { eventType: 'MESSAGE_RECEIVED', createdAt: { gte: recentThreshold } },
+        take: 12,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          studentId: true,
+          channel: true,
+          dedupeKey: true,
+          normalizedData: true,
+          createdAt: true,
+          student: { select: { fullNameEncrypted: true, fullNameKeyId: true } },
+        },
+      }),
+      this.prisma.messageIntent.findMany({
+        where: messageProblemWhere,
+        take: 8,
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          studentId: true,
+          category: true,
+          status: true,
+          suppressionReason: true,
+          payload: true,
+          updatedAt: true,
+          channelIdentity: { select: { channelAccount: { select: { type: true } } } },
+          student: { select: { fullNameEncrypted: true, fullNameKeyId: true } },
+        },
+      }),
+      this.prisma.messageIntent.count({ where: messageProblemWhere }),
+      this.prisma.handoff.findMany({
+        where: { status: 'OPEN' },
+        take: 8,
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          studentId: true,
+          reason: true,
+          createdAt: true,
+          student: { select: { fullNameEncrypted: true, fullNameKeyId: true } },
+        },
+      }),
+      this.prisma.weeklyMeeting.findMany({
+        where: { startsAt: { gte: todayBounds.start, lt: todayBounds.end } },
+        orderBy: { startsAt: 'asc' },
+        select: {
+          id: true,
+          startsAt: true,
+          endsAt: true,
+          status: true,
+          meetingSeries: {
+            select: {
+              student: { select: { id: true, fullNameEncrypted: true, fullNameKeyId: true } },
+            },
+          },
+        },
+      }),
+    ]);
 
     const namedStudents = students.map((student) => ({
       ...student,
@@ -219,7 +235,7 @@ export class AdminDashboardController {
 
     const studentPulse = realStudents.map((student) => {
       const current = student.practiceSessions.filter(
-        (session) => session.serviceDate >= lastSevenStart,
+        (session) => session.serviceDate >= lastSevenStart && session.serviceDate < today,
       );
       const previous = student.practiceSessions.filter(
         (session) => session.serviceDate < lastSevenStart,
@@ -247,6 +263,14 @@ export class AdminDashboardController {
       const previousCompletedMinutesForStudent = previous
         .filter((session) => session.status === 'COMPLETED')
         .reduce((total, session) => total + session.durationMinutes, 0);
+      const concludedRecent = student.practiceSessions.filter(
+        (session) => session.serviceDate < today && session.status !== 'AWAITING_RESPONSE',
+      );
+      let nonCompletionStreak = 0;
+      for (let index = concludedRecent.length - 1; index >= 0; index -= 1) {
+        if (concludedRecent[index]?.status === 'COMPLETED') break;
+        nonCompletionStreak += 1;
+      }
 
       completed += currentCompleted;
       skipped += currentSkipped;
@@ -307,6 +331,7 @@ export class AdminDashboardController {
         completed: currentCompleted,
         skipped: currentSkipped,
         missed: currentMissed,
+        nonCompletionStreak,
         pending: currentPending,
         reflections: currentReflections,
         completionRate,
@@ -343,6 +368,33 @@ export class AdminDashboardController {
           : undefined,
       };
     });
+
+    const dailyCheckIns = realStudents
+      .map((student) => {
+        const sessions = student.practiceSessions.filter((session) => session.serviceDate >= today);
+        const responded = sessions.filter(
+          (session) => session.status === 'COMPLETED' || session.status === 'SKIPPED',
+        ).length;
+        const reflections = sessions.filter((session) => session.reflection).length;
+        const unanswered = sessions.filter(
+          (session) => session.status === 'AWAITING_RESPONSE' || session.status === 'MISSED',
+        ).length;
+        return {
+          studentId: student.id,
+          fullName: student.fullName,
+          channel: student.defaultChannelIdentity?.channelAccount.type,
+          responded,
+          reflections,
+          unanswered,
+        };
+      })
+      .filter((student) => student.responded > 0 || student.unanswered > 0)
+      .sort(
+        (left, right) =>
+          right.unanswered - left.unanswered ||
+          right.reflections - left.reflections ||
+          (left.fullName ?? '').localeCompare(right.fullName ?? '', 'tr'),
+      );
 
     const outcomeCount = completed + skipped + missed;
     const currentCompletionRate = percentage(completed, outcomeCount);
@@ -397,9 +449,15 @@ export class AdminDashboardController {
         activeStudents: realStudents.length,
         paymentReviews: paymentReviewCount,
         recentMessages: inboxEvents.length,
-        failedMessages: failedIntents.length,
+        failedMessages: failedIntentCount,
         openHandoffs: openHandoffs.length,
         todayMeetings: meetings.length,
+      },
+      dailyCheckIns: {
+        responded: dailyCheckIns.reduce((total, student) => total + student.responded, 0),
+        reflections: dailyCheckIns.reduce((total, student) => total + student.reflections, 0),
+        unanswered: dailyCheckIns.reduce((total, student) => total + student.unanswered, 0),
+        students: dailyCheckIns,
       },
       practice: {
         periodDays: 7,

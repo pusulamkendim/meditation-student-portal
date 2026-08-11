@@ -1,7 +1,7 @@
 'use client';
 
 import { Alert, Badge, EmptyState, PageHeader, Skeleton } from '@meditation/ui';
-import { MessageCircle, Search, Users } from 'lucide-react';
+import { ArrowRight, MessageCircle, Search, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -49,16 +49,6 @@ const statusLabels: Record<string, string> = {
   DELETED: 'Silindi',
 };
 
-const tone: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
-  ACTIVE: 'success',
-  PAYMENT_PENDING: 'warning',
-  PAUSED: 'info',
-  INACTIVE: 'neutral',
-  LEAD: 'info',
-  DELETION_PENDING: 'danger',
-  DELETED: 'danger',
-};
-
 const dateFormatter = new Intl.DateTimeFormat('tr-TR', {
   day: '2-digit',
   month: 'short',
@@ -72,6 +62,14 @@ function formatDate(value?: string) {
 function formatChannel(channel?: Student['channel']) {
   if (!channel) return 'Kanal bağlanmadı';
   return `${channel.type === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}${channel.identifier ? ` · ${channel.identifier}` : ''}`;
+}
+
+function initials(fullName?: string) {
+  if (!fullName?.trim()) return '?';
+  const parts = fullName.trim().split(/\s+/u);
+  return `${parts[0]?.[0] ?? ''}${parts.length > 1 ? (parts.at(-1)?.[0] ?? '') : ''}`.toLocaleUpperCase(
+    'tr-TR',
+  );
 }
 
 export default function StudentsPage() {
@@ -222,50 +220,55 @@ export default function StudentsPage() {
           description="Arama veya filtreleri değiştirerek tekrar deneyin."
         />
       ) : (
-        <div className="student-table student-table--professional">
-          <div className="student-table__head">
-            <span>Öğrenci</span>
-            <span>İlerleme</span>
-            <span>Pratik uyumu</span>
-            <span>Sonraki görüşme</span>
-            <span>Üyelik</span>
-            <span>Durum</span>
-          </div>
-          {visible.map((student) => (
-            <a className="student-row" href={`/students/${student.id}`} key={student.id}>
-              <span className="student-cell student-cell--identity">
-                <strong>{student.fullName ?? 'İsim belirtilmedi'}</strong>
-                <small>
-                  <MessageCircle aria-hidden="true" /> {formatChannel(student.channel)}
-                </small>
+        <div className="student-directory-list">
+          {visible.map((student, index) => (
+            <a className="student-directory-row" href={`/students/${student.id}`} key={student.id}>
+              <span className="student-directory-identity">
+                <span className={`student-list-avatar is-${index % 2 === 0 ? 'gold' : 'sage'}`}>
+                  {initials(student.fullName)}
+                </span>
+                <span className="student-identity-copy">
+                  <strong>{student.fullName ?? 'İsim belirtilmedi'}</strong>
+                  <small>
+                    <MessageCircle aria-hidden="true" /> {formatChannel(student.channel)}
+                  </small>
+                </span>
               </span>
-              <span className="student-cell">
+              <span className="student-directory-stat">
+                <small>İlerleme</small>
                 <strong>{student.journey.label}</strong>
-                <small>{student.journey.completedMeetingCount} tamamlanan görüşme</small>
+                <em>{student.journey.completedMeetingCount} tamamlanan görüşme</em>
               </span>
-              <span className="student-cell">
+              <span className="student-directory-stat is-practice">
+                <small>Pratik uyumu</small>
                 <strong>%{student.practice.complianceRate}</strong>
-                <small>
+                <em>
                   {student.practice.completed} tamamlandı · {student.practice.missed} kaçırıldı
-                </small>
+                </em>
               </span>
-              <span className="student-cell">
+              <span className="student-directory-stat is-meeting">
+                <small>Sonraki görüşme</small>
                 <strong>{formatDate(student.nextMeetingAt)}</strong>
-                <small>{student.nextMeetingAt ? 'Planlandı' : 'Görüşme yok'}</small>
+                <em>{student.nextMeetingAt ? 'Planlandı' : 'Görüşme yok'}</em>
               </span>
-              <span className="student-cell">
+              <span className="student-directory-stat is-membership">
+                <small>Üyelik</small>
                 <strong>
                   {student.subscription ? formatDate(student.subscription.endExclusive) : '—'}
                 </strong>
-                <small>
+                <em>
                   {student.subscription
                     ? `${student.subscription.credits} görüşme kredisi`
                     : 'Paket yok'}
-                </small>
+                </em>
               </span>
-              <Badge tone={tone[student.status] ?? 'neutral'}>
+              <span
+                className={`student-directory-status is-${student.status.toLocaleLowerCase('en-US')}`}
+              >
+                <i aria-hidden="true" />
                 {statusLabels[student.status] ?? student.status}
-              </Badge>
+              </span>
+              <ArrowRight className="student-directory-arrow" aria-hidden="true" />
             </a>
           ))}
         </div>
