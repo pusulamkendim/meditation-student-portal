@@ -206,6 +206,10 @@ export class VoiceMessageProcessor {
 
     if (!existingReflection) {
       await this.prisma.$transaction(async (tx) => {
+        const practiceSession = await tx.practiceSession.findUniqueOrThrow({
+          where: { id: reflectionContext.sessionId },
+          select: { version: true },
+        });
         await tx.practiceReflection.create({
           data: {
             practiceSessionId: reflectionContext.sessionId,
@@ -231,7 +235,7 @@ export class VoiceMessageProcessor {
           channelIdentityId: identity.id,
           locale: identity.student.preferredLocale,
           stage: identity.student.curriculumStage,
-          aggregateVersion: identity.student.version,
+          aggregateVersion: practiceSession.version,
           idempotencyKey: `practice:${reflectionContext.sessionId}:reflection-received`,
           variables: {},
           context: { practiceSessionId: reflectionContext.sessionId },

@@ -21,14 +21,36 @@ describe('VoiceMessageProcessor', () => {
     };
     const put = vi.fn().mockResolvedValue(undefined);
     const reflectionCreate = vi.fn().mockResolvedValue({ id: 'reflection-1' });
+    const messageIntentCreate = vi.fn().mockResolvedValue({ id: 'intent-1' });
     const voiceUpdate = vi.fn(async ({ data }: { data: Record<string, unknown> }) => {
       media = { ...media, ...data } as typeof media;
       return media;
     });
     const tx = {
+      practiceSession: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ version: 4 }),
+      },
       practiceReflection: { create: reflectionCreate },
       conversationContextResolution: { upsert: vi.fn().mockResolvedValue({}) },
-      standardMessageVersion: { findMany: vi.fn().mockResolvedValue([]) },
+      standardMessageVersion: {
+        findMany: vi.fn().mockResolvedValue([
+          {
+            id: 'version-1',
+            content: 'Bunu paylaştığın için teşekkür ederim.',
+            effectiveAt: clock.now(),
+            variant: {
+              locale: 'tr',
+              curriculumStage: null,
+              slot: null,
+              priority: 0,
+              requiresStudentName: false,
+            },
+          },
+        ]),
+      },
+      systemEventOccurrence: { create: vi.fn().mockResolvedValue({ id: 'occurrence-1' }) },
+      messageIntent: { create: messageIntentCreate },
+      outboxEvent: { create: vi.fn().mockResolvedValue({}) },
       inboundResponseOwnership: { upsert: vi.fn().mockResolvedValue({}) },
       inboxEvent: { update: vi.fn().mockResolvedValue({}) },
     };
@@ -131,6 +153,14 @@ describe('VoiceMessageProcessor', () => {
         create: expect.objectContaining({
           entityId: 'session-1',
           resolutionMethod: 'EXPLICIT_REPLY',
+        }),
+      }),
+    );
+    expect(messageIntentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          aggregateVersion: 4,
+          payload: expect.objectContaining({ practiceSessionId: 'session-1' }),
         }),
       }),
     );
