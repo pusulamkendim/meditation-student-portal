@@ -569,7 +569,11 @@ export class StudentReportService {
 
   private async reflectionCandidates(studentId: string, start: Date, end: Date) {
     const rows = await this.prisma.practiceReflection.findMany({
-      where: { practiceSession: { studentId, serviceDate: { gte: start, lt: end } } },
+      where: {
+        contentEncrypted: { not: null },
+        contentKeyId: { not: null },
+        practiceSession: { studentId, serviceDate: { gte: start, lt: end } },
+      },
       include: {
         practiceSession: {
           select: {
@@ -583,17 +587,23 @@ export class StudentReportService {
       orderBy: { createdAt: 'asc' },
       take: 14,
     });
-    return rows.map((row) => ({
-      id: row.id,
-      sessionId: row.practiceSession.id,
-      date: row.practiceSession.serviceDate.toISOString().slice(0, 10),
-      slot: row.practiceSession.practiceSlot?.slotKey ?? 'CUSTOM',
-      meditationType: row.practiceSession.meditationType?.title ?? null,
-      text: this.encryption.decrypt(
-        { ciphertext: Buffer.from(row.contentEncrypted), keyId: row.contentKeyId },
-        `practice:${row.practiceSession.id}:reflection`,
-      ),
-    }));
+    return rows.flatMap((row) =>
+      row.contentEncrypted && row.contentKeyId
+        ? [
+            {
+              id: row.id,
+              sessionId: row.practiceSession.id,
+              date: row.practiceSession.serviceDate.toISOString().slice(0, 10),
+              slot: row.practiceSession.practiceSlot?.slotKey ?? 'CUSTOM',
+              meditationType: row.practiceSession.meditationType?.title ?? null,
+              text: this.encryption.decrypt(
+                { ciphertext: Buffer.from(row.contentEncrypted), keyId: row.contentKeyId },
+                `practice:${row.practiceSession.id}:reflection`,
+              ),
+            },
+          ]
+        : [],
+    );
   }
 
   private async requireReflection(studentId: string, reflectionId: string, start: Date, end: Date) {

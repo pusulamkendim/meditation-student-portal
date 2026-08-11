@@ -51,6 +51,14 @@ export interface EmbeddingResult {
   inputTokens: number;
 }
 
+export interface AudioTranscriptionResult {
+  text: string;
+  providerRequestId?: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 const responseSchema = z.object({
   candidates: z
     .array(
@@ -153,6 +161,70 @@ export class GeminiPaidAdapter {
 
   async generateStructured(input: LlmGenerateInput): Promise<LlmGenerateResult> {
     return this.generateJson({ ...input, outputSchema: 'agent-reply' });
+  }
+
+  async transcribeAudio(input: {
+    model: LlmModelCandidate;
+    operationId: string;
+    prompt: string;
+    audio: Buffer;
+    mimeType: string;
+    maxOutputTokens?: number;
+  }): Promise<AudioTranscriptionResult> {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(input.model.providerModelId)}:generateContent?key=${encodeURIComponent(this.apiKey)}`;
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-client-operation-id': input.operationId },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: input.prompt },
+              {
+                inlineData: {
+                  mimeType: input.mimeType,
+                  data: input.audio.toString('base64'),
+                },
+              },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: input.maxOutputTokens ?? 2048,
+        },
+      }),
+    });
+    if (!response.ok) {
+      const status = response.status;
+      throw new LlmProviderError(
+        `Gemini audio transcription failed with HTTP ${status}.`,
+        status >= 500 || status === 429 ? 'TRANSIENT' : 'PERMANENT',
+      );
+    }
+    const parsed = responseSchema.safeParse(await response.json());
+    if (!parsed.success)
+      throw new LlmProviderError(
+        'Gemini transcription response shape is invalid.',
+        'INVALID_OUTPUT',
+      );
+    const text = parsed.data.candidates?.[0]?.content?.parts
+      .map((part) => part.text ?? '')
+      .join('')
+      .trim();
+    if (!text)
+      throw new LlmProviderError('Gemini returned an empty transcription.', 'INVALID_OUTPUT');
+    const usage = parsed.data.usageMetadata;
+    return {
+      text,
+      providerRequestId: response.headers.get('x-request-id') ?? undefined,
+      inputTokens: usage?.promptTokenCount ?? 0,
+      outputTokens: usage?.candidatesTokenCount ?? 0,
+      totalTokens:
+        usage?.totalTokenCount ??
+        (usage?.promptTokenCount ?? 0) + (usage?.candidatesTokenCount ?? 0),
+    };
   }
 
   async generateJson<T = AgentReplyOutput>(

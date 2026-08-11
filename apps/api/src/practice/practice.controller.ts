@@ -51,7 +51,20 @@ export class PracticeController {
         practiceSlot: true,
         practicePlan: true,
         meditationType: { select: { id: true, title: true } },
-        reflection: { include: { tags: true } },
+        reflection: {
+          include: {
+            tags: true,
+            voiceMedia: {
+              select: {
+                id: true,
+                status: true,
+                durationSeconds: true,
+                contentType: true,
+                errorCode: true,
+              },
+            },
+          },
+        },
       },
     });
     return {
@@ -90,6 +103,7 @@ export class PracticeController {
                 confidence: tag.confidence,
                 taxonomyVersion: tag.taxonomyVersion,
               })),
+              voiceMedia: item.reflection.voiceMedia,
             }
           : undefined,
         reflectionTags:
@@ -118,7 +132,8 @@ export class PracticeController {
     }
   }
 
-  private decryptReflection(sessionId: string, encrypted: Uint8Array, keyId: string) {
+  private decryptReflection(sessionId: string, encrypted: Uint8Array | null, keyId: string | null) {
+    if (!encrypted || !keyId) return undefined;
     try {
       return this.encryption.decrypt(
         { ciphertext: Buffer.from(encrypted), keyId },

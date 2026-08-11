@@ -150,6 +150,8 @@ export class StudentPulseAiProcessor {
       }),
       this.prisma.practiceReflection.findMany({
         where: {
+          contentEncrypted: { not: null },
+          contentKeyId: { not: null },
           practiceSession: { studentId, serviceDate: { gte: periodStart, lt: periodEndExclusive } },
         },
         include: { practiceSession: { select: { id: true, serviceDate: true } } },
@@ -212,11 +214,18 @@ export class StudentPulseAiProcessor {
     );
     const currentSessions = sessions.filter((session) => session.serviceDate >= periodStart);
     const previousSessions = sessions.filter((session) => session.serviceDate < periodStart);
-    const reflectionTexts = reflections.map((reflection) =>
-      this.encryption.decrypt(
-        { ciphertext: Buffer.from(reflection.contentEncrypted), keyId: reflection.contentKeyId },
-        `practice:${reflection.practiceSession.id}:reflection`,
-      ),
+    const reflectionTexts = reflections.flatMap((reflection) =>
+      reflection.contentEncrypted && reflection.contentKeyId
+        ? [
+            this.encryption.decrypt(
+              {
+                ciphertext: Buffer.from(reflection.contentEncrypted),
+                keyId: reflection.contentKeyId,
+              },
+              `practice:${reflection.practiceSession.id}:reflection`,
+            ),
+          ]
+        : [],
     );
     const facts = {
       period: {

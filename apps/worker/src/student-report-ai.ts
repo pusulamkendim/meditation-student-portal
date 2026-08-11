@@ -158,18 +158,27 @@ export class StudentReportAiProcessor {
         return 'ignored';
       }
 
-      const reflectionCandidates = reflections.map((reflection) => ({
-        id: reflection.id,
-        evidenceId: `reflection:${reflection.id}`,
-        sessionEvidenceId: `practice:${reflection.practiceSession.id}`,
-        date: reflection.practiceSession.serviceDate.toISOString().slice(0, 10),
-        slot: reflection.practiceSession.practiceSlot?.slotKey ?? 'CUSTOM',
-        meditationType: reflection.practiceSession.meditationType?.title ?? null,
-        text: this.encryption.decrypt(
-          { ciphertext: Buffer.from(reflection.contentEncrypted), keyId: reflection.contentKeyId },
-          `practice:${reflection.practiceSession.id}:reflection`,
-        ),
-      }));
+      const reflectionCandidates = reflections.flatMap((reflection) =>
+        reflection.contentEncrypted && reflection.contentKeyId
+          ? [
+              {
+                id: reflection.id,
+                evidenceId: `reflection:${reflection.id}`,
+                sessionEvidenceId: `practice:${reflection.practiceSession.id}`,
+                date: reflection.practiceSession.serviceDate.toISOString().slice(0, 10),
+                slot: reflection.practiceSession.practiceSlot?.slotKey ?? 'CUSTOM',
+                meditationType: reflection.practiceSession.meditationType?.title ?? null,
+                text: this.encryption.decrypt(
+                  {
+                    ciphertext: Buffer.from(reflection.contentEncrypted),
+                    keyId: reflection.contentKeyId,
+                  },
+                  `practice:${reflection.practiceSession.id}:reflection`,
+                ),
+              },
+            ]
+          : [],
+      );
       const snapshot = report.snapshot as {
         pulse?: { id?: string } | null;
         evidenceIds?: string[];

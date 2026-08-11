@@ -302,9 +302,20 @@ enum LlmTask {
   WEEKLY_SUMMARY
   STUDENT_PULSE
   STUDENT_REPORT
+  REFLECTION_TRANSCRIPTION
   KNOWLEDGE_EMBEDDING
   RAG_QUERY_REWRITE
   RAG_RERANK
+}
+
+enum VoiceMediaStatus {
+  RECEIVED
+  STORED
+  TRANSCRIBING
+  TRANSCRIBED
+  STORED_WITHOUT_AI
+  TOO_LONG
+  FAILED
 }
 
 enum StudentPulseTone {
@@ -443,6 +454,7 @@ model Student {
   drawingAssignments     DrawingAssignment[]
   pulseInsights          StudentPulseInsight[]
   reportCards            StudentReportCard[]
+  voiceMedia             VoiceMessageMedia[]
 
   @@index([status])
   @@map("students")
@@ -537,11 +549,12 @@ model StudentChannelIdentity {
   createdAt             DateTime              @default(now()) @map("created_at")
   updatedAt             DateTime              @updatedAt @map("updated_at")
 
-  student           Student         @relation("StudentIdentities", fields: [studentId], references: [id], onDelete: Cascade)
-  channelAccount    ChannelAccount  @relation(fields: [channelAccountId], references: [id], onDelete: Restrict)
-  defaultForStudent Student?        @relation("DefaultChannel")
+  student           Student             @relation("StudentIdentities", fields: [studentId], references: [id], onDelete: Cascade)
+  channelAccount    ChannelAccount      @relation(fields: [channelAccountId], references: [id], onDelete: Restrict)
+  defaultForStudent Student?            @relation("DefaultChannel")
   messages          Message[]
   messageIntents    MessageIntent[]
+  voiceMedia        VoiceMessageMedia[]
 
   @@unique([channelAccountId, externalUserHmac])
   @@index([studentId, status])
@@ -736,11 +749,13 @@ model PracticeAccessLink {
 model PracticeReflection {
   id                String   @id @default(uuid()) @db.Uuid
   practiceSessionId String   @unique @map("practice_session_id") @db.Uuid
-  contentEncrypted  Bytes    @map("content_encrypted")
-  contentKeyId      String   @map("content_key_id")
+  contentEncrypted  Bytes?   @map("content_encrypted")
+  contentKeyId      String?  @map("content_key_id")
+  voiceMediaId      String?  @unique @map("voice_media_id") @db.Uuid
   createdAt         DateTime @default(now()) @map("created_at")
 
-  practiceSession PracticeSession @relation(fields: [practiceSessionId], references: [id], onDelete: Cascade)
+  practiceSession PracticeSession    @relation(fields: [practiceSessionId], references: [id], onDelete: Cascade)
+  voiceMedia      VoiceMessageMedia? @relation(fields: [voiceMediaId], references: [id], onDelete: SetNull)
   tags            ReflectionTag[]
 
   @@map("practice_reflections")
@@ -950,6 +965,7 @@ model Message {
   channelIdentity StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
   inboxEvent      InboxEvent?            @relation(fields: [inboxEventId], references: [id], onDelete: SetNull)
   messageIntent   MessageIntent?         @relation(fields: [messageIntentId], references: [id], onDelete: SetNull)
+  voiceMedia      VoiceMessageMedia?
 
   @@unique([channelIdentityId, externalMessageId])
   @@index([studentId, occurredAt])
@@ -1120,9 +1136,40 @@ model InboxEvent {
   message           Message?
   contextResolution ConversationContextResolution?
   intentDecision    InboundIntentDecision?
+  voiceMedia        VoiceMessageMedia?
 
   @@index([studentId, createdAt])
   @@map("inbox_events")
+}
+
+model VoiceMessageMedia {
+  id                     String           @id @default(uuid()) @db.Uuid
+  inboxEventId           String           @unique @map("inbox_event_id") @db.Uuid
+  messageId              String?          @unique @map("message_id") @db.Uuid
+  studentId              String           @map("student_id") @db.Uuid
+  channelIdentityId      String           @map("channel_identity_id") @db.Uuid
+  status                 VoiceMediaStatus @default(RECEIVED)
+  storageKey             String?          @map("storage_key")
+  storageEncryptionKeyId String?          @map("storage_encryption_key_id")
+  contentType            String?          @map("content_type")
+  byteSize               Int?             @map("byte_size")
+  durationSeconds        Int?             @map("duration_seconds")
+  originalFileName       String?          @map("original_file_name")
+  transcriptionModel     String?          @map("transcription_model")
+  transcribedAt          DateTime?        @map("transcribed_at")
+  errorCode              String?          @map("error_code")
+  createdAt              DateTime         @default(now()) @map("created_at")
+  updatedAt              DateTime         @updatedAt @map("updated_at")
+
+  inboxEvent      InboxEvent             @relation(fields: [inboxEventId], references: [id], onDelete: Cascade)
+  message         Message?               @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  student         Student                @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  channelIdentity StudentChannelIdentity @relation(fields: [channelIdentityId], references: [id], onDelete: Restrict)
+  reflection      PracticeReflection?
+
+  @@index([studentId, createdAt])
+  @@index([status, createdAt])
+  @@map("voice_message_media")
 }
 
 model InboundIntentDecision {

@@ -49,9 +49,11 @@ async function main() {
                         ? 'student-pulse-v1'
                         : task === LlmTask.STUDENT_REPORT
                           ? 'student-report-v1'
-                          : task === LlmTask.AGENT_REPLY
-                            ? 'agent-reply-v2'
-                            : 'embedding-v1',
+                          : task === LlmTask.REFLECTION_TRANSCRIPTION
+                            ? 'plain-text-v1'
+                            : task === LlmTask.AGENT_REPLY
+                              ? 'agent-reply-v2'
+                              : 'embedding-v1',
               approvedAt: new Date(),
             },
           }));

@@ -34,6 +34,8 @@ import {
   allPracticeWeekdays,
   PracticeWeekdaySelector,
 } from '../../_components/practice-weekday-selector';
+import { VoiceAudioPlayer, type VoiceMediaSummary } from '../../_components/voice-audio-player';
+import { calculatePracticeWeeklyOverview } from './weekly-overview';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -53,6 +55,7 @@ type Session = {
     content?: string;
     createdAt: string;
     tags: Array<{ tag: string; confidence: number }>;
+    voiceMedia?: VoiceMediaSummary;
   };
   reflectionTags?: Array<{ tag: string; confidence: number }>;
 };
@@ -98,14 +101,6 @@ function toLocalDateTime(value: string) {
   const date = new Date(value);
   const offset = date.getTimezoneOffset();
   return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16);
-}
-
-function startOfWeek(value: Date) {
-  const result = new Date(value);
-  result.setHours(0, 0, 0, 0);
-  const day = result.getDay() || 7;
-  result.setDate(result.getDate() - day + 1);
-  return result;
 }
 
 function addDays(value: Date, amount: number) {
@@ -208,38 +203,7 @@ export default function PracticePage() {
   }, [sessions]);
 
   const weeklyOverview = useMemo(() => {
-    const items = sessions ?? [];
-    const currentWeek = startOfWeek(new Date());
-    const weeks = Array.from({ length: 6 }, (_, index) => {
-      const start = addDays(currentWeek, (index - 5) * 7);
-      const end = addDays(start, 7);
-      const completedSessions = items.filter((item) => {
-        const timestamp = new Date(item.startAt).getTime();
-        return (
-          item.status === 'COMPLETED' && timestamp >= start.getTime() && timestamp < end.getTime()
-        );
-      });
-      return {
-        start,
-        completed: completedSessions.length,
-        minutes: completedSessions.reduce((sum, item) => sum + item.durationMinutes, 0),
-      };
-    });
-    const current = weeks.at(-1)!;
-    const previous = weeks.at(-2)!;
-    const currentEnd = addDays(currentWeek, 7);
-    const currentItems = items.filter((item) => {
-      const timestamp = new Date(item.startAt).getTime();
-      return timestamp >= currentWeek.getTime() && timestamp < currentEnd.getTime();
-    });
-    return {
-      weeks,
-      current,
-      change: current.completed - previous.completed,
-      incomplete: currentItems.filter((item) => ['MISSED', 'SKIPPED'].includes(item.status)).length,
-      awaiting: items.filter((item) => item.status === 'AWAITING_RESPONSE').length,
-      maximum: Math.max(1, ...weeks.map((week) => week.completed)),
-    };
+    return calculatePracticeWeeklyOverview(sessions ?? [], new Date());
   }, [sessions]);
 
   const visible = useMemo(() => {
@@ -468,8 +432,8 @@ export default function PracticePage() {
                     <strong>{weeklyOverview.current.completed}</strong>
                     <em data-tone={weeklyOverview.change < 0 ? 'down' : 'up'}>
                       {weeklyOverview.change === 0
-                        ? 'Geçen haftayla aynı'
-                        : `Geçen haftaya göre ${weeklyOverview.change > 0 ? '+' : ''}${weeklyOverview.change}`}
+                        ? 'Geçen haftanın aynı dönemiyle aynı'
+                        : `Geçen haftanın aynı dönemine göre ${weeklyOverview.change > 0 ? '+' : ''}${weeklyOverview.change}`}
                     </em>
                   </span>
                 </article>
@@ -503,7 +467,7 @@ export default function PracticePage() {
                   <BarChart3 aria-hidden="true" />
                   <span>
                     <strong>Son 6 hafta</strong>
-                    <small>Tamamlanan pratik sayısı</small>
+                    <small>Tamamlanan pratik sayısı · bu hafta bugün itibarıyla</small>
                   </span>
                 </div>
                 <div className="practice-week-bars">
@@ -513,7 +477,10 @@ export default function PracticePage() {
                       <span className="practice-week-track" aria-hidden="true">
                         <i
                           style={{
-                            height: `${Math.max(5, (week.completed / weeklyOverview.maximum) * 100)}%`,
+                            height:
+                              week.completed === 0
+                                ? '0%'
+                                : `${Math.max(5, (week.completed / weeklyOverview.maximum) * 100)}%`,
                           }}
                         />
                       </span>
@@ -640,13 +607,18 @@ export default function PracticePage() {
                           <dd>v{selected.planRevision}</dd>
                         </div>
                       </dl>
-                      {selected.reflection?.content ? (
+                      {selected.reflection ? (
                         <section className="practice-reflection">
                           <header>
                             <strong>Refleksiyon</strong>
                             <time>{formatSessionDate(selected.reflection.createdAt)}</time>
                           </header>
-                          <p>{selected.reflection.content}</p>
+                          {selected.reflection.content ? (
+                            <p>{selected.reflection.content}</p>
+                          ) : null}
+                          {selected.reflection.voiceMedia ? (
+                            <VoiceAudioPlayer media={selected.reflection.voiceMedia} />
+                          ) : null}
                           {selected.reflection.tags.length ? (
                             <div>
                               {selected.reflection.tags.map((tag) => (

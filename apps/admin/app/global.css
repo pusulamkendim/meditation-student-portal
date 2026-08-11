@@ -5427,6 +5427,227 @@ a {
   width: min(380px, calc(100vw - 32px));
 }
 
+.meeting-calendar {
+  margin: 28px 0 34px;
+  border-block: 1px solid var(--color-border);
+}
+.meeting-calendar__header {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: 12px 0;
+}
+.meeting-calendar__header > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+.meeting-calendar__header small,
+.meeting-calendar__agenda > small {
+  color: var(--color-brand);
+  font-size: 0.67rem;
+  font-weight: 800;
+}
+.meeting-calendar__header h2,
+.meeting-calendar__agenda h3 {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: capitalize;
+}
+.meeting-calendar__header h2 {
+  font-size: 1.65rem;
+}
+.meeting-calendar__navigation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.meeting-calendar__layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  border-top: 1px solid var(--color-border);
+}
+.meeting-calendar__grid {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+.meeting-calendar__weekday {
+  min-height: 36px;
+  display: grid;
+  place-items: center;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-ink-muted);
+  font-size: 0.64rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+.meeting-calendar__day {
+  min-width: 0;
+  min-height: 104px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 9px;
+  overflow: hidden;
+  border: 0;
+  border-right: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+  cursor: pointer;
+}
+.meeting-calendar__day:hover {
+  background: rgb(255 255 255 / 3%);
+}
+.meeting-calendar__day[data-current-month='false'] {
+  opacity: 0.38;
+}
+.meeting-calendar__day[data-selected='true'] {
+  background: var(--color-brand-soft);
+  box-shadow: inset 0 0 0 1px rgb(201 154 88 / 48%);
+}
+.meeting-calendar__day-number {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  color: var(--color-ink-muted);
+  font-family: var(--font-serif);
+  font-size: 0.9rem;
+}
+.meeting-calendar__day[data-today='true'] .meeting-calendar__day-number {
+  background: var(--color-brand);
+  color: #07130f;
+  font-weight: 700;
+}
+.meeting-calendar__events {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+.meeting-calendar__event {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 5px;
+  padding-left: 6px;
+  border-left: 2px solid var(--color-info);
+  color: var(--color-ink-muted);
+  font-size: 0.62rem;
+  line-height: 1.25;
+}
+.meeting-calendar__event[data-status='COMPLETED'] {
+  border-left-color: var(--color-success);
+}
+.meeting-calendar__event[data-status='NO_SHOW'] {
+  border-left-color: var(--color-warning);
+}
+.meeting-calendar__event[data-status='CANCELLED'] {
+  border-left-color: var(--color-danger);
+  opacity: 0.6;
+}
+.meeting-calendar__event time {
+  color: var(--color-ink);
+  font-weight: 750;
+}
+.meeting-calendar__event > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meeting-calendar__more {
+  color: var(--color-brand);
+  font-size: 0.61rem;
+  font-weight: 700;
+}
+.meeting-calendar__agenda {
+  min-width: 0;
+  padding: 20px;
+  border-left: 1px solid var(--color-border);
+}
+.meeting-calendar__agenda h3 {
+  margin-top: 5px;
+  font-size: 1.15rem;
+  line-height: 1.2;
+}
+.meeting-calendar__empty {
+  min-height: 190px;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 7px;
+  color: var(--color-ink-muted);
+  text-align: center;
+}
+.meeting-calendar__empty svg {
+  width: 28px;
+  color: var(--color-brand);
+}
+.meeting-calendar__empty span {
+  max-width: 200px;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+.meeting-calendar__agenda-list {
+  display: grid;
+  margin-top: 18px;
+  border-top: 1px solid var(--color-border);
+}
+.meeting-calendar__agenda-list > button {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 0;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.meeting-calendar__agenda-list > button:hover strong {
+  color: var(--color-brand-strong);
+}
+.meeting-calendar__agenda-list > button > span:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.meeting-calendar__agenda-list small {
+  overflow: hidden;
+  color: var(--color-ink-muted);
+  font-size: 0.66rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.meeting-calendar__agenda-list > button > svg {
+  width: 16px;
+  color: var(--color-brand);
+}
+.meeting-calendar__agenda-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-brand-strong);
+  font-size: 0.7rem;
+  font-weight: 750;
+}
+.meeting-calendar__agenda-time svg {
+  width: 14px;
+}
+
 .meeting-connection {
   display: flex;
   align-items: center;
@@ -5757,6 +5978,9 @@ a {
   .meeting-layout {
     grid-template-columns: 1fr;
   }
+  .meeting-calendar__layout {
+    grid-template-columns: minmax(0, 1fr) 250px;
+  }
   .meeting-detail {
     position: static;
   }
@@ -5906,6 +6130,72 @@ a {
   .meeting-create__form button {
     grid-column: auto;
     justify-self: stretch;
+  }
+  .meeting-calendar {
+    margin-block: 20px 26px;
+  }
+  .meeting-calendar__header {
+    min-height: 64px;
+  }
+  .meeting-calendar__header h2 {
+    font-size: 1.35rem;
+  }
+  .meeting-calendar__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .meeting-calendar__weekday {
+    min-height: 28px;
+    font-size: 0.56rem;
+  }
+  .meeting-calendar__day {
+    min-height: 59px;
+    gap: 4px;
+    padding: 5px;
+  }
+  .meeting-calendar__day-number {
+    width: 22px;
+    height: 22px;
+    font-size: 0.75rem;
+  }
+  .meeting-calendar__events {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding-left: 3px;
+  }
+  .meeting-calendar__event {
+    width: 6px;
+    height: 6px;
+    display: block;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: var(--color-info);
+    font-size: 0;
+  }
+  .meeting-calendar__event[data-status='COMPLETED'] {
+    background: var(--color-success);
+  }
+  .meeting-calendar__event[data-status='NO_SHOW'] {
+    background: var(--color-warning);
+  }
+  .meeting-calendar__event[data-status='CANCELLED'] {
+    background: var(--color-danger);
+  }
+  .meeting-calendar__more {
+    font-size: 0.52rem;
+  }
+  .meeting-calendar__agenda {
+    padding: 18px 0 4px;
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+  .meeting-calendar__agenda h3 {
+    font-size: 1rem;
+  }
+  .meeting-calendar__empty {
+    min-height: 118px;
   }
   .meeting-table__head {
     display: none;
@@ -8317,6 +8607,11 @@ a {
   background: var(--color-canvas);
   color: var(--color-ink);
 }
+html:has(.portal-theme),
+body:has(.portal-theme) {
+  background: #06110f;
+  color-scheme: dark;
+}
 .portal-theme .workspace {
   min-height: 100vh;
   background: var(--color-canvas);
@@ -8918,6 +9213,26 @@ a {
 }
 
 @media (max-width: 760px) {
+  .app-shell {
+    padding-bottom: calc(68px + env(safe-area-inset-bottom));
+  }
+  .sidebar {
+    height: calc(68px + env(safe-area-inset-bottom));
+    padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+  }
+  .sidebar nav {
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+  }
+  .sidebar nav::-webkit-scrollbar {
+    display: none;
+  }
+  .sidebar nav a {
+    width: calc((100vw - 16px) / 5);
+    min-width: calc((100vw - 16px) / 5);
+    flex: 0 0 calc((100vw - 16px) / 5);
+    scroll-snap-align: start;
+  }
   .portal-theme .sidebar {
     background: rgb(6 17 15 / 96%);
     backdrop-filter: blur(16px);
@@ -8926,13 +9241,53 @@ a {
     display: none;
   }
   .portal-theme .sidebar nav {
+    gap: 0;
     padding: 0;
   }
   .portal-theme .nav-group a {
-    min-width: 72px;
+    min-width: calc((100vw - 16px) / 5);
     height: 52px;
     padding: 0 4px;
     font-size: 0.61rem;
+  }
+  .portal-theme .ui-modal-backdrop {
+    place-items: stretch;
+    padding: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right))
+      max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+  }
+  .portal-theme .ui-modal {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+  }
+  .portal-theme .ui-modal header {
+    min-height: 58px;
+    align-items: center;
+    padding: 13px 16px;
+  }
+  .portal-theme .ui-modal header > div {
+    min-width: 0;
+  }
+  .portal-theme .ui-modal header button {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    margin: -6px -8px -6px 0;
+    color: var(--color-ink);
+    font-size: 1.45rem;
+  }
+  .portal-theme .ui-modal__body {
+    padding: 16px;
+  }
+  .portal-theme .ui-modal footer {
+    align-items: stretch;
+    flex-direction: column;
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom));
+  }
+  .portal-theme .ui-modal footer .ui-button {
+    width: 100%;
   }
   .portal-theme .nav-group a[aria-current='page']::before {
     top: -8px;
@@ -11115,6 +11470,98 @@ a {
 }
 .portal-theme .practice-detail-actions {
   margin-top: 15px;
+}
+
+.voice-audio-player {
+  min-width: min(300px, 100%);
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-left: 2px solid var(--color-brand);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-surface-subtle) 76%, transparent);
+}
+.voice-audio-player__meta {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.68rem;
+}
+.voice-audio-player__meta svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  color: var(--color-brand-strong, var(--color-brand));
+}
+.voice-audio-player__meta span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.voice-audio-player__meta time {
+  margin-left: auto;
+  color: var(--color-ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+.voice-audio-player > button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 999px;
+  background: var(--color-brand-soft);
+  color: var(--color-ink);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.voice-audio-player > button:hover:not(:disabled) {
+  border-color: var(--color-brand);
+}
+.voice-audio-player > button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+.voice-audio-player > button svg {
+  width: 15px;
+  height: 15px;
+}
+.voice-audio-player audio {
+  width: 100%;
+  height: 34px;
+  accent-color: var(--color-brand);
+}
+.voice-audio-player__spinner {
+  animation: voice-audio-spin 0.8s linear infinite;
+}
+.voice-audio-player__error {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--color-danger);
+  font-size: 0.62rem;
+}
+.voice-audio-player__error svg {
+  width: 13px;
+  height: 13px;
+}
+.message-content {
+  margin: 0;
+  white-space: pre-wrap;
+}
+@keyframes voice-audio-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 .portal-theme .operations-grid {
   gap: 22px;

@@ -958,6 +958,39 @@ export default function ReadingsPage() {
           onClose={() => setPublicShareOpen(false)}
           title="Herkese açık paylaşım"
           description="Instagram ve diğer kanallarda paylaşılabilen anonim okuma bağlantısını yönetin."
+          actions={
+            <>
+              {publicShare ? (
+                publicShare.status === 'ACTIVE' ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => void changePublicShareStatus('PAUSED')}
+                  >
+                    <PauseCircle aria-hidden="true" /> Yayını durdur
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={busy}
+                    onClick={() => void changePublicShareStatus('ACTIVE')}
+                  >
+                    <PlayCircle aria-hidden="true" /> Yeniden aç
+                  </Button>
+                )
+              ) : null}
+              <Button
+                type="button"
+                disabled={busy || publicSlug.length < 3}
+                onClick={() => void savePublicShare()}
+              >
+                <Save aria-hidden="true" />
+                {publicShare ? 'Ayarları kaydet' : 'Bağlantı oluştur'}
+              </Button>
+            </>
+          }
         >
           <div className="reading-public-share">
             {publicShare ? (
@@ -1123,38 +1156,6 @@ export default function ReadingsPage() {
                 </Button>
               </div>
             ) : null}
-
-            <div className="modal-actions reading-public-actions">
-              {publicShare ? (
-                publicShare.status === 'ACTIVE' ? (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => void changePublicShareStatus('PAUSED')}
-                  >
-                    <PauseCircle aria-hidden="true" /> Yayını durdur
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={busy}
-                    onClick={() => void changePublicShareStatus('ACTIVE')}
-                  >
-                    <PlayCircle aria-hidden="true" /> Yeniden aç
-                  </Button>
-                )
-              ) : null}
-              <Button
-                type="button"
-                disabled={busy || publicSlug.length < 3}
-                onClick={() => void savePublicShare()}
-              >
-                <Save aria-hidden="true" />
-                {publicShare ? 'Ayarları kaydet' : 'Bağlantı oluştur'}
-              </Button>
-            </div>
           </div>
         </Modal>
       ) : null}

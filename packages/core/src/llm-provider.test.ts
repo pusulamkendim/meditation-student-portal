@@ -75,6 +75,47 @@ describe('GeminiPaidAdapter', () => {
     ).rejects.toMatchObject({ code: 'TRANSIENT' });
   });
 
+  it('sends audio inline and returns a plain transcription with usage', async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      void input;
+      void init;
+      return new Response(
+        JSON.stringify({
+          candidates: [{ content: { parts: [{ text: 'Nefesime dönmek daha kolaydı.' }] } }],
+          usageMetadata: { promptTokenCount: 14, candidatesTokenCount: 8, totalTokenCount: 22 },
+        }),
+        { status: 200, headers: { 'x-request-id': 'audio-request' } },
+      );
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await new GeminiPaidAdapter('test-key').transcribeAudio({
+      model: {
+        id: 'model',
+        providerId: 'provider',
+        providerModelId: 'gemini-2.5-flash-lite',
+        status: 'ACTIVE',
+      },
+      operationId: 'transcription-1',
+      prompt: 'Kelimesi kelimesine yazıya dök.',
+      audio: Buffer.from([1, 2, 3]),
+      mimeType: 'audio/flac',
+    });
+
+    expect(result).toMatchObject({
+      text: 'Nefesime dönmek daha kolaydı.',
+      totalTokens: 22,
+      providerRequestId: 'audio-request',
+    });
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as {
+      contents: Array<{ parts: Array<{ inlineData?: { mimeType: string; data: string } }> }>;
+    };
+    expect(request.contents[0]?.parts[1]?.inlineData).toEqual({
+      mimeType: 'audio/flac',
+      data: Buffer.from([1, 2, 3]).toString('base64'),
+    });
+  });
+
   it('validates student pulse structured output', async () => {
     vi.stubGlobal(
       'fetch',

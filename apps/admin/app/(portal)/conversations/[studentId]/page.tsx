@@ -11,6 +11,7 @@ import {
 import { ArrowLeft, Send } from 'lucide-react';
 import { useParams } from 'next/navigation';
 import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { VoiceAudioPlayer, type VoiceMediaSummary } from '../../../_components/voice-audio-player';
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 const statusLabels: Record<string, string> = {
   PENDING: 'Bekliyor',
@@ -44,6 +45,7 @@ type Data = {
     status: string;
     occurredAt: string;
     content?: string;
+    voiceMedia?: VoiceMediaSummary;
     context?: { eventKey?: string; resolutionMethod: string };
   }>;
   intents: Array<{
@@ -183,7 +185,9 @@ export default function ConversationDetail() {
                   time={new Date(item.occurredAt).toLocaleString('tr-TR')}
                 >
                   <div>
-                    {item.content ?? 'İçerik mevcut değil'}
+                    {item.content ? <p className="message-content">{item.content}</p> : null}
+                    {item.voiceMedia ? <VoiceAudioPlayer media={item.voiceMedia} /> : null}
+                    {!item.content && !item.voiceMedia ? 'İçerik mevcut değil' : null}
                     {item.context?.eventKey ? (
                       <small className="message-context-label">
                         Bağlam: {item.context.eventKey} · {item.context.resolutionMethod}

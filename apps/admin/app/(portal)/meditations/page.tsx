@@ -968,6 +968,29 @@ export default function MeditationsPage() {
                     onClose={() => setPublicShareOpen(false)}
                     title="Herkese açık paylaşım"
                     description="Instagram ve diğer kanallarda paylaşılabilen global meditasyon bağlantısını yönetin."
+                    actions={
+                      detail.status === 'PUBLISHED' ? (
+                        <>
+                          {publicShare ? (
+                            <Button
+                              variant="secondary"
+                              disabled={busy}
+                              onClick={() =>
+                                void changePublicShareStatus(
+                                  publicShare.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE',
+                                )
+                              }
+                            >
+                              {publicShare.status === 'ACTIVE' ? 'Yayını durdur' : 'Yayını aç'}
+                            </Button>
+                          ) : null}
+                          <Button loading={busy} onClick={() => void savePublicShare()}>
+                            <Save aria-hidden="true" />
+                            {publicShare ? 'Paylaşımı kaydet' : 'Global bağlantı oluştur'}
+                          </Button>
+                        </>
+                      ) : undefined
+                    }
                   >
                     <div className="reading-public-share meditation-public-dialog-content">
                       {detail.status !== 'PUBLISHED' ? (
@@ -1166,26 +1189,6 @@ export default function MeditationsPage() {
                               </div>
                             </div>
                           ) : null}
-
-                          <div className="modal-actions reading-public-actions meditation-public-actions">
-                            {publicShare ? (
-                              <Button
-                                variant="secondary"
-                                disabled={busy}
-                                onClick={() =>
-                                  void changePublicShareStatus(
-                                    publicShare.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE',
-                                  )
-                                }
-                              >
-                                {publicShare.status === 'ACTIVE' ? 'Yayını durdur' : 'Yayını aç'}
-                              </Button>
-                            ) : null}
-                            <Button loading={busy} onClick={() => void savePublicShare()}>
-                              <Save aria-hidden="true" />
-                              {publicShare ? 'Paylaşımı kaydet' : 'Global bağlantı oluştur'}
-                            </Button>
-                          </div>
                         </>
                       )}
                     </div>

@@ -149,7 +149,11 @@ export class ConversationsController {
         continue;
       const threadKey = `${event.channel}:${normalized.accountExternalId}:${normalized.senderHmac}`;
       const rawContent = this.decryptInboxField(event.dedupeKey, normalized, 'content');
-      const content = rawContent ? humanizePracticeResponsePayload(rawContent) : undefined;
+      const content = rawContent
+        ? humanizePracticeResponsePayload(rawContent)
+        : normalized.media
+          ? 'Sesli mesaj'
+          : undefined;
       const existing = threads.get(threadKey);
       const readingInquiry =
         content?.toLocaleLowerCase('tr-TR').includes('birebir meditasyon dersleri hakkında') ??
@@ -242,6 +246,15 @@ export class ConversationsController {
         externalMessageId: true,
         contentEncrypted: true,
         contentKeyId: true,
+        voiceMedia: {
+          select: {
+            id: true,
+            status: true,
+            durationSeconds: true,
+            contentType: true,
+            errorCode: true,
+          },
+        },
       },
     });
     const inboxItems = await this.prisma.inboxEvent.findMany({
@@ -259,6 +272,15 @@ export class ConversationsController {
             entityId: true,
             resolutionMethod: true,
             resolvedAt: true,
+          },
+        },
+        voiceMedia: {
+          select: {
+            id: true,
+            status: true,
+            durationSeconds: true,
+            contentType: true,
+            errorCode: true,
           },
         },
       },
@@ -309,6 +331,7 @@ export class ConversationsController {
           occurredAt: item.occurredAt.toISOString(),
           channelIdentityId: item.channelIdentityId,
           content: content ? humanizePracticeResponsePayload(content) : undefined,
+          voiceMedia: item.voiceMedia,
           context: item.inboxEventId ? contextByInboxId.get(item.inboxEventId) : undefined,
         };
       }),
@@ -345,6 +368,7 @@ export class ConversationsController {
                 : item.createdAt.toISOString(),
             channelIdentityId: student.defaultChannelIdentityId,
             content: content ? humanizePracticeResponsePayload(content) : undefined,
+            voiceMedia: item.voiceMedia,
             context: item.contextResolution,
           };
         }),

@@ -10,7 +10,18 @@ export interface NormalizedWhatsAppEvent {
   messageType?: string;
   status?: string;
   repliedToExternalMessageId?: string;
+  audio?: NormalizedInboundAudio;
   occurredAt: Date;
+}
+
+export interface NormalizedInboundAudio {
+  kind: 'VOICE' | 'AUDIO';
+  providerFileId: string;
+  mimeType?: string;
+  checksum?: string;
+  durationSeconds?: number;
+  byteSize?: number;
+  fileName?: string;
 }
 
 const payloadSchema = z
@@ -41,6 +52,14 @@ const payloadSchema = z
                               button_reply: z
                                 .object({ id: z.string(), title: z.string().optional() })
                                 .optional(),
+                            })
+                            .optional(),
+                          audio: z
+                            .object({
+                              id: z.string().min(1),
+                              mime_type: z.string().optional(),
+                              sha256: z.string().optional(),
+                              voice: z.boolean().optional(),
                             })
                             .optional(),
                         }),
@@ -83,6 +102,14 @@ export function normalizeWhatsAppPayload(payload: unknown): NormalizedWhatsAppEv
             message.text?.body ?? message.button?.payload ?? message.interactive?.button_reply?.id,
           messageType: message.type,
           repliedToExternalMessageId: message.context?.id,
+          audio: message.audio
+            ? {
+                kind: message.audio.voice === false ? 'AUDIO' : 'VOICE',
+                providerFileId: message.audio.id,
+                mimeType: message.audio.mime_type,
+                checksum: message.audio.sha256,
+              }
+            : undefined,
           occurredAt: new Date(Number(message.timestamp) * 1000),
         });
       }

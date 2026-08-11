@@ -49,6 +49,7 @@ import {
   formatPracticeWeekdays,
   PracticeWeekdaySelector,
 } from '../../../_components/practice-weekday-selector';
+import { VoiceAudioPlayer, type VoiceMediaSummary } from '../../../_components/voice-audio-player';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 
@@ -84,6 +85,7 @@ type PracticeSession = {
     content?: string;
     createdAt: string;
     tags: Array<{ tag: string; confidence: number }>;
+    voiceMedia?: VoiceMediaSummary;
   };
 };
 
@@ -211,6 +213,7 @@ type Conversation = {
     status: string;
     occurredAt: string;
     content?: string;
+    voiceMedia?: VoiceMediaSummary;
     context?: { eventKey?: string; resolutionMethod: string };
   }>;
   intents: Array<{
@@ -2688,6 +2691,9 @@ function PracticeRow({
           ) : session.status === 'AWAITING_RESPONSE' ? (
             <span className="muted">Yanıt bekleniyor.</span>
           ) : null}
+          {session.reflection?.voiceMedia ? (
+            <VoiceAudioPlayer media={session.reflection.voiceMedia} />
+          ) : null}
           {session.reflection?.tags.length ? (
             <small>{session.reflection.tags.map((tag) => tag.tag).join(' · ')}</small>
           ) : null}
@@ -2926,7 +2932,9 @@ function ConversationsTab({
                   time={formatDateTime(item.occurredAt)}
                 >
                   <div>
-                    {item.content ?? 'İçerik çözülemedi'}
+                    {item.content ? <p className="message-content">{item.content}</p> : null}
+                    {item.voiceMedia ? <VoiceAudioPlayer media={item.voiceMedia} /> : null}
+                    {!item.content && !item.voiceMedia ? 'İçerik çözülemedi' : null}
                     {item.context?.eventKey ? (
                       <small className="message-context-label">
                         Bağlam: {item.context.eventKey} · {item.context.resolutionMethod}

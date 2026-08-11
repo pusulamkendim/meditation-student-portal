@@ -149,16 +149,31 @@ test('uses the same spaced footer layout in create and delete dialogs', async ({
     expect(footerBox).not.toBeNull();
     expect(firstButtonBox).not.toBeNull();
     expect(lastButtonBox).not.toBeNull();
-    expect(
-      (lastButtonBox?.x ?? 0) - ((firstButtonBox?.x ?? 0) + (firstButtonBox?.width ?? 0)),
-    ).toBeGreaterThanOrEqual(12);
-    expect(
-      Math.abs(
-        (lastButtonBox?.x ?? 0) +
-          (lastButtonBox?.width ?? 0) -
-          ((footerBox?.x ?? 0) + (footerBox?.width ?? 0) - 20),
-      ),
-    ).toBeLessThanOrEqual(1);
+    const viewport = page.viewportSize();
+    if ((viewport?.width ?? 1_000) <= 760) {
+      await expect(dialog.getByRole('button', { name: 'Pencereyi kapat' })).toBeVisible();
+      expect(footerBox?.y ?? Infinity).toBeGreaterThanOrEqual(0);
+      expect((footerBox?.y ?? 0) + (footerBox?.height ?? 0)).toBeLessThanOrEqual(
+        viewport?.height ?? 0,
+      );
+      expect(
+        (lastButtonBox?.y ?? 0) - ((firstButtonBox?.y ?? 0) + (firstButtonBox?.height ?? 0)),
+      ).toBeGreaterThanOrEqual(12);
+      expect(
+        Math.abs((firstButtonBox?.width ?? 0) - (lastButtonBox?.width ?? 0)),
+      ).toBeLessThanOrEqual(1);
+    } else {
+      expect(
+        (lastButtonBox?.x ?? 0) - ((firstButtonBox?.x ?? 0) + (firstButtonBox?.width ?? 0)),
+      ).toBeGreaterThanOrEqual(12);
+      expect(
+        Math.abs(
+          (lastButtonBox?.x ?? 0) +
+            (lastButtonBox?.width ?? 0) -
+            ((footerBox?.x ?? 0) + (footerBox?.width ?? 0) - 20),
+        ),
+      ).toBeLessThanOrEqual(1);
+    }
     await dialog.screenshot({ path: testInfo.outputPath(screenshotName) });
   }
 
@@ -245,6 +260,20 @@ test('manages the global meditation link in a separate dialog', async ({ page },
     clientWidth: element.clientWidth,
   }));
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+  if ((page.viewportSize()?.width ?? 1_000) <= 760) {
+    const [dialogBox, closeBox, footerBox] = await Promise.all([
+      dialog.boundingBox(),
+      dialog.getByRole('button', { name: 'Pencereyi kapat' }).boundingBox(),
+      dialog.locator('footer').boundingBox(),
+    ]);
+    expect(dialogBox).not.toBeNull();
+    expect(closeBox).not.toBeNull();
+    expect(footerBox).not.toBeNull();
+    expect(closeBox?.y ?? Infinity).toBeGreaterThanOrEqual(0);
+    expect((footerBox?.y ?? 0) + (footerBox?.height ?? 0)).toBeLessThanOrEqual(
+      page.viewportSize()?.height ?? 0,
+    );
+  }
   await page.screenshot({
     path: testInfo.outputPath('global-meditation-share.png'),
     fullPage: true,

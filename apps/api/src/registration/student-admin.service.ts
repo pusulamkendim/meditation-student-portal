@@ -206,7 +206,20 @@ export class StudentAdminService {
             meditationRender: {
               select: { id: true, status: true, durationMinutes: true, sourceVersion: true },
             },
-            reflection: { include: { tags: true } },
+            reflection: {
+              include: {
+                tags: true,
+                voiceMedia: {
+                  select: {
+                    id: true,
+                    status: true,
+                    durationSeconds: true,
+                    contentType: true,
+                    errorCode: true,
+                  },
+                },
+              },
+            },
           },
         },
         meetingSeries: {
@@ -343,6 +356,7 @@ export class StudentAdminService {
                   tag: tag.tag,
                   confidence: tag.confidence,
                 })),
+                voiceMedia: session.reflection.voiceMedia,
               }
             : undefined,
         })),
@@ -429,7 +443,8 @@ export class StudentAdminService {
     }
   }
 
-  private decryptReflection(sessionId: string, encrypted: Uint8Array, keyId: string) {
+  private decryptReflection(sessionId: string, encrypted: Uint8Array | null, keyId: string | null) {
+    if (!encrypted || !keyId) return undefined;
     try {
       return this.encryption.decrypt(
         { ciphertext: Buffer.from(encrypted), keyId },

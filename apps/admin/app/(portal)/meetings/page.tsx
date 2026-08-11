@@ -14,6 +14,9 @@ import {
 import {
   CalendarDays,
   Check,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
   ExternalLink,
   Link2,
   RefreshCw,
@@ -25,6 +28,7 @@ import {
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+const meetingTimezone = 'Europe/Istanbul';
 type Meeting = {
   id: string;
   occurrenceNumber: number;
@@ -126,6 +130,59 @@ function toDateTimeInput(value: string) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function meetingDateKey(value: Date | string) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: meetingTimezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((entry) => entry.type === type)?.value ?? '';
+  return `${part('year')}-${part('month')}-${part('day')}`;
+}
+
+function calendarDateKey(value: Date) {
+  const pad = (entry: number) => String(entry).padStart(2, '0');
+  return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+}
+
+function currentCalendarMonth() {
+  const [year, month] = meetingDateKey(new Date()).split('-').map(Number);
+  return new Date(year, month - 1, 1, 12);
+}
+
+function buildCalendarDays(cursor: Date) {
+  const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1, 12);
+  const mondayOffset = (first.getDay() + 6) % 7;
+  const start = new Date(first);
+  start.setDate(first.getDate() - mondayOffset);
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
+}
+
+function formatCalendarMonth(value: Date) {
+  return new Intl.DateTimeFormat('tr-TR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(value);
+}
+
+function formatCalendarDay(value: Date) {
+  return new Intl.DateTimeFormat('tr-TR', { dateStyle: 'full' }).format(value);
+}
+
+function formatMeetingTime(value: string, timezone = meetingTimezone) {
+  return new Intl.DateTimeFormat('tr-TR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: timezone,
+  }).format(new Date(value));
+}
+
 export default function MeetingsPage() {
   const [items, setItems] = useState<Meeting[]>();
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -138,6 +195,8 @@ export default function MeetingsPage() {
   const [busy, setBusy] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [statusOpen, setStatusOpen] = useState(false);
+  const [calendarCursor, setCalendarCursor] = useState(currentCalendarMonth);
+  const [selectedCalendarDay, setSelectedCalendarDay] = useState(() => meetingDateKey(new Date()));
 
   const load = useCallback(async () => {
     setError(undefined);
@@ -364,6 +423,51 @@ export default function MeetingsPage() {
     [filter, items],
   );
 
+  const calendarDays = useMemo(() => buildCalendarDays(calendarCursor), [calendarCursor]);
+  const meetingsByDay = useMemo(() => {
+    const grouped = new Map<string, Meeting[]>();
+    for (const meeting of items ?? []) {
+      const key = meetingDateKey(meeting.startsAt);
+      const dayMeetings = grouped.get(key) ?? [];
+      dayMeetings.push(meeting);
+      grouped.set(key, dayMeetings);
+    }
+    for (const dayMeetings of grouped.values()) {
+      dayMeetings.sort(
+        (first, second) => new Date(first.startsAt).getTime() - new Date(second.startsAt).getTime(),
+      );
+    }
+    return grouped;
+  }, [items]);
+  const selectedDayMeetings = meetingsByDay.get(selectedCalendarDay) ?? [];
+  const todayKey = meetingDateKey(new Date());
+
+  function selectCalendarDay(day: Date) {
+    setSelectedCalendarDay(calendarDateKey(day));
+    if (
+      day.getMonth() !== calendarCursor.getMonth() ||
+      day.getFullYear() !== calendarCursor.getFullYear()
+    ) {
+      setCalendarCursor(new Date(day.getFullYear(), day.getMonth(), 1, 12));
+    }
+  }
+
+  async function openMeetingFromCalendar(meeting: Meeting) {
+    setFilter('ALL');
+    await selectMeeting(meeting);
+    requestAnimationFrame(() => {
+      document
+        .getElementById('meeting-management')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
+  function goToToday() {
+    const currentMonth = currentCalendarMonth();
+    setCalendarCursor(currentMonth);
+    setSelectedCalendarDay(todayKey);
+  }
+
   return (
     <main className="content">
       <PageHeader
@@ -393,6 +497,126 @@ export default function MeetingsPage() {
           {error}
         </Alert>
       ) : null}
+      <section className="meeting-calendar" aria-label="Görüşme takvimi">
+        <header className="meeting-calendar__header">
+          <div>
+            <small>AYLIK TAKVİM</small>
+            <h2>{formatCalendarMonth(calendarCursor)}</h2>
+          </div>
+          <div className="meeting-calendar__navigation" aria-label="Takvim gezinme">
+            <Button variant="ghost" onClick={goToToday}>
+              Bugün
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon"
+              aria-label="Önceki ay"
+              onClick={() =>
+                setCalendarCursor(
+                  new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() - 1, 1, 12),
+                )
+              }
+            >
+              <ChevronLeft />
+            </Button>
+            <Button
+              variant="secondary"
+              size="icon"
+              aria-label="Sonraki ay"
+              onClick={() =>
+                setCalendarCursor(
+                  new Date(calendarCursor.getFullYear(), calendarCursor.getMonth() + 1, 1, 12),
+                )
+              }
+            >
+              <ChevronRight />
+            </Button>
+          </div>
+        </header>
+        <div className="meeting-calendar__layout">
+          <div className="meeting-calendar__grid">
+            {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((weekday) => (
+              <span className="meeting-calendar__weekday" key={weekday}>
+                {weekday}
+              </span>
+            ))}
+            {calendarDays.map((day) => {
+              const key = calendarDateKey(day);
+              const dayMeetings = meetingsByDay.get(key) ?? [];
+              const outsideMonth = day.getMonth() !== calendarCursor.getMonth();
+              return (
+                <button
+                  className="meeting-calendar__day"
+                  data-current-month={!outsideMonth}
+                  data-selected={selectedCalendarDay === key}
+                  data-today={todayKey === key}
+                  key={key}
+                  type="button"
+                  aria-label={`${formatCalendarDay(day)}, ${dayMeetings.length} görüşme`}
+                  onClick={() => selectCalendarDay(day)}
+                >
+                  <span className="meeting-calendar__day-number">{day.getDate()}</span>
+                  <span className="meeting-calendar__events" aria-hidden="true">
+                    {dayMeetings.slice(0, 2).map((meeting) => (
+                      <span
+                        className="meeting-calendar__event"
+                        data-status={meeting.status}
+                        key={meeting.id}
+                      >
+                        <time>{formatMeetingTime(meeting.startsAt, meeting.series.timezone)}</time>
+                        <span>{meeting.studentName ?? meeting.studentId.slice(0, 8)}</span>
+                      </span>
+                    ))}
+                    {dayMeetings.length > 2 ? (
+                      <span className="meeting-calendar__more">+{dayMeetings.length - 2}</span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <aside className="meeting-calendar__agenda">
+            <small>SEÇİLİ GÜN</small>
+            <h3>
+              {formatCalendarDay(
+                calendarDays.find((day) => calendarDateKey(day) === selectedCalendarDay) ??
+                  new Date(`${selectedCalendarDay}T12:00:00`),
+              )}
+            </h3>
+            {selectedDayMeetings.length === 0 ? (
+              <div className="meeting-calendar__empty">
+                <CalendarDays />
+                <strong>Görüşme yok</strong>
+                <span>Bu gün için planlanmış bir görüşme bulunmuyor.</span>
+              </div>
+            ) : (
+              <div className="meeting-calendar__agenda-list">
+                {selectedDayMeetings.map((meeting) => (
+                  <button
+                    type="button"
+                    key={meeting.id}
+                    aria-label={`${formatMeetingTime(meeting.startsAt, meeting.series.timezone)} · ${meeting.studentName ?? meeting.studentId.slice(0, 8)} · ${statusLabel[meeting.status] ?? meeting.status}`}
+                    onClick={() => void openMeetingFromCalendar(meeting)}
+                  >
+                    <span className="meeting-calendar__agenda-time">
+                      <Clock3 />
+                      {formatMeetingTime(meeting.startsAt, meeting.series.timezone)}
+                    </span>
+                    <span>
+                      <strong>{meeting.studentName ?? meeting.studentId.slice(0, 8)}</strong>
+                      <small>
+                        {meeting.occurrenceNumber}. görüşme ·{' '}
+                        {statusLabel[meeting.status] ?? meeting.status}
+                      </small>
+                    </span>
+                    {meeting.meetUrl ? <Video aria-label="Meet linki hazır" /> : <ChevronRight />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </aside>
+        </div>
+      </section>
       <section className="meeting-connection section">
         <div>
           <small>Google Calendar</small>
@@ -506,7 +730,7 @@ export default function MeetingsPage() {
           </div>
         )}
       </section>
-      <section className="section">
+      <section className="section" id="meeting-management">
         <div className="payment-toolbar">
           <div className="payment-filters">
             {[

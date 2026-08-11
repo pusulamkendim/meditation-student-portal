@@ -18,7 +18,7 @@ import {
   type Prisma,
 } from '@meditation/database';
 
-async function createResponseIntent(
+export async function createResponseIntent(
   tx: Prisma.TransactionClient,
   now: Date,
   input: {
@@ -105,7 +105,7 @@ export function parseTypedPracticeResponse(content: string): 'COMPLETED' | 'SKIP
   return normalized === 'yaptim' ? 'COMPLETED' : normalized === 'yapamadim' ? 'SKIPPED' : undefined;
 }
 
-async function findOpenReflectionSessionId(
+export async function findOpenReflectionSessionId(
   tx: Prisma.TransactionClient,
   studentId: string,
   responseOccurredAt: Date,

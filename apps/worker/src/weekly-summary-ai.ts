@@ -80,6 +80,8 @@ export class WeeklySummaryAiProcessor {
     const since = new Date(meeting.startsAt.getTime() - 7 * 86_400_000);
     const reflections = await this.prisma.practiceReflection.findMany({
       where: {
+        contentEncrypted: { not: null },
+        contentKeyId: { not: null },
         practiceSession: {
           studentId: meeting.meetingSeries.studentId,
           startAt: { gte: since, lt: meeting.startsAt },
@@ -90,11 +92,18 @@ export class WeeklySummaryAiProcessor {
       take: MAX_WEEKLY_REFLECTIONS,
     });
     const reflectionText = reflections
-      .map((reflection) =>
-        this.encryption.decrypt(
-          { ciphertext: Buffer.from(reflection.contentEncrypted), keyId: reflection.contentKeyId },
-          `practice:${reflection.practiceSessionId}:reflection`,
-        ),
+      .flatMap((reflection) =>
+        reflection.contentEncrypted && reflection.contentKeyId
+          ? [
+              this.encryption.decrypt(
+                {
+                  ciphertext: Buffer.from(reflection.contentEncrypted),
+                  keyId: reflection.contentKeyId,
+                },
+                `practice:${reflection.practiceSessionId}:reflection`,
+              ),
+            ]
+          : [],
       )
       .join('\n---\n');
     const input = JSON.stringify({

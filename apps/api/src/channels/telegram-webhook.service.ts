@@ -65,6 +65,21 @@ export class TelegramWebhookService {
           const exactCommand = normalizeExactCommand(event.text);
           if (exactCommand) normalized.exactCommand = exactCommand;
         }
+        if (event.audio) {
+          const providerFile = this.encryption.encrypt(
+            event.audio.providerFileId,
+            `${event.dedupeKey}:media`,
+          );
+          normalized.media = {
+            kind: event.audio.kind,
+            providerFileIdEncrypted: providerFile.ciphertext.toString('base64'),
+            providerFileIdKeyId: providerFile.keyId,
+            mimeType: event.audio.mimeType,
+            durationSeconds: event.audio.durationSeconds,
+            byteSize: event.audio.byteSize,
+            fileName: event.audio.fileName,
+          };
+        }
         const inbox = await transaction.inboxEvent.create({
           data: {
             channel: ChannelType.TELEGRAM,
@@ -84,8 +99,9 @@ export class TelegramWebhookService {
           },
           data: { lastInboundAt: event.occurredAt },
         });
-        const topic =
-          event.text && parsePracticeResponsePayload(event.text)
+        const topic = event.audio
+          ? 'media.voice-inbound'
+          : event.text && parsePracticeResponsePayload(event.text)
             ? 'practice.inbound'
             : 'channel.inbound';
         await transaction.outboxEvent.create({

@@ -169,6 +169,9 @@ importers:
       pino:
         specifier: ^9.9.5
         version: 9.14.0
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^22.15.3

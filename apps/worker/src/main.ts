@@ -24,6 +24,7 @@ import { RegistrationInboundProcessor } from './registration-inbound.js';
 import { InboundIntentRouter } from './inbound-intent-router.js';
 import { AdminPanelNotificationProcessor } from './admin-panel-notification.js';
 import { MeditationAudioRenderProcessor } from './meditation-audio-render.js';
+import { VoiceMessageProcessor } from './voice-message.js';
 
 async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
@@ -41,6 +42,7 @@ async function bootstrap(): Promise<void> {
   const inboundIntentRouter = new InboundIntentRouter(llmAgent, prisma, systemClock, config);
   const adminPanelNotifications = new AdminPanelNotificationProcessor(prisma);
   const meditationAudioRender = new MeditationAudioRenderProcessor(prisma, config);
+  const voiceMessages = new VoiceMessageProcessor(prisma, config, systemClock);
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
   await syncSystemEventRegistry(prisma);
   await syncDefaultRegistrationMessages(prisma);
@@ -87,6 +89,7 @@ async function bootstrap(): Promise<void> {
               'llm.student-report',
               'admin.notifications',
               'meditation.audio-render',
+              'media.voice-inbound',
             ],
           },
         },
@@ -157,6 +160,10 @@ async function bootstrap(): Promise<void> {
             break;
           case 'channel.inbound':
             queueName = 'channel.inbound';
+            data = { inboxEventId: payload.inboxEventId };
+            break;
+          case 'media.voice-inbound':
+            queueName = 'media.voice-inbound';
             data = { inboxEventId: payload.inboxEventId };
             break;
           default:
@@ -230,6 +237,11 @@ async function bootstrap(): Promise<void> {
   await boss.schedule('practice.response-timeout', '*/15 * * * *', {});
   await boss.createQueue('llm.agent-reply');
   await boss.createQueue('channel.inbound');
+  await boss.createQueue('media.voice-inbound');
+  await boss.work<{ inboxEventId: string }>('media.voice-inbound', async (jobs) => {
+    for (const job of jobs)
+      if (job.data.inboxEventId) await voiceMessages.process(job.data.inboxEventId);
+  });
   await boss.work<{ inboxEventId: string }>('channel.inbound', async (jobs) => {
     for (const job of jobs) {
       if (!job.data.inboxEventId) continue;

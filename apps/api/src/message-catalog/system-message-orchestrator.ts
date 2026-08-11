@@ -10,6 +10,7 @@ import {
 } from '@meditation/core';
 import {
   MessageIntentStatus,
+  NotificationChannel,
   ProviderTemplateStatus,
   StandardMessageVersionStatus,
   type Prisma,
@@ -63,7 +64,21 @@ export class SystemMessageOrchestrator {
         if (owner) throw new Error(`Inbound message already has response owner: ${owner.owner}`);
       }
 
-      const variant = await this.resolveVariant(transaction, command, now);
+      const channelIdentity = await transaction.studentChannelIdentity.findUniqueOrThrow({
+        where: { id: command.channelIdentityId },
+        select: {
+          studentId: true,
+          channelAccount: { select: { type: true } },
+        },
+      });
+      if (channelIdentity.studentId !== command.studentId) {
+        throw new Error('Channel identity does not belong to the message student.');
+      }
+      const channel =
+        channelIdentity.channelAccount.type === 'WHATSAPP'
+          ? NotificationChannel.WHATSAPP
+          : NotificationChannel.TELEGRAM;
+      const variant = await this.resolveVariant(transaction, command, now, channel);
       if (!variant) throw new Error(`No published message variant for ${command.eventKey}`);
       const rendered = renderMessageTemplate(command.eventKey, variant.content, command.variables);
       const student = await transaction.student.findUniqueOrThrow({
@@ -137,12 +152,14 @@ export class SystemMessageOrchestrator {
     transaction: Prisma.TransactionClient,
     command: SystemMessageCommand,
     now: Date,
+    channel: NotificationChannel,
   ) {
     const versions = await transaction.standardMessageVersion.findMany({
       where: {
         status: StandardMessageVersionStatus.PUBLISHED,
         effectiveAt: { lte: now },
         variant: {
+          channel,
           standardMessage: { eventKey: command.eventKey, audience: 'STUDENT' },
         },
       },

@@ -59,4 +59,43 @@ describe('WhatsApp normalizer', () => {
     });
     expect(event?.text).toBe('practice:session:nonce:COMPLETED');
   });
+
+  it('preserves WhatsApp voice metadata for private media processing', () => {
+    const [event] = normalizeWhatsAppPayload({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: 'phone-1' },
+                messages: [
+                  {
+                    id: 'wamid.voice',
+                    from: '90500',
+                    type: 'audio',
+                    timestamp: '10',
+                    context: { id: 'wamid.reflection-request' },
+                    audio: {
+                      id: 'media-voice-1',
+                      mime_type: 'audio/ogg; codecs=opus',
+                      sha256: 'checksum',
+                      voice: true,
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(event?.repliedToExternalMessageId).toBe('wamid.reflection-request');
+    expect(event?.audio).toEqual({
+      kind: 'VOICE',
+      providerFileId: 'media-voice-1',
+      mimeType: 'audio/ogg; codecs=opus',
+      checksum: 'checksum',
+    });
+  });
 });

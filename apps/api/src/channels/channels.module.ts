@@ -9,6 +9,7 @@ import { WhatsAppWebhookController } from './whatsapp-webhook.controller.js';
 import { WhatsAppWebhookService } from './whatsapp-webhook.service.js';
 import { TelegramWebhookController } from './telegram-webhook.controller.js';
 import { TelegramWebhookService } from './telegram-webhook.service.js';
+import { VoiceMediaController } from './voice-media.controller.js';
 
 @Module({
   imports: [AuthModule],
@@ -18,6 +19,7 @@ import { TelegramWebhookService } from './telegram-webhook.service.js';
     ChannelLinkController,
     ConversationsController,
     OperationsController,
+    VoiceMediaController,
   ],
   providers: [
     WhatsAppWebhookService,

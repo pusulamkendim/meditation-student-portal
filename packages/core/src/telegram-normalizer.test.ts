@@ -33,4 +33,38 @@ describe('Telegram normalizer', () => {
       ).repliedToExternalMessageId,
     ).toBe('99');
   });
+
+  it('preserves Telegram voice metadata and caption context', () => {
+    const event = normalizeTelegramUpdate(
+      {
+        update_id: 8,
+        message: {
+          message_id: 3,
+          date: 20,
+          caption: 'Pratik sonrası paylaşımım',
+          chat: { id: 5, type: 'private' },
+          from: { id: 5 },
+          reply_to_message: { message_id: 100 },
+          voice: {
+            file_id: 'voice-file-id',
+            file_unique_id: 'voice-unique-id',
+            duration: 42,
+            mime_type: 'audio/ogg',
+            file_size: 1234,
+          },
+        },
+      },
+      'bot',
+    );
+
+    expect(event.text).toBe('Pratik sonrası paylaşımım');
+    expect(event.repliedToExternalMessageId).toBe('100');
+    expect(event.audio).toEqual({
+      kind: 'VOICE',
+      providerFileId: 'voice-file-id',
+      mimeType: 'audio/ogg',
+      durationSeconds: 42,
+      byteSize: 1234,
+    });
+  });
 });

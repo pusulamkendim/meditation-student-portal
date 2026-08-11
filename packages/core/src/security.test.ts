@@ -14,6 +14,15 @@ describe('security primitives', () => {
     expect(() => encryption.decrypt(encrypted, 'student:2')).toThrow();
   });
 
+  it('round-trips binary media without converting it to text', () => {
+    const encryption = new FieldEncryption(new Map([['key-1', randomBytes(32)]]), 'key-1');
+    const audio = Buffer.from([0, 255, 12, 128, 44, 0, 99]);
+    const encrypted = encryption.encryptBuffer(audio, 'voice-media:1');
+
+    expect(encryption.decryptBuffer(encrypted, 'voice-media:1')).toEqual(audio);
+    expect(() => encryption.decryptBuffer(encrypted, 'voice-media:2')).toThrow();
+  });
+
   it('creates deterministic lookup digests and constant-time compatible verification', () => {
     const hmac = new LookupHmac(randomBytes(32));
     const digest = hmac.digest('+905428078429');

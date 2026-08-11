@@ -443,12 +443,22 @@ test('payments page stays consistent when the review detail is open', async ({ p
   await expectHealthyDarkPage(page);
 });
 
-test('meetings page stays consistent with calendar, drafts and detail', async ({ page }) => {
+test('meetings page stays consistent with calendar, drafts and detail', async ({
+  page,
+}, testInfo) => {
+  await page.clock.setFixedTime(new Date('2026-08-11T09:00:00.000+03:00'));
   await page.goto('/meetings');
   await expect(page.getByRole('heading', { name: 'Görüşmeler' })).toBeVisible();
-  await page.getByRole('button', { name: /Ayşe Yılmaz/u }).click();
+  const calendar = page.getByRole('region', { name: 'Görüşme takvimi' });
+  await expect(calendar.getByRole('heading', { name: 'Ağustos 2026', exact: true })).toBeVisible();
+  await calendar.getByRole('button', { name: /12 Ağustos 2026.*1 görüşme/iu }).click();
+  await calendar.getByRole('button', { name: /15:00 · Ayşe Yılmaz/iu }).click();
   await expect(page.getByText('Meet linkini aç')).toBeVisible();
   await expectHealthyDarkPage(page);
+  await page.screenshot({
+    path: testInfo.outputPath('meeting-calendar.png'),
+    fullPage: true,
+  });
 });
 
 test('operations tabs stay consistent with populated records', async ({ page }) => {

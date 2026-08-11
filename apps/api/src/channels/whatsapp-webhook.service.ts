@@ -113,6 +113,22 @@ export class WhatsAppWebhookService {
             const exactCommand = normalizeExactCommand(event.text);
             if (exactCommand) protectedData.exactCommand = exactCommand;
           }
+          if (event.audio) {
+            const providerFile = this.encryption.encrypt(
+              event.audio.providerFileId,
+              `${event.dedupeKey}:media`,
+            );
+            protectedData.media = {
+              kind: event.audio.kind,
+              providerFileIdEncrypted: providerFile.ciphertext.toString('base64'),
+              providerFileIdKeyId: providerFile.keyId,
+              mimeType: event.audio.mimeType,
+              checksum: event.audio.checksum,
+              durationSeconds: event.audio.durationSeconds,
+              byteSize: event.audio.byteSize,
+              fileName: event.audio.fileName,
+            };
+          }
           const inbox = await transaction.inboxEvent.create({
             data: {
               channel: ChannelType.WHATSAPP,
@@ -140,8 +156,9 @@ export class WhatsAppWebhookService {
               event.occurredAt,
             );
           }
-          const topic =
-            event.text && parsePracticeResponsePayload(event.text)
+          const topic = event.audio
+            ? 'media.voice-inbound'
+            : event.text && parsePracticeResponsePayload(event.text)
               ? 'practice.inbound'
               : 'channel.inbound';
           await transaction.outboxEvent.create({
