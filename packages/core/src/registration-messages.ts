@@ -98,7 +98,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PRACTICE_REFLECTION_REQUEST',
     content:
-      'Pratik sırasında ve sonrasında neler fark ettin? Yaşadığın zorlukları, bedenindeki hisleri veya duygularını birkaç cümleyle paylaşabilirsin.',
+      'Eline sağlık, bugünkü pratiğini tamamladın. Kendine ayırdığın bu zamanı önemsiyorum. İstersen pratik sırasında veya sonrasında fark ettiklerini, yaşadığın zorlukları, bedenindeki hisleri ya da duygularını yazılı veya sesli olarak paylaşabilirsin.',
   },
   {
     eventKey: 'PRACTICE_REFLECTION_RECEIVED',

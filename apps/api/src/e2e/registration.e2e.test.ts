@@ -2074,7 +2074,7 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
           payload: { path: ['eventKey'], equals: 'PRACTICE_COMPLETED_ACK' },
         },
       }),
-    ).toBe(1);
+    ).toBe(0);
     const reflectionRequest = await prisma.messageIntent.findFirstOrThrow({
       where: {
         studentId: current.studentId,
@@ -2083,7 +2083,13 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     });
     expect(reflectionRequest.status).toBe('SENT');
     expect((reflectionRequest.payload as { rendered: string }).rendered).toContain(
-      'birkaç cümleyle paylaşabilirsin',
+      'yazılı veya sesli olarak paylaşabilirsin',
+    );
+    expect((reflectionRequest.payload as { rendered: string }).rendered).toContain(
+      'bugünkü pratiğini tamamladın',
+    );
+    expect((reflectionRequest.payload as { rendered: string }).rendered).not.toContain(
+      'Bir sonraki pratiğin',
     );
   });
 

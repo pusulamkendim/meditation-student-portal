@@ -455,34 +455,35 @@ export async function processPracticeResponse(
           timeStyle: 'short',
         }).format(next.startAt)}.`
       : '';
-    const acknowledgementIntentId = await createResponseIntent(tx, now, {
-      eventKey: response === 'COMPLETED' ? 'PRACTICE_COMPLETED_ACK' : 'PRACTICE_SKIPPED_ACK',
-      studentId: identity.studentId,
-      channelIdentityId: identity.id,
-      locale: session.student.preferredLocale,
-      stage: session.student.curriculumStage,
-      aggregateVersion: session.version + 1,
-      idempotencyKey: `practice:${session.id}:${response.toLowerCase()}-ack`,
-      variables: { nextPracticeAtText },
-      context: { practiceSessionId: session.id },
-    });
-    if (response === 'COMPLETED')
-      await createResponseIntent(tx, now, {
-        eventKey: 'PRACTICE_REFLECTION_REQUEST',
-        studentId: identity.studentId,
-        channelIdentityId: identity.id,
-        locale: session.student.preferredLocale,
-        stage: session.student.curriculumStage,
-        aggregateVersion: session.version + 1,
-        idempotencyKey: `practice:${session.id}:reflection-request`,
-        variables: {},
-        context: { practiceSessionId: session.id },
-      });
+    const responseIntentId =
+      response === 'COMPLETED'
+        ? await createResponseIntent(tx, now, {
+            eventKey: 'PRACTICE_REFLECTION_REQUEST',
+            studentId: identity.studentId,
+            channelIdentityId: identity.id,
+            locale: session.student.preferredLocale,
+            stage: session.student.curriculumStage,
+            aggregateVersion: session.version + 1,
+            idempotencyKey: `practice:${session.id}:reflection-request`,
+            variables: {},
+            context: { practiceSessionId: session.id },
+          })
+        : await createResponseIntent(tx, now, {
+            eventKey: 'PRACTICE_SKIPPED_ACK',
+            studentId: identity.studentId,
+            channelIdentityId: identity.id,
+            locale: session.student.preferredLocale,
+            stage: session.student.curriculumStage,
+            aggregateVersion: session.version + 1,
+            idempotencyKey: `practice:${session.id}:${response.toLowerCase()}-ack`,
+            variables: { nextPracticeAtText },
+            context: { practiceSessionId: session.id },
+          });
     await tx.inboundResponseOwnership.create({
       data: {
         inboundMessageId: inbox.id,
-        owner: acknowledgementIntentId ? 'SYSTEM_STANDARD_MESSAGE' : 'NO_REPLY',
-        referenceId: acknowledgementIntentId,
+        owner: responseIntentId ? 'SYSTEM_STANDARD_MESSAGE' : 'NO_REPLY',
+        referenceId: responseIntentId,
       },
     });
     await tx.inboxEvent.update({

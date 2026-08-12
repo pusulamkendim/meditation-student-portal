@@ -25,11 +25,16 @@ import { InboundIntentRouter } from './inbound-intent-router.js';
 import { AdminPanelNotificationProcessor } from './admin-panel-notification.js';
 import { MeditationAudioRenderProcessor } from './meditation-audio-render.js';
 import { VoiceMessageProcessor } from './voice-message.js';
+import {
+  configureResponsiveQueue,
+  OUTBOX_POLL_INTERVAL_MS,
+  RESPONSIVE_WORK_OPTIONS,
+} from './responsive-queue.js';
 
 async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
   const logger = pino({ level: config.LOG_LEVEL, base: { service: 'worker' } });
-  const boss = new PgBoss(config.DATABASE_URL);
+  const boss = new PgBoss({ connectionString: config.DATABASE_URL, useListenNotify: true });
   const prisma = new PrismaClient();
   const systemClock = new SystemClock();
   const calendarWorker = new MeetingCalendarWorker(prisma, config, systemClock);
@@ -62,126 +67,137 @@ async function bootstrap(): Promise<void> {
     config,
     createChannelAdapters(config),
   );
-  await boss.createQueue('message.send');
-  await boss.work<{ intentId: string }>('message.send', async (jobs) => {
+  await configureResponsiveQueue(boss, 'message.send');
+  await boss.work<{ intentId: string }>('message.send', RESPONSIVE_WORK_OPTIONS, async (jobs) => {
     for (const job of jobs) await dispatcher.dispatch(job.data.intentId);
   });
   await boss.createQueue('outbox.relay');
   let relayRunning = false;
+  let relayRequested = false;
   const relayOutbox = async (): Promise<void> => {
+    relayRequested = true;
     if (relayRunning) return;
     relayRunning = true;
     try {
-      const events = await prisma.outboxEvent.findMany({
-        where: {
-          status: 'PENDING',
-          availableAt: { lte: systemClock.now() },
-          topic: {
-            in: [
-              'message.intents',
-              'practice.inbound',
-              'channel.inbound',
-              'meeting.calendar-create',
-              'meeting.calendar-update',
-              'llm.agent-reply',
-              'knowledge.document-parse',
-              'llm.weekly-summary',
-              'llm.student-report',
-              'admin.notifications',
-              'meditation.audio-render',
-              'media.voice-inbound',
-            ],
+      do {
+        relayRequested = false;
+        const events = await prisma.outboxEvent.findMany({
+          where: {
+            status: 'PENDING',
+            availableAt: { lte: systemClock.now() },
+            topic: {
+              in: [
+                'message.intents',
+                'practice.inbound',
+                'channel.inbound',
+                'meeting.calendar-create',
+                'meeting.calendar-update',
+                'llm.agent-reply',
+                'knowledge.document-parse',
+                'llm.weekly-summary',
+                'llm.student-report',
+                'admin.notifications',
+                'meditation.audio-render',
+                'media.voice-inbound',
+              ],
+            },
           },
-        },
-        take: 100,
-        orderBy: { createdAt: 'asc' },
-      });
-      for (const event of events) {
-        const gatedFlag: Record<string, string> = {
-          'knowledge.document-parse': 'knowledge.ingestion.enabled',
-          'llm.weekly-summary': 'llm.weekly-summary.enabled',
-          'llm.student-report': 'llm.student-report.enabled',
-        };
-        const requiredFlag = gatedFlag[event.topic];
-        if (requiredFlag) {
-          const flag = await prisma.featureFlagConfig.findUnique({ where: { key: requiredFlag } });
-          if (!flag?.enabled || flag.rolloutPercentage <= 0) continue;
+          take: 100,
+          orderBy: { createdAt: 'asc' },
+        });
+        for (const event of events) {
+          const gatedFlag: Record<string, string> = {
+            'knowledge.document-parse': 'knowledge.ingestion.enabled',
+            'llm.weekly-summary': 'llm.weekly-summary.enabled',
+            'llm.student-report': 'llm.student-report.enabled',
+          };
+          const requiredFlag = gatedFlag[event.topic];
+          if (requiredFlag) {
+            const flag = await prisma.featureFlagConfig.findUnique({
+              where: { key: requiredFlag },
+            });
+            if (!flag?.enabled || flag.rolloutPercentage <= 0) continue;
+          }
+          const payload = event.payload as {
+            intentId?: string;
+            inboxEventId?: string;
+            seriesId?: string;
+            meetingId?: string;
+            retryOperationId?: string;
+            versionId?: string;
+            outboxEventId?: string;
+            renderId?: string;
+            reportId?: string;
+            operationId?: string;
+          };
+          let queueName: string;
+          let data: Record<string, string | undefined>;
+          switch (event.topic) {
+            case 'message.intents':
+              queueName = 'message.send';
+              data = { intentId: payload.intentId };
+              break;
+            case 'practice.inbound':
+              queueName = 'practice.response';
+              data = { inboxEventId: payload.inboxEventId };
+              break;
+            case 'meeting.calendar-create':
+              queueName = 'meeting.calendar-create';
+              data = { seriesId: payload.seriesId };
+              break;
+            case 'meeting.calendar-update':
+              queueName = 'meeting.calendar-update';
+              data = { seriesId: payload.seriesId, meetingId: payload.meetingId };
+              break;
+            case 'knowledge.document-parse':
+              queueName = 'knowledge.document-parse';
+              data = { versionId: payload.versionId };
+              break;
+            case 'llm.weekly-summary':
+              queueName = 'llm.weekly-summary';
+              data = { meetingId: payload.meetingId };
+              break;
+            case 'llm.student-report':
+              queueName = 'llm.student-report';
+              data = { reportId: payload.reportId, operationId: payload.operationId };
+              break;
+            case 'admin.notifications':
+              queueName = 'admin.notification';
+              data = { outboxEventId: event.id };
+              break;
+            case 'meditation.audio-render':
+              queueName = 'meditation.audio-render';
+              data = { renderId: payload.renderId };
+              break;
+            case 'channel.inbound':
+              queueName = 'channel.inbound';
+              data = { inboxEventId: payload.inboxEventId };
+              break;
+            case 'media.voice-inbound':
+              queueName = 'media.voice-inbound';
+              data = { inboxEventId: payload.inboxEventId };
+              break;
+            default:
+              queueName = 'llm.agent-reply';
+              data = {
+                inboxEventId: payload.inboxEventId,
+                retryOperationId: payload.retryOperationId,
+              };
+              break;
+          }
+          if (!Object.values(data)[0]) continue;
+          const jobId = await boss.send(queueName, data, { id: event.id });
+          if (jobId)
+            await prisma.outboxEvent.update({
+              where: { id: event.id },
+              data: {
+                status: 'PUBLISHED',
+                publishedAt: new Date(),
+                attempts: { increment: 1 },
+              },
+            });
         }
-        const payload = event.payload as {
-          intentId?: string;
-          inboxEventId?: string;
-          seriesId?: string;
-          meetingId?: string;
-          retryOperationId?: string;
-          versionId?: string;
-          outboxEventId?: string;
-          renderId?: string;
-          reportId?: string;
-          operationId?: string;
-        };
-        let queueName: string;
-        let data: Record<string, string | undefined>;
-        switch (event.topic) {
-          case 'message.intents':
-            queueName = 'message.send';
-            data = { intentId: payload.intentId };
-            break;
-          case 'practice.inbound':
-            queueName = 'practice.response';
-            data = { inboxEventId: payload.inboxEventId };
-            break;
-          case 'meeting.calendar-create':
-            queueName = 'meeting.calendar-create';
-            data = { seriesId: payload.seriesId };
-            break;
-          case 'meeting.calendar-update':
-            queueName = 'meeting.calendar-update';
-            data = { seriesId: payload.seriesId, meetingId: payload.meetingId };
-            break;
-          case 'knowledge.document-parse':
-            queueName = 'knowledge.document-parse';
-            data = { versionId: payload.versionId };
-            break;
-          case 'llm.weekly-summary':
-            queueName = 'llm.weekly-summary';
-            data = { meetingId: payload.meetingId };
-            break;
-          case 'llm.student-report':
-            queueName = 'llm.student-report';
-            data = { reportId: payload.reportId, operationId: payload.operationId };
-            break;
-          case 'admin.notifications':
-            queueName = 'admin.notification';
-            data = { outboxEventId: event.id };
-            break;
-          case 'meditation.audio-render':
-            queueName = 'meditation.audio-render';
-            data = { renderId: payload.renderId };
-            break;
-          case 'channel.inbound':
-            queueName = 'channel.inbound';
-            data = { inboxEventId: payload.inboxEventId };
-            break;
-          case 'media.voice-inbound':
-            queueName = 'media.voice-inbound';
-            data = { inboxEventId: payload.inboxEventId };
-            break;
-          default:
-            queueName = 'llm.agent-reply';
-            data = {
-              inboxEventId: payload.inboxEventId,
-              retryOperationId: payload.retryOperationId,
-            };
-            break;
-        }
-        if (!Object.values(data)[0]) continue;
-        const jobId = await boss.send(queueName, data, { id: event.id });
-        if (jobId)
-          await prisma.outboxEvent.update({
-            where: { id: event.id },
-            data: { status: 'PUBLISHED', publishedAt: new Date(), attempts: { increment: 1 } },
-          });
-      }
+      } while (relayRequested);
     } finally {
       relayRunning = false;
     }
@@ -197,7 +213,7 @@ async function bootstrap(): Promise<void> {
         'Outbox polling failed',
       ),
     );
-  }, 5_000);
+  }, OUTBOX_POLL_INTERVAL_MS);
   await boss.createQueue('meeting.calendar-create');
   await boss.work<{ seriesId?: string }>('meeting.calendar-create', async (jobs) => {
     for (const job of jobs)
@@ -223,11 +239,16 @@ async function bootstrap(): Promise<void> {
     await processPracticeLifecycle(prisma, systemClock, config);
   });
   await boss.schedule('practice.lifecycle', '* * * * *', {});
-  await boss.createQueue('practice.response');
-  await boss.work<{ inboxEventId: string }>('practice.response', async (jobs) => {
-    for (const job of jobs)
-      await processPracticeResponse(prisma, systemClock, config, job.data.inboxEventId);
-  });
+  await configureResponsiveQueue(boss, 'practice.response');
+  await boss.work<{ inboxEventId: string }>(
+    'practice.response',
+    RESPONSIVE_WORK_OPTIONS,
+    async (jobs) => {
+      for (const job of jobs)
+        await processPracticeResponse(prisma, systemClock, config, job.data.inboxEventId);
+      await relayOutbox();
+    },
+  );
   await boss.createQueue('practice.response-timeout');
   await boss.work('practice.response-timeout', async () => {
     const expiredPracticeResponses = await expireStalePracticeResponses(prisma, systemClock);
@@ -236,19 +257,29 @@ async function bootstrap(): Promise<void> {
   });
   await boss.schedule('practice.response-timeout', '*/15 * * * *', {});
   await boss.createQueue('llm.agent-reply');
-  await boss.createQueue('channel.inbound');
-  await boss.createQueue('media.voice-inbound');
-  await boss.work<{ inboxEventId: string }>('media.voice-inbound', async (jobs) => {
-    for (const job of jobs)
-      if (job.data.inboxEventId) await voiceMessages.process(job.data.inboxEventId);
-  });
-  await boss.work<{ inboxEventId: string }>('channel.inbound', async (jobs) => {
-    for (const job of jobs) {
-      if (!job.data.inboxEventId) continue;
-      const result = await registrationInbound.process(job.data.inboxEventId);
-      if (result === 'unhandled') await inboundIntentRouter.process(job.data.inboxEventId);
-    }
-  });
+  await configureResponsiveQueue(boss, 'channel.inbound');
+  await configureResponsiveQueue(boss, 'media.voice-inbound');
+  await boss.work<{ inboxEventId: string }>(
+    'media.voice-inbound',
+    RESPONSIVE_WORK_OPTIONS,
+    async (jobs) => {
+      for (const job of jobs)
+        if (job.data.inboxEventId) await voiceMessages.process(job.data.inboxEventId);
+      await relayOutbox();
+    },
+  );
+  await boss.work<{ inboxEventId: string }>(
+    'channel.inbound',
+    RESPONSIVE_WORK_OPTIONS,
+    async (jobs) => {
+      for (const job of jobs) {
+        if (!job.data.inboxEventId) continue;
+        const result = await registrationInbound.process(job.data.inboxEventId);
+        if (result === 'unhandled') await inboundIntentRouter.process(job.data.inboxEventId);
+      }
+      await relayOutbox();
+    },
+  );
   await boss.work<{ inboxEventId: string; retryOperationId?: string }>(
     'llm.agent-reply',
     async (jobs) => {
