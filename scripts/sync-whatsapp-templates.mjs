@@ -14,6 +14,7 @@ const targets = {
   PAYMENT_ACTION_REQUIRED: ['payment_action_required_tr', 'UTILITY'],
   PAYMENT_APPROVED: ['payment_approved_tr', 'UTILITY'],
   STUDENT_ACTIVATED: ['student_activated_tr', 'UTILITY'],
+  SUBSCRIPTION_RENEWAL_REMINDER: ['subscription_renewal_reminder_v1_tr', 'UTILITY'],
   PRACTICE_PLAN_CONFIRMATION_REQUEST: ['practice_plan_confirmation_request_tr', 'UTILITY'],
   PRACTICE_PLAN_CONFIRMED: ['practice_plan_confirmed_tr', 'UTILITY'],
   PRACTICE_PLAN_UPDATED: ['practice_plan_updated_tr', 'UTILITY'],
@@ -176,6 +177,15 @@ try {
               buttons: [
                 { type: 'QUICK_REPLY', text: 'Yaptım' },
                 { type: 'QUICK_REPLY', text: 'Bugün yapamadım' },
+              ],
+            });
+          }
+          if (eventKey === 'SUBSCRIPTION_RENEWAL_REMINDER') {
+            components.push({
+              type: 'BUTTONS',
+              buttons: [
+                { type: 'QUICK_REPLY', text: 'Devam etmek isterim' },
+                { type: 'QUICK_REPLY', text: 'Devam etmeyeceğim' },
               ],
             });
           }

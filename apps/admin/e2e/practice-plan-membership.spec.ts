@@ -15,6 +15,7 @@ test('updates membership end date and publishes an independent weekday plan', as
   page,
 }, testInfo) => {
   let subscriptionPayload: Record<string, unknown> | undefined;
+  let newPackagePayload: Record<string, unknown> | undefined;
   let planPayload: Record<string, unknown> | undefined;
   let outcomePayload: Record<string, unknown> | undefined;
   const detail = {
@@ -134,6 +135,34 @@ test('updates membership end date and publishes an independent weekday plan', as
       body: JSON.stringify(detail.subscriptions[0]),
     });
   });
+  await page.route(`**/v1/admin/students/${studentId}/subscriptions`, async (route) => {
+    newPackagePayload = route.request().postDataJSON() as Record<string, unknown>;
+    const startDate = String(newPackagePayload.startDate);
+    const created = {
+      id: '20000000-0000-4000-8000-000000000002',
+      status: 'SCHEDULED',
+      startDate: `${startDate}T00:00:00.000Z`,
+      endExclusive: '2026-09-19T00:00:00.000Z',
+      durationDays: 28,
+      meetingCredits: 4,
+      paymentId: '30000000-0000-4000-8000-000000000003',
+      paymentStatus: 'APPROVED',
+      practicePlanCopied: true,
+    };
+    detail.subscriptions.push({
+      ...created,
+      priceMinor: '400000',
+      currency: 'TRY',
+      credits: 4,
+      version: 1,
+    });
+    return route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      headers: corsHeaders,
+      body: JSON.stringify(created),
+    });
+  });
   await page.route(`**/v1/admin/students/${studentId}/practice-plan/versions`, async (route) => {
     planPayload = route.request().postDataJSON() as Record<string, unknown>;
     const submitted = planPayload as {
@@ -195,7 +224,20 @@ test('updates membership end date and publishes an independent weekday plan', as
       expectedVersion: 4,
       reason: 'Öğrenci talebi',
     });
-  await expect(page.getByText('22 Ağu 2026')).toBeVisible();
+  await expect(page.getByText('21 Ağu 2026')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Yeni paket oluştur' }).click();
+  const packageDialog = page.getByRole('dialog', { name: 'Yeni paket oluştur' });
+  await expect(packageDialog.getByLabel('Yeni dönem başlangıcı')).toHaveValue('2026-08-22');
+  await expect(packageDialog.getByText('4.000 TL · 28 gün · 4 görüşme')).toBeVisible();
+  await expect(packageDialog.getByText('Admin onaylı olarak oluşturulacak')).toBeVisible();
+  await packageDialog.getByRole('button', { name: 'Paketi oluştur' }).click();
+  await expect.poll(() => newPackagePayload).toEqual({ startDate: '2026-08-22' });
+  await expect(
+    page.getByText('Yeni 28 günlük paket ve onaylı ödeme kaydı oluşturuldu.'),
+  ).toBeVisible();
+  await expect(page.getByText('Planlanan paket')).toBeVisible();
+  await expect(page.getByText('22 Ağu 2026 – 18 Eyl 2026 · 4 görüşme')).toBeVisible();
 
   await page.getByRole('tab', { name: /Pratikler/ }).click();
   await page.getByRole('button', { name: 'Planı düzenle' }).click();

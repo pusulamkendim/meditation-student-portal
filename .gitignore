@@ -3,6 +3,7 @@ node_modules/
 .pnpm-store/
 dist/
 .next/
+.next-dev/
 coverage/
 playwright-report/
 test-results/

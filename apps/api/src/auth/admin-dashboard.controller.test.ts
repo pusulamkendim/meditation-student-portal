@@ -3,10 +3,29 @@ import { randomBytes } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { FakeClock, FieldEncryption } from '@meditation/core';
 
-import { AdminDashboardController } from './admin-dashboard.controller.js';
+import {
+  AdminDashboardController,
+  calculateNonCompletionStreak,
+} from './admin-dashboard.controller.js';
 import type { PrismaService } from '../database/prisma.service.js';
 
 describe('AdminDashboardController', () => {
+  it('clears the warning streak as soon as the latest concluded practice is completed', () => {
+    const now = new Date('2026-08-05T12:00:00.000Z');
+    expect(
+      calculateNonCompletionStreak(
+        [
+          { startAt: new Date('2026-08-02T09:00:00.000Z'), status: 'MISSED' },
+          { startAt: new Date('2026-08-03T09:00:00.000Z'), status: 'SKIPPED' },
+          { startAt: new Date('2026-08-04T09:00:00.000Z'), status: 'MISSED' },
+          { startAt: new Date('2026-08-05T09:00:00.000Z'), status: 'COMPLETED' },
+          { startAt: new Date('2026-08-05T21:00:00.000Z'), status: 'AWAITING_RESPONSE' },
+        ],
+        now,
+      ),
+    ).toBe(0);
+  });
+
   it('excludes test profiles and calculates the current seven-day student pulse', async () => {
     const clock = new FakeClock('2026-08-05T12:00:00.000Z');
     const encryption = new FieldEncryption(new Map([['test', randomBytes(32)]]), 'test');
@@ -149,7 +168,7 @@ describe('AdminDashboardController', () => {
     expect(result.studentPulse[0]).toMatchObject({
       id: realId,
       fullName: 'Duygu Bulut',
-      nonCompletionStreak: 3,
+      nonCompletionStreak: 0,
       recommendation: 'Son 7 günlük yanıtlara göre programı tek seansa indirmeyi değerlendirin.',
       insight: {
         tone: 'NEUTRAL',

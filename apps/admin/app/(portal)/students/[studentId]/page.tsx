@@ -390,6 +390,13 @@ function formatDate(value?: string) {
   return value ? dateFormatter.format(new Date(value)) : '—';
 }
 
+function formatInclusiveEndDate(value?: string) {
+  if (!value) return '—';
+  const date = new Date(value);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return dateFormatter.format(date);
+}
+
 function formatDateTime(value?: string) {
   return value ? dateTimeFormatter.format(new Date(value)) : '—';
 }
@@ -447,6 +454,15 @@ function preferredSubscription(subscriptions: Subscription[]) {
   );
 }
 
+function packageSourceSubscription(subscriptions: Subscription[]) {
+  return subscriptions
+    .filter((subscription) => ['ACTIVE', 'SCHEDULED'].includes(subscription.status))
+    .sort(
+      (left, right) =>
+        new Date(right.endExclusive).getTime() - new Date(left.endExclusive).getTime(),
+    )[0];
+}
+
 function addUtcDays(value: string, days: number) {
   const date = new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -496,6 +512,7 @@ export default function StudentDetailPage() {
   const [meetingDialog, setMeetingDialog] = useState<'create' | 'reschedule' | 'status'>();
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting>();
   const [meetingDate, setMeetingDate] = useState('');
+  const [meetingSubscriptionId, setMeetingSubscriptionId] = useState('');
   const [meetingReason, setMeetingReason] = useState('');
   const [meetingTargetStatus, setMeetingTargetStatus] = useState('COMPLETED');
   const [conversation, setConversation] = useState<Conversation>();
@@ -515,6 +532,8 @@ export default function StudentDetailPage() {
   const [subscriptionReason, setSubscriptionReason] = useState(
     'Üyelik dönemi admin tarafından güncellendi.',
   );
+  const [newSubscriptionDialog, setNewSubscriptionDialog] = useState(false);
+  const [newSubscriptionStartDate, setNewSubscriptionStartDate] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -677,6 +696,36 @@ export default function StudentDetailPage() {
     }
   }
 
+  function openNewSubscriptionDialog() {
+    const source = data ? packageSourceSubscription(data.subscriptions) : undefined;
+    const today = localDateInput(new Date());
+    const defaultStart = source?.endExclusive.slice(0, 10) ?? today;
+    setNewSubscriptionStartDate(defaultStart > today ? defaultStart : today);
+    setNewSubscriptionDialog(true);
+  }
+
+  async function submitNewSubscription(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!newSubscriptionStartDate) return;
+    try {
+      setBusy(true);
+      await requestJson(`/v1/admin/students/${studentId}/subscriptions`, {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ startDate: newSubscriptionStartDate }),
+      });
+      setNotice(
+        'Yeni 28 günlük paket ve onaylı ödeme kaydı oluşturuldu. Pratik planı yeni döneme uzatıldı.',
+      );
+      setNewSubscriptionDialog(false);
+      await load();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : 'Yeni paket oluşturulamadı.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitPracticeAction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!practiceAction) return;
@@ -796,7 +845,7 @@ export default function StudentDetailPage() {
   async function submitMeeting(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (meetingDialog === 'create') {
-      const subscription = data ? preferredSubscription(data.subscriptions) : undefined;
+      const subscription = data?.subscriptions.find((item) => item.id === meetingSubscriptionId);
       if (!subscription || !meetingDate) return;
       await runMutation(
         `/v1/admin/subscriptions/${subscription.id}/meeting-series`,
@@ -1078,6 +1127,7 @@ export default function StudentDetailPage() {
           data={data}
           onOpenHandoffs={() => setActiveTab('handoffs')}
           onEditSubscription={openSubscriptionDialog}
+          onCreateSubscription={openNewSubscriptionDialog}
         />
       ) : null}
       {activeTab === 'practices' ? (
@@ -1106,6 +1156,19 @@ export default function StudentDetailPage() {
           openReschedule={openReschedule}
           openStatus={openStatus}
           openCreate={() => {
+            const usedSubscriptionIds = new Set(
+              data.meetings.map((meeting) => meeting.subscriptionId),
+            );
+            const eligible = data.subscriptions.filter(
+              (subscription) =>
+                ['ACTIVE', 'SCHEDULED'].includes(subscription.status) &&
+                !usedSubscriptionIds.has(subscription.id),
+            );
+            setMeetingSubscriptionId(
+              eligible.find((subscription) => subscription.status === 'SCHEDULED')?.id ??
+                eligible[0]?.id ??
+                '',
+            );
             setMeetingDate('');
             setMeetingDialog('create');
           }}
@@ -1205,6 +1268,63 @@ export default function StudentDetailPage() {
                 onChange={(event) => setSubscriptionReason(event.target.value)}
               />
             </label>
+          </form>
+        </Modal>
+      ) : null}
+
+      {newSubscriptionDialog ? (
+        <Modal
+          title="Yeni paket oluştur"
+          description="Yeni dönem 28 gün sürer, dört görüşme hakkı ve onaylı 4.000 TL ödeme kaydı oluşturur. Mevcut pratik programı öğrenciye ek plan mesajı göndermeden devam eder."
+          onClose={() => setNewSubscriptionDialog(false)}
+          actions={
+            <>
+              <Button variant="ghost" onClick={() => setNewSubscriptionDialog(false)}>
+                Vazgeç
+              </Button>
+              <Button form="new-subscription-form" type="submit" loading={busy}>
+                <Plus aria-hidden="true" /> Paketi oluştur
+              </Button>
+            </>
+          }
+        >
+          <form
+            id="new-subscription-form"
+            className="student-modal-form"
+            onSubmit={submitNewSubscription}
+          >
+            <label>
+              <span>Yeni dönem başlangıcı</span>
+              <input
+                required
+                type="date"
+                min={localDateInput(new Date())}
+                value={newSubscriptionStartDate}
+                onChange={(event) => setNewSubscriptionStartDate(event.target.value)}
+              />
+            </label>
+            <dl className="student-info-list">
+              <div>
+                <dt>Dönem</dt>
+                <dd>
+                  {newSubscriptionStartDate
+                    ? `${formatDate(`${newSubscriptionStartDate}T00:00:00.000Z`)} – ${formatInclusiveEndDate(`${addUtcDays(newSubscriptionStartDate, 28)}T00:00:00.000Z`)}`
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Paket</dt>
+                <dd>4.000 TL · 28 gün · 4 görüşme</dd>
+              </div>
+              <div>
+                <dt>Ödeme kaydı</dt>
+                <dd>Admin onaylı olarak oluşturulacak</dd>
+              </div>
+              <div>
+                <dt>Pratik programı</dt>
+                <dd>{data.practicePlan ? 'Yeni döneme kopyalanacak' : 'Henüz plan bulunmuyor'}</dd>
+              </div>
+            </dl>
           </form>
         </Modal>
       ) : null}
@@ -1394,6 +1514,35 @@ export default function StudentDetailPage() {
           }
         >
           <form id="meeting-form" className="student-modal-form" onSubmit={submitMeeting}>
+            {meetingDialog === 'create' ? (
+              <label>
+                <span>Görüşme paketi</span>
+                <select
+                  required
+                  value={meetingSubscriptionId}
+                  onChange={(event) => setMeetingSubscriptionId(event.target.value)}
+                >
+                  <option value="" disabled>
+                    Dönem seçin
+                  </option>
+                  {data.subscriptions
+                    .filter(
+                      (subscription) =>
+                        ['ACTIVE', 'SCHEDULED'].includes(subscription.status) &&
+                        !data.meetings.some(
+                          (meeting) => meeting.subscriptionId === subscription.id,
+                        ),
+                    )
+                    .map((subscription) => (
+                      <option key={subscription.id} value={subscription.id}>
+                        {subscription.status === 'SCHEDULED' ? 'Yeni dönem' : 'Aktif dönem'} ·{' '}
+                        {formatDate(subscription.startDate)} –{' '}
+                        {formatInclusiveEndDate(subscription.endExclusive)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            ) : null}
             {meetingDialog !== 'status' ? (
               <label>
                 <span>
@@ -2185,12 +2334,19 @@ function Overview({
   data,
   onOpenHandoffs,
   onEditSubscription,
+  onCreateSubscription,
 }: {
   data: Detail;
   onOpenHandoffs: () => void;
   onEditSubscription: () => void;
+  onCreateSubscription: () => void;
 }) {
   const latestSubscription = preferredSubscription(data.subscriptions);
+  const scheduledSubscription = data.subscriptions
+    .filter((subscription) => subscription.status === 'SCHEDULED')
+    .sort(
+      (left, right) => new Date(left.startDate).getTime() - new Date(right.startDate).getTime(),
+    )[0];
   const historySessions = data.practice.sessions
     .filter((session) => ['COMPLETED', 'MISSED', 'SKIPPED'].includes(session.status))
     .sort((a, b) => new Date(b.startAt).getTime() - new Date(a.startAt).getTime());
@@ -2237,18 +2393,23 @@ function Overview({
               <span className="eyebrow">ÜYELİK</span>
               <h2>Aktif paket</h2>
             </div>
-            {latestSubscription ? (
-              <div className="student-action-row">
-                <Badge tone={statusTone[latestSubscription.status] ?? 'neutral'}>
-                  {label(latestSubscription.status)}
-                </Badge>
-                {['ACTIVE', 'SCHEDULED'].includes(latestSubscription.status) ? (
-                  <Button variant="ghost" size="sm" onClick={onEditSubscription}>
-                    <Pencil aria-hidden="true" /> Bitiş tarihini değiştir
-                  </Button>
-                ) : null}
-              </div>
-            ) : null}
+            <div className="student-action-row">
+              {latestSubscription ? (
+                <>
+                  <Badge tone={statusTone[latestSubscription.status] ?? 'neutral'}>
+                    {label(latestSubscription.status)}
+                  </Badge>
+                  {['ACTIVE', 'SCHEDULED'].includes(latestSubscription.status) ? (
+                    <Button variant="ghost" size="sm" onClick={onEditSubscription}>
+                      <Pencil aria-hidden="true" /> Bitiş tarihini değiştir
+                    </Button>
+                  ) : null}
+                </>
+              ) : null}
+              <Button variant="secondary" size="sm" onClick={onCreateSubscription}>
+                <Plus aria-hidden="true" /> Yeni paket oluştur
+              </Button>
+            </div>
           </div>
           {latestSubscription ? (
             <dl className="student-info-list">
@@ -2256,7 +2417,7 @@ function Overview({
                 <dt>Dönem</dt>
                 <dd>
                   {formatDate(latestSubscription.startDate)} –{' '}
-                  {formatDate(latestSubscription.endExclusive)}
+                  {formatInclusiveEndDate(latestSubscription.endExclusive)}
                 </dd>
               </div>
               <div>
@@ -2269,6 +2430,15 @@ function Overview({
                 <dt>Görüşme kredisi</dt>
                 <dd>{latestSubscription.credits} / 4 kaldı</dd>
               </div>
+              {scheduledSubscription && scheduledSubscription.id !== latestSubscription.id ? (
+                <div>
+                  <dt>Planlanan paket</dt>
+                  <dd>
+                    {formatDate(scheduledSubscription.startDate)} –{' '}
+                    {formatInclusiveEndDate(scheduledSubscription.endExclusive)} · 4 görüşme
+                  </dd>
+                </div>
+              ) : null}
             </dl>
           ) : (
             <EmptyState
@@ -2749,6 +2919,12 @@ function MeetingsTab({
   openStatus: (meeting: Meeting, status: string) => void;
   openCreate: () => void;
 }) {
+  const usedSubscriptionIds = new Set(data.meetings.map((meeting) => meeting.subscriptionId));
+  const eligibleSubscriptions = data.subscriptions.filter(
+    (item) =>
+      (item.status === 'ACTIVE' || item.status === 'SCHEDULED') &&
+      !usedSubscriptionIds.has(item.id),
+  );
   const hasSubscription = data.subscriptions.some(
     (item) => item.status === 'ACTIVE' || item.status === 'SCHEDULED',
   );
@@ -2760,10 +2936,10 @@ function MeetingsTab({
           <h2>Görüşme takvimi</h2>
           <p>Google Meet bağlantısı, durum ve saat değişikliklerini öğrenci bazında yönetin.</p>
         </div>
-        {!data.meetings.length && hasSubscription ? (
+        {eligibleSubscriptions.length ? (
           <Button onClick={openCreate}>
             <CalendarClock aria-hidden="true" />
-            Seri oluştur
+            {data.meetings.length ? 'Yeni dönem serisi' : 'Seri oluştur'}
           </Button>
         ) : null}
       </div>

@@ -7,6 +7,7 @@ import { RegistrationService } from './registration.service.js';
 import { InternalChannelGuard } from './internal-channel.guard.js';
 import { StudentAdminService } from './student-admin.service.js';
 import { StudentNoteService } from './student-note.service.js';
+import { SubscriptionPackageService } from './subscription-package.service.js';
 @Module({
   imports: [AuthModule],
   controllers: [RegistrationController],
@@ -15,6 +16,7 @@ import { StudentNoteService } from './student-note.service.js';
     PaymentService,
     StudentAdminService,
     StudentNoteService,
+    SubscriptionPackageService,
     InternalChannelGuard,
     { provide: CLOCK_TOKEN, useClass: SystemClock },
   ],

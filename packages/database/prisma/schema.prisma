@@ -83,6 +83,14 @@ enum SubscriptionStatus {
   CANCELLED
 }
 
+enum SubscriptionRenewalStatus {
+  REMINDER_QUEUED
+  CONTINUE_REQUESTED
+  DECLINED
+  PAYMENT_REPORTED
+  COMPLETED
+}
+
 enum PracticePlanStatus {
   DRAFT
   ACTIVE
@@ -437,6 +445,7 @@ model Student {
   messagingPreference    MessagingPreference?
   payments               Payment[]
   subscriptions          SubscriptionPeriod[]
+  subscriptionRenewals   SubscriptionRenewal[]
   practicePlans          PracticePlan[]
   practiceSessions       PracticeSession[]
   meetingSeries          MeetingSeries[]
@@ -608,9 +617,10 @@ model Payment {
   createdAt             DateTime      @default(now()) @map("created_at")
   updatedAt             DateTime      @updatedAt @map("updated_at")
 
-  student      Student             @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  student      Student              @relation(fields: [studentId], references: [id], onDelete: Restrict)
   subscription SubscriptionPeriod?
-  approvedBy   AdminUser?          @relation(fields: [approvedByAdminUserId], references: [id], onDelete: Restrict)
+  renewal      SubscriptionRenewal?
+  approvedBy   AdminUser?           @relation(fields: [approvedByAdminUserId], references: [id], onDelete: Restrict)
 
   @@index([studentId, status])
   @@map("payments")
@@ -629,14 +639,35 @@ model SubscriptionPeriod {
   createdAt    DateTime           @default(now()) @map("created_at")
   updatedAt    DateTime           @updatedAt @map("updated_at")
 
-  student       Student              @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  payment       Payment?             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
-  creditEvents  MeetingCreditEvent[]
-  practicePlans PracticePlan[]
-  meetingSeries MeetingSeries[]
+  student        Student              @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  payment        Payment?             @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  creditEvents   MeetingCreditEvent[]
+  practicePlans  PracticePlan[]
+  meetingSeries  MeetingSeries[]
+  renewalRequest SubscriptionRenewal? @relation("SubscriptionRenewalSource")
 
   @@index([studentId, status])
   @@map("subscription_periods")
+}
+
+model SubscriptionRenewal {
+  id                         String                    @id @default(uuid()) @db.Uuid
+  studentId                  String                    @map("student_id") @db.Uuid
+  sourceSubscriptionPeriodId String                    @unique @map("source_subscription_period_id") @db.Uuid
+  paymentId                  String?                   @unique @map("payment_id") @db.Uuid
+  status                     SubscriptionRenewalStatus @default(REMINDER_QUEUED)
+  reminderQueuedAt           DateTime                  @map("reminder_queued_at")
+  choiceRecordedAt           DateTime?                 @map("choice_recorded_at")
+  version                    Int                       @default(1)
+  createdAt                  DateTime                  @default(now()) @map("created_at")
+  updatedAt                  DateTime                  @updatedAt @map("updated_at")
+
+  student                  Student            @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  sourceSubscriptionPeriod SubscriptionPeriod @relation("SubscriptionRenewalSource", fields: [sourceSubscriptionPeriodId], references: [id], onDelete: Restrict)
+  payment                  Payment?           @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+
+  @@index([studentId, status])
+  @@map("subscription_renewals")
 }
 
 model MeetingCreditEvent {

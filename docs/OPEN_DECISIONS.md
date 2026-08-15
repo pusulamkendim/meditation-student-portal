@@ -24,26 +24,34 @@ Kabul edilenler:
 - Görüşmeler Google Meet üzerinden yapılacak.
 - Haftalık görüşme saatini admin belirleyecek.
 - Günlük pratik takibi ve hatırlatmalar pakete dahil olacak.
-- Admin gerektiğinde öğrenci için yeni bir aylık paket dönemi tanımlayabilecek.
-- Yeni paket dört yeni görüşme hakkı oluşturacak; eski paketin tarihleri değiştirilmeyecek.
+- Admin gerektiğinde öğrenci sayfasından, ödeme bildirimi beklemeden yeni bir paket dönemi tanımlayabilecek.
+- Admin tarafından doğrudan oluşturulan paket için 4.000 TL tutarında `APPROVED`
+  ödeme kaydı aynı transaction içinde oluşturulacak ve işlemi yapan admin kaydedilecek.
+- Yeni paket 28 gün sürecek ve dört yeni görüşme hakkı oluşturacak.
 - Her paket dönemi kendi tarih ve kullanım geçmişiyle ayrı saklanacak.
-- Aktif paket varsa yeni paket mevcut paketin bitişinden sonraki gün başlayacak.
+- Aktif veya planlı paket varsa yeni paketin varsayılan başlangıcı sıradaki son paketin
+  hariç bitiş tarihi olacak.
+- Admin daha erken veya geç bir başlangıç seçerse önceki dönemin hariç bitiş tarihi
+  yeni başlangıca hizalanacak; böylece dönemler çakışmayacak.
 - Aktif paket yoksa yeni paketin başlangıç tarihini admin seçecek.
 - İlk paket ödeme onayı sırasında adminin seçtiği başlangıç tarihiyle oluşturulacak.
-- Paket takvim ayına değil, seçilen başlangıç tarihine bağlı bir takvim ayı sürecek.
-- Başlangıç tarihi dahil, bir sonraki ayın aynı günü hariç tutulacak.
-- Örneğin 10 Temmuz başlangıçlı paket 9 Ağustos gün sonuna kadar geçerli olacak.
-- Hedef ayda aynı gün yoksa hariç bitiş tarihi hedef ayın son gününe sınırlanacak.
+- Paket takvim ayına değil, seçilen başlangıç tarihinden başlayan sabit 28 günlük
+  döneme bağlı olacak.
+- Örneğin 10 Temmuz başlangıçlı paket 6 Ağustos gün sonuna kadar geçerli olacak;
+  `end_exclusive` tarihi 7 Ağustos olacak.
 - Paket tarihleri öğrencinin IANA saat dilimindeki yerel tarihler olarak hesaplanacak.
 - Aynı öğrenciye ait paket dönemlerinin tarihleri çakışamayacak.
 - Paket bittiğinde sırada yeni paket yoksa üyelik `INACTIVE` olacak.
 - Paket bittiğinde pratik, değerlendirme ve görüşme mesajları durdurulacak.
 - Öğrenci profili ve izin verilen geçmiş veriler korunacak.
 - Yeni paket başladığında üyelik ve yeni dönemin zamanlanmış işleri tekrar aktifleştirilecek.
-- Paket bitmeden üç gün önce öğrenciye yenileme hatırlatması gönderilecek.
-- Hatırlatma 4.000 TL ücret, IBAN ve yenilemeye özel ödeme referansı içerecek.
+- Paket bitmeden beş gün önce öğrenciye yenileme hatırlatması gönderilecek.
+- Hatırlatma devam/etmeme seçeneklerini içerecek; ücret ve IBAN devam yanıtından
+  sonra gönderilecek.
 - Aynı anda admin panelinde yenileme bildirimi oluşturulacak.
-- Hatırlatma yeni paket oluşturmayacak; paket yalnızca ödeme bildirimi admin tarafından onaylanınca oluşturulacak.
+- Hatırlatma yeni paket oluşturmayacak; kanal yenilemesinde paket yalnızca ödeme
+  bildirimi admin tarafından onaylanınca oluşturulacak. Adminin öğrenci sayfasından
+  başlattığı manuel paket tanımı bu akıştan bağımsız olacak.
 - İade, eksik ve fazla ödeme banka üzerinden admin tarafından manuel yönetilecek.
 - Sistem banka transferi veya otomatik iade başlatmayacak.
 - Admin portalda işlem türü, tutar, açıklama ve tarihi kaydedecek.

@@ -78,27 +78,34 @@ kullanılmalıdır.
 | Yenileme | Admin yeni bir aylık paket dönemi tanımlar |
 
 İlk paket ödeme onayı sırasında adminin seçtiği başlangıç tarihiyle oluşturulur.
-Paket takvim ayına bağlı değildir; seçilen başlangıç tarihinden itibaren bir
-takvim ayı sürer. Başlangıç günü dahil, bir sonraki ayın aynı günü hariç tutulur.
-Örneğin 10 Temmuz'da başlayan paket 9 Ağustos gün sonuna kadar geçerlidir.
-Hedef ayda aynı gün bulunmuyorsa hariç bitiş tarihi hedef ayın son gününe
-sınırlanır; örneğin 31 Ocak'ta başlayan paketin `end_exclusive` tarihi 28/29
-Şubat olur. Tarihler öğrencinin saat dilimindeki yerel takvim tarihi olarak
-hesaplanır ve dört görüşmenin tamamı bu yarı açık tarih aralığında planlanır.
+Sonraki paket admin tarafından öğrenci sayfasından doğrudan veya kanal yenileme
+ödemesi onaylanarak oluşturulabilir. Paket takvim ayına bağlı değildir; seçilen
+başlangıç tarihinden itibaren 28 gün sürer. Örneğin 10 Temmuz'da başlayan paket
+6 Ağustos gün sonuna kadar geçerlidir ve `end_exclusive` tarihi 7 Ağustos olur.
+Tarihler öğrencinin saat dilimindeki yerel takvim tarihi olarak hesaplanır ve
+dört görüşmenin tamamı bu yarı açık tarih aralığında planlanır.
 Bir paket döneminde en fazla dört birebir görüşme hakkı bulunur; takvimde
 beşinci haftaya denk gelen
 görüşme otomatik olarak pakete eklenmez.
 
 Üyelik yenilemesi mevcut paketin bitiş tarihini değiştirerek yapılmaz. Admin
 öğrenci için yeni bir aylık paket dönemi tanımlar. Yeni dönem kendi başlangıç ve
-bitiş tarihine, dört yeni görüşme hakkına ve varsa kendi ödeme kaydına sahip
+bitiş tarihine, dört yeni görüşme hakkına ve kendi ödeme kaydına sahip
 olur. Böylece önceki paketlerin kullanım ve ödeme geçmişi korunur.
 
-Yeni paket oluşturulurken öğrencinin aktif bir paketi varsa yeni dönem mevcut
-paketin bitişinden sonraki gün başlayacak şekilde sıraya alınır. Aktif paket
-yoksa başlangıç tarihini admin belirler. Aynı öğrenciye ait paket dönemleri
+Admin panelinden doğrudan oluşturulan paketin 4.000 TL ödeme kaydı aynı işlemde
+`APPROVED` olarak oluşturulur ve işlemi yapan admin ile ilişkilendirilir. Kanal
+üzerinden başlatılan yenilemede ise ödeme önce inceleme listesine düşer; paket
+yalnızca admin ödeme onayı verdikten sonra oluşturulur.
+
+Yeni paket oluşturulurken aktif veya planlı dönem varsa varsayılan başlangıç
+sıradaki son dönemin `end_exclusive` tarihidir. Admin farklı bir başlangıç
+seçerse önceki dönemin `end_exclusive` tarihi yeni başlangıca hizalanır. Aktif
+paket yoksa başlangıç tarihini admin belirler. Aynı öğrenciye ait paket dönemleri
 çakışamaz. Gelecekte başlayacak paket `SCHEDULED`, başlamış paket `ACTIVE`, sona
-ermiş paket `EXPIRED` durumunda tutulur.
+ermiş paket `EXPIRED` durumunda tutulur. Mevcut pratik programı yeni döneme
+sessizce kopyalanır; bu teknik kopyalama öğrenciye plan oluşturma veya güncelleme
+mesajı göndermez.
 
 Aktif paket sona erdiğinde sırada başlayacak yeni paket yoksa öğrencinin üyeliği
 `INACTIVE` durumuna alınır. Öğrenci profili, paket geçmişi ve izin verilen geçmiş
@@ -106,11 +113,14 @@ veriler korunur; pratik hatırlatmaları, değerlendirme istekleri ve görüşme
 mesajları durdurulur. Daha sonra yeni bir paket başladığında üyelik tekrar aktif
 hale getirilir ve yeni dönem için zamanlanmış işler oluşturulur.
 
-Paket bitişinden üç gün önce öğrenciye varsayılan kanalından yenileme hatırlatması,
-4.000 TL ücret, IBAN ve yenilemeye özel ödeme referansı gönderilir. Aynı anda
-admin panelinde yenileme bildirimi oluşturulur. Hatırlatma kendi başına yeni
-paket yaratmaz. Öğrencinin ödeme bildirimi admin tarafından onaylandığında yeni
-paket dönemi sıraya alınır.
+Paket bitişinden beş gün önce öğrenciye varsayılan kanalından tek seferlik yenileme
+hatırlatması ve devam tercihi gönderilir. Devam etmek isteyen öğrenciye 4.000 TL
+ücret ile IBAN bilgisi reaktif mesajda iletilir; `ÖDEME YAPTIM` yanıtı yenileme
+ödemesi olarak admin inceleme listesine düşer. Devam etmeyen öğrencinin mevcut
+paketi erken kapatılmaz ve bitiş tarihine kadar sürer. Hatırlatma kendi başına
+yeni paket yaratmaz. Ödeme admin tarafından onaylandığında yeni aylık dönem,
+mevcut dönemin bitişinden başlayacak şekilde dört yeni görüşme hakkıyla sıraya
+alınır.
 
 ## 4. Öğrenci Kayıt Akışı
 
@@ -377,7 +387,7 @@ MVP event kataloğu:
 | Grup | Event key'leri |
 | --- | --- |
 | Kayıt ve izin | `REGISTRATION_STARTED`, `PRIVACY_NOTICE_SENT`, `CHANNEL_OPT_IN_REQUEST`, `REFLECTION_STORAGE_CONSENT_REQUEST`, `REFLECTION_AI_CONSENT_REQUEST`, `AGENT_REPLY_AI_CONSENT_REQUEST`, `NAME_REQUEST`, `REGISTRATION_ALREADY_EXISTS`, `CONSENT_WITHDRAWN` |
-| Ödeme ve paket | `PAYMENT_INSTRUCTIONS`, `PAYMENT_REPORTED`, `PAYMENT_ACTION_REQUIRED`, `PAYMENT_APPROVED`, `PAYMENT_REFUNDED`, `STUDENT_ACTIVATED`, `SUBSCRIPTION_SCHEDULED`, `SUBSCRIPTION_STARTED`, `SUBSCRIPTION_RENEWAL_REMINDER`, `SUBSCRIPTION_EXPIRED`, `SUBSCRIPTION_CANCELLED` |
+| Ödeme ve paket | `PAYMENT_INSTRUCTIONS`, `PAYMENT_REPORTED`, `PAYMENT_ACTION_REQUIRED`, `PAYMENT_APPROVED`, `PAYMENT_REFUNDED`, `STUDENT_ACTIVATED`, `SUBSCRIPTION_SCHEDULED`, `SUBSCRIPTION_STARTED`, `SUBSCRIPTION_RENEWAL_REMINDER`, `SUBSCRIPTION_RENEWAL_PAYMENT_INSTRUCTIONS`, `SUBSCRIPTION_RENEWAL_DECLINED`, `SUBSCRIPTION_EXPIRED`, `SUBSCRIPTION_CANCELLED` |
 | Pratik | `PRACTICE_PLAN_CONFIRMATION_REQUEST`, `PRACTICE_PLAN_CONFIRMED`, `PRACTICE_PLAN_UPDATED`, `PRACTICE_REMINDER`, `PRACTICE_CHECKIN`, `PRACTICE_REFLECTION_REQUEST`, `PRACTICE_COMPLETED_ACK`, `PRACTICE_SKIPPED_ACK`, `PRACTICE_RESPONSE_AMBIGUOUS`, `PRACTICE_CANCELLED`, `PRACTICE_RESTORED`, `PRACTICE_PAUSED`, `PRACTICE_RESUMED` |
 | Görüşme | `MEETING_SERIES_SCHEDULED`, `MEETING_SCHEDULED`, `MEETING_REMINDER_24H`, `MEETING_REMINDER_1H`, `MEETING_RESCHEDULED`, `MEETING_CANCELLED`, `MEETING_COMPLETED`, `MEETING_NO_SHOW`, `MEET_LINK_UNAVAILABLE` |
 | Bilgi ve destek | `STUDENT_CONTEXT_RESPONSE`, `WEEKLY_SUMMARY_SHARED`, `KNOWLEDGE_NOT_FOUND`, `HANDOFF_OPENED`, `HANDOFF_RESOLVED`, `AGENT_UNAVAILABLE`, `UNKNOWN_MESSAGE_FALLBACK`, `UNSUPPORTED_MEDIA` |
@@ -660,7 +670,8 @@ kanal hesabıyla birlikte tekilleştirilir.
 - `students`: öğrenci profili ve yaşam döngüsü
 - `consents`: aydınlatma ve izin kayıtları
 - `payments`: ödeme bildirimi ve admin onayı
-- `subscriptions`: aylık paket dönemi ve yenileme durumu
+- `subscriptions`: aylık paket dönemleri
+- `subscription-renewals`: yenileme tercihi, ödeme bildirimi ve tamamlanma durumu
 - `practice-plans`: program ve pratik saatleri
 - `practice-sessions`: tekil planlanmış meditasyonlar
 - `reflections`: pratik sonuçları ve öğrenci metinleri
@@ -774,7 +785,7 @@ değişiklikleri gerekçe ve admin kimliğiyle audit edilir.
 - Aktif olmayan öğrenciye pratik mesajı gönderilmez.
 - Paket sona erdiğinde gelecekteki pratik ve görüşme görevleri iptal edilir.
 - Yeni paket başladığında yalnızca yeni döneme ait görevler oluşturulur.
-- Paket bitişinden üç gün önce yenileme hatırlatması yalnızca bir kez gönderilir.
+- Paket bitişinden beş gün önce yenileme hatırlatması yalnızca bir kez gönderilir.
 - `PRATİĞİ DURDUR` pratik hatırlatma ve değerlendirme mesajlarını durdurur.
 - `TÜMÜNÜ DURDUR` tüm proaktif otomatik kanal mesajlarını durdurur.
 - `MESAJ İZNİ İPTAL` varsayılan kanal opt-in kaydını geri çeker ve yeni proaktif intent oluşturulmasını engeller.
@@ -840,7 +851,7 @@ olur, intent retry edilmez ve admin uyarılır.
 - Görüşmeden 3 saat önce hazırlanan haftalık özet bildirimi
 - Google Meet bağlantısı oluşturma veya görüşmeye ekleme
 - Geçmiş ve aktif aylık paket dönemleri
-- Üç gün içinde sona erecek ve yenileme bekleyen paketler
+- Beş gün içinde sona erecek ve yenileme bekleyen paketler
 - Kalan görüşme hakkı ve tamamlanan görüşmeler
 - Başlangıç tarihi seçerek yeni bir aylık paket dönemi tanımlama
 - Görüşme öncesi özet
@@ -866,10 +877,10 @@ olur, intent retry edilmez ve admin uyarılır.
 - Agent context read geçmişi: section/range, asOf, row count, latency ve cevap referansı
 - Admin işlem geçmişi
 
-Yeni paket dönemi tanımlama işlemi ödeme kaydından bağımsız yapılabilir ancak
-işlemi yapan admin, başlangıç/bitiş tarihleri, dört görüşme hakkı ve gerekçe
-audit log'a yazılmalıdır. Admin hesabı en az iki aşamalı doğrulama ile
-korunmalıdır.
+Yeni paket dönemi tanımlama işlemi kanal ödeme bildiriminden bağımsız yapılabilir.
+Bu durumda onaylı ödeme kaydı, paket ve dört görüşme hakkı tek transaction içinde
+oluşturulur; işlemi yapan admin ile başlangıç/bitiş tarihleri audit log'a yazılır.
+Admin hesabı en az iki aşamalı doğrulama ile korunmalıdır.
 
 ### Konuşma Ekranı
 

@@ -183,7 +183,10 @@ export class StudentAdminService {
         defaultChannelIdentity: { include: { channelAccount: true } },
         channelIdentities: { include: { channelAccount: true }, orderBy: { createdAt: 'asc' } },
         consents: { orderBy: { occurredAt: 'desc' } },
-        payments: { orderBy: { reportedAt: 'desc' }, include: { subscription: true } },
+        payments: {
+          orderBy: { reportedAt: 'desc' },
+          include: { subscription: true, renewal: true },
+        },
         messagingPreference: true,
         practicePlans: {
           where: { status: { in: [...planStatuses] } },
@@ -307,6 +310,11 @@ export class StudentAdminService {
         reportedAt: payment.reportedAt.toISOString(),
         approvedAt: payment.approvedAt?.toISOString(),
         reviewNote: payment.reviewNote,
+        purpose: payment.renewal
+          ? 'SUBSCRIPTION_RENEWAL'
+          : payment.referenceCode.startsWith('ADMIN-')
+            ? 'ADMIN_PACKAGE'
+            : 'INITIAL_PACKAGE',
         subscriptionId: payment.subscription?.id,
       })),
       practicePlan: student.practicePlans[0]

@@ -594,7 +594,7 @@ practice:{sessionId}:reminder
 practice:{sessionId}:checkin
 meeting:{meetingId}:reminder:24h
 meeting:{meetingId}:reminder:1h
-subscription:{periodId}:renewal:3d
+subscription:{periodId}:renewal:5d
 payment:{paymentId}:approved
 ```
 
@@ -990,7 +990,8 @@ Payment/subscription:
 PAYMENT_INSTRUCTIONS, PAYMENT_REPORTED, PAYMENT_ACTION_REQUIRED,
 PAYMENT_APPROVED, PAYMENT_REFUNDED, STUDENT_ACTIVATED,
 SUBSCRIPTION_SCHEDULED, SUBSCRIPTION_STARTED,
-SUBSCRIPTION_RENEWAL_REMINDER, SUBSCRIPTION_EXPIRED, SUBSCRIPTION_CANCELLED
+SUBSCRIPTION_RENEWAL_REMINDER, SUBSCRIPTION_RENEWAL_PAYMENT_INSTRUCTIONS,
+SUBSCRIPTION_RENEWAL_DECLINED, SUBSCRIPTION_EXPIRED, SUBSCRIPTION_CANCELLED
 
 Practice:
 PRACTICE_PLAN_CONFIRMATION_REQUEST, PRACTICE_PLAN_CONFIRMED,
@@ -1814,7 +1815,11 @@ unit, PostgreSQL entegrasyon ve production build kontrolleri geçti.
 - IBAN/reference
 - Dekont ve payment review/action-required/approve
 - Atomik ödeme onayıyla paket ve dört görüşme credit'i oluşturma
-- Yenileme, ileri tarihli aktivasyon ve paket bitişi
+- Paket bitişinden beş gün önce idempotent yenileme tercihi; devam yanıtında
+  ödeme yönergesi, ödeme bildirimi ve admin onayı
+- Onaylanan yenilemenin mevcut dönemi kesmeden ardışık bir aylık dönem ve dört
+  yeni görüşme kredisi oluşturması
+- İleri tarihli aktivasyon ve paket bitişi
 
 **Çıkış ölçütü:** Her iki kanalda uçtan uca kayıt yalnızca atomik admin ödeme
 onayıyla aktive olur; AI kapalıyken de temel akış tamamlanır.

@@ -46,6 +46,21 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
       'Aramıza hoş geldin{{studentDisplayName}}. Üyeliğin aktif ve {{subscriptionEndsAtText}} tarihine kadar devam ediyor. Şimdi sana uygun pratik saatlerini birlikte belirleyeceğiz.',
   },
   {
+    eventKey: 'SUBSCRIPTION_RENEWAL_REMINDER',
+    content:
+      'Sevgili {{studentDisplayName}}, yaklaşık bir aydır Dhamma pratiğine hayatında yer açıyor ve bu yolu emekle sürdürüyorsun. Bu süreçte gösterdiğin niyet çok kıymetli.\n\nMeditasyon paketinin bitmesine 5 gün kaldı. Paketin {{subscriptionEndsAtText}} tarihinde sona erecek. Pratik takibine, hatırlatmalara ve Necip’le haftalık birebir görüşmelerine devam etmek istersen aşağıdaki seçeneklerden sana uygun olanı seçebilirsin.',
+  },
+  {
+    eventKey: 'SUBSCRIPTION_RENEWAL_PAYMENT_INSTRUCTIONS',
+    content:
+      'Harika {{studentDisplayName}}, birlikte devam etmek istemene sevindim. Yeni bir aylık paketin ücreti {{amountText}}; paket haftalık birebir görüşmeler ve düzenli pratik takibini içerir.\n\nÖdemeyi {{iban}} IBAN numarasına, alıcı {{accountHolder}} olacak şekilde yapabilirsin. Tamamladığında ÖDEME YAPTIM seçeneğini kullanabilir veya dekontunu gönderebilirsin.',
+  },
+  {
+    eventKey: 'SUBSCRIPTION_RENEWAL_DECLINED',
+    content:
+      'Sevgili {{studentDisplayName}}, kararını benimle paylaştığın için teşekkür ederim. Mevcut paketin {{subscriptionEndsAtText}} tarihine kadar devam edecek.\n\nSeninle çalışmak ve Dhamma pratiğini hayatına nasıl taşıdığını gözlemlemek benim için çok kıymetliydi. Yolunda yürümeye devam et. İleride yeniden desteğe ihtiyaç duyarsan çekinmeden benimle iletişime geçebilirsin.',
+  },
+  {
     eventKey: 'REGISTRATION_ALREADY_EXISTS',
     content:
       'Bu kanalda daha önce bir kayıt başlatmışız. Hiç sorun değil; kaldığımız adımdan birlikte devam edebiliriz.',

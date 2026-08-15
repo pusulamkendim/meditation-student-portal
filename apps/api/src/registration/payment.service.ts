@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import {
   CLOCK_TOKEN,
   getDefaultRegistrationMessage,
@@ -15,12 +15,16 @@ import {
   StandardMessageVersionStatus,
 } from '@meditation/database';
 import { PrismaService } from '../database/prisma.service.js';
+import {
+  addSubscriptionDays,
+  alignRenewalBoundary,
+  carryPracticePlanToRenewal,
+} from './subscription-renewal-period.js';
 
-function addMonth(date: Date): Date {
-  const result = new Date(date);
-  result.setUTCMonth(result.getUTCMonth() + 1);
-  return result;
+function utcDate(date: Date): Date {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
 }
+
 @Injectable()
 export class PaymentService {
   constructor(
@@ -35,11 +39,15 @@ export class PaymentService {
   }
   async approve(paymentId: string, adminId: string, requestedStart?: Date) {
     const now = this.clock.now();
-    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const start = requestedStart && requestedStart > today ? requestedStart : today;
-    const end = addMonth(start);
+    const today = utcDate(now);
     return this.prisma.$transaction(async (tx) => {
-      const payment = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
+      const payment = await tx.payment.findUniqueOrThrow({
+        where: { id: paymentId },
+        include: {
+          renewal: { include: { sourceSubscriptionPeriod: true } },
+        },
+      });
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${payment.studentId}))`;
       if (
         !new Set<PaymentStatus>([
           PaymentStatus.REPORTED,
@@ -53,6 +61,33 @@ export class PaymentService {
         data: { status: PaymentStatus.UNDER_REVIEW, version: { increment: 1 } },
       });
       if (claimed.count !== 1) throw new Error('Payment approval conflict.');
+      const requestedServiceDate = requestedStart ? utcDate(requestedStart) : undefined;
+      const start = payment.renewal
+        ? (requestedServiceDate ?? payment.renewal.sourceSubscriptionPeriod.endExclusive)
+        : (requestedServiceDate ?? today);
+      if (start < today) throw new BadRequestException('Paket başlangıcı bugünden önce olamaz.');
+      const end = addSubscriptionDays(start);
+      let sourcePlan;
+      if (payment.renewal) {
+        sourcePlan = await alignRenewalBoundary(tx, {
+          source: payment.renewal.sourceSubscriptionPeriod,
+          start,
+          today,
+          adminId,
+        });
+        const overlap = await tx.subscriptionPeriod.findFirst({
+          where: {
+            id: { not: payment.renewal.sourceSubscriptionPeriodId },
+            studentId: payment.studentId,
+            status: { in: [SubscriptionStatus.ACTIVE, SubscriptionStatus.SCHEDULED] },
+            startDate: { lt: end },
+            endExclusive: { gt: start },
+          },
+          select: { id: true },
+        });
+        if (overlap)
+          throw new ConflictException('Yeni dönem başka bir üyelik dönemiyle çakışıyor.');
+      }
       const subscription = await tx.subscriptionPeriod.create({
         data: {
           studentId: payment.studentId,
@@ -64,6 +99,9 @@ export class PaymentService {
           currency: payment.currency,
         },
       });
+      if (payment.renewal) {
+        await carryPracticePlanToRenewal(tx, { sourcePlan, subscription, today });
+      }
       await tx.meetingCreditEvent.create({
         data: {
           subscriptionPeriodId: subscription.id,
@@ -81,10 +119,33 @@ export class PaymentService {
           version: { increment: 1 },
         },
       });
+      if (payment.renewal) {
+        const completed = await tx.subscriptionRenewal.updateMany({
+          where: {
+            id: payment.renewal.id,
+            paymentId: payment.id,
+            version: payment.renewal.version,
+          },
+          data: { status: 'COMPLETED', version: { increment: 1 } },
+        });
+        if (completed.count !== 1) throw new Error('Subscription renewal completion conflict.');
+      }
+      const coveringSubscription = await tx.subscriptionPeriod.findFirst({
+        where: {
+          studentId: payment.studentId,
+          status: SubscriptionStatus.ACTIVE,
+          startDate: { lte: today },
+          endExclusive: { gt: today },
+        },
+        select: { id: true },
+      });
       const activatedStudent = await tx.student.update({
         where: { id: payment.studentId },
         data: {
-          status: start > today ? StudentStatus.INACTIVE : StudentStatus.ACTIVE,
+          status:
+            start.getTime() <= today.getTime() || coveringSubscription
+              ? StudentStatus.ACTIVE
+              : StudentStatus.INACTIVE,
           registrationStep: RegistrationStep.COMPLETE,
           version: { increment: 1 },
         },
@@ -98,7 +159,7 @@ export class PaymentService {
         const variables = {
           amountText: '4.000 TL',
           subscriptionStartsAtText: this.formatDate(start),
-          subscriptionEndsAtText: this.formatDate(end),
+          subscriptionEndsAtText: this.formatInclusiveEndDate(end),
         };
         const versions = await tx.standardMessageVersion.findMany({
           where: {
@@ -178,5 +239,11 @@ export class PaymentService {
       dateStyle: 'medium',
       timeZone: 'Europe/Istanbul',
     }).format(value);
+  }
+
+  private formatInclusiveEndDate(endExclusive: Date): string {
+    const inclusiveEnd = new Date(endExclusive);
+    inclusiveEnd.setUTCDate(inclusiveEnd.getUTCDate() - 1);
+    return this.formatDate(inclusiveEnd);
   }
 }

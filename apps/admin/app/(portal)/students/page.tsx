@@ -59,6 +59,13 @@ function formatDate(value?: string) {
   return value ? dateFormatter.format(new Date(value)) : '—';
 }
 
+function formatInclusiveEndDate(value?: string) {
+  if (!value) return '—';
+  const date = new Date(value);
+  date.setUTCDate(date.getUTCDate() - 1);
+  return dateFormatter.format(date);
+}
+
 function formatChannel(channel?: Student['channel']) {
   if (!channel) return 'Kanal bağlanmadı';
   return `${channel.type === 'WHATSAPP' ? 'WhatsApp' : 'Telegram'}${channel.identifier ? ` · ${channel.identifier}` : ''}`;
@@ -254,7 +261,9 @@ export default function StudentsPage() {
               <span className="student-directory-stat is-membership">
                 <small>Üyelik</small>
                 <strong>
-                  {student.subscription ? formatDate(student.subscription.endExclusive) : '—'}
+                  {student.subscription
+                    ? formatInclusiveEndDate(student.subscription.endExclusive)
+                    : '—'}
                 </strong>
                 <em>
                   {student.subscription

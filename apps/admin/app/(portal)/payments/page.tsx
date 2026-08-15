@@ -15,6 +15,8 @@ type Payment = {
   currency: string;
   reportedAt: string;
   reviewNote?: string | null;
+  purpose: 'INITIAL_PACKAGE' | 'SUBSCRIPTION_RENEWAL' | 'ADMIN_PACKAGE';
+  renewalSourceEndDate?: string;
 };
 const tones: Record<string, 'neutral' | 'success' | 'warning' | 'danger' | 'info'> = {
   REPORTED: 'warning',
@@ -29,6 +31,11 @@ const labels: Record<string, string> = {
   ACTION_REQUIRED: 'Bilgi bekliyor',
   APPROVED: 'Onaylandı',
   REJECTED: 'Reddedildi',
+};
+const purposeLabels: Record<Payment['purpose'], string> = {
+  INITIAL_PACKAGE: 'İlk paket',
+  SUBSCRIPTION_RENEWAL: 'Paket yenileme',
+  ADMIN_PACKAGE: 'Admin paket tanımı',
 };
 
 export default function PaymentsPage() {
@@ -181,7 +188,10 @@ export default function PaymentsPage() {
                   setNotice(undefined);
                 }}
               >
-                <strong>{item.referenceCode}</strong>
+                <span>
+                  <strong>{item.referenceCode}</strong>
+                  <small>{purposeLabels[item.purpose]}</small>
+                </span>
                 <span>{item.studentName ?? `İsimsiz öğrenci · ${item.studentId.slice(0, 8)}`}</span>
                 <span>{new Date(item.reportedAt).toLocaleDateString('tr-TR')}</span>
                 <span>
@@ -232,6 +242,10 @@ export default function PaymentsPage() {
                   </dd>
                 </div>
                 <div>
+                  <dt>İşlem türü</dt>
+                  <dd>{purposeLabels[selected.purpose]}</dd>
+                </div>
+                <div>
                   <dt>Bildirim zamanı</dt>
                   <dd>{new Date(selected.reportedAt).toLocaleString('tr-TR')}</dd>
                 </div>
@@ -261,7 +275,11 @@ export default function PaymentsPage() {
                       name="startDate"
                       label="Paket başlangıcı"
                       type="date"
-                      hint="Boş bırakılırsa bugün başlar."
+                      hint={
+                        selected.purpose === 'SUBSCRIPTION_RENEWAL'
+                          ? 'Boş bırakılırsa mevcut paket bittiğinde başlar.'
+                          : 'Boş bırakılırsa bugün başlar.'
+                      }
                     />
                     <Button loading={busy} type="submit">
                       <Check />

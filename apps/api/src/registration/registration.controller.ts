@@ -22,6 +22,7 @@ import { PrismaService } from '../database/prisma.service.js';
 import { InternalChannelGuard } from './internal-channel.guard.js';
 import { StudentAdminService } from './student-admin.service.js';
 import { StudentNoteService } from './student-note.service.js';
+import { SubscriptionPackageService } from './subscription-package.service.js';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 const advance = z.object({
   command: z.enum([
@@ -47,6 +48,8 @@ export class RegistrationController {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(StudentAdminService) private readonly studentAdmin: StudentAdminService,
     @Inject(StudentNoteService) private readonly studentNotes: StudentNoteService,
+    @Inject(SubscriptionPackageService)
+    private readonly subscriptionPackages: SubscriptionPackageService,
     @Inject(APPLICATION_CONFIG) config: ApplicationConfig,
   ) {
     if (!config.DATA_ENCRYPTION_KEYS_JSON || !config.ACTIVE_DATA_KEY_ID)
@@ -70,13 +73,18 @@ export class RegistrationController {
         referenceCode: true,
         reportedAt: true,
         reviewNote: true,
+        renewal: {
+          select: {
+            sourceSubscriptionPeriod: { select: { id: true, endExclusive: true } },
+          },
+        },
         student: {
           select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
         },
       },
     });
     return {
-      items: payments.map(({ student, ...payment }) => {
+      items: payments.map(({ student, renewal, ...payment }) => {
         let studentName: string | undefined;
         if (student.fullNameEncrypted && student.fullNameKeyId) {
           try {
@@ -93,6 +101,12 @@ export class RegistrationController {
         }
         return {
           ...payment,
+          purpose: renewal
+            ? 'SUBSCRIPTION_RENEWAL'
+            : payment.referenceCode.startsWith('ADMIN-')
+              ? 'ADMIN_PACKAGE'
+              : 'INITIAL_PACKAGE',
+          renewalSourceEndDate: renewal?.sourceSubscriptionPeriod.endExclusive.toISOString(),
           studentName,
           amountMinor: payment.amountMinor.toString(),
           reportedAt: payment.reportedAt.toISOString(),
@@ -110,6 +124,31 @@ export class RegistrationController {
     @Req() request: FastifyRequest,
   ) {
     return this.studentAdmin.detail(id, request.admin?.id);
+  }
+  @Post('admin/students/:studentId/subscriptions')
+  @UseGuards(AdminSessionGuard, AdminCsrfGuard)
+  async createSubscriptionPackage(
+    @Param('studentId') studentId: string,
+    @Body() body: unknown,
+    @Req() request: FastifyRequest,
+  ) {
+    const value = z.object({ startDate: z.coerce.date().optional() }).parse(body);
+    const result = await this.subscriptionPackages.createForStudent(
+      studentId,
+      request.admin!.id,
+      value.startDate,
+    );
+    return {
+      id: result.subscription.id,
+      status: result.subscription.status,
+      startDate: result.subscription.startDate.toISOString(),
+      endExclusive: result.subscription.endExclusive.toISOString(),
+      durationDays: 28,
+      meetingCredits: 4,
+      paymentId: result.payment.id,
+      paymentStatus: result.payment.status,
+      practicePlanCopied: Boolean(result.copiedPracticePlanId),
+    };
   }
   @Get('admin/students/:studentId/notes')
   @UseGuards(AdminSessionGuard)

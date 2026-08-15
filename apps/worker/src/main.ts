@@ -9,7 +9,10 @@ import pino from 'pino';
 
 import { registerSmokeQueue } from './queue-runtime.js';
 import { createChannelAdapters, MessageDispatcher } from './message-dispatcher.js';
-import { reconcileSubscriptions } from './subscription-lifecycle.js';
+import {
+  processSubscriptionRenewalReminders,
+  reconcileSubscriptions,
+} from './subscription-lifecycle.js';
 import { processPracticeLifecycle } from './practice-lifecycle.js';
 import { processPracticeResponse } from './practice-response.js';
 import { expireStalePracticeResponses } from './practice-response-timeout.js';
@@ -21,6 +24,7 @@ import { WeeklySummaryAiProcessor } from './weekly-summary-ai.js';
 import { StudentPulseAiProcessor } from './student-pulse-ai.js';
 import { StudentReportAiProcessor } from './student-report-ai.js';
 import { RegistrationInboundProcessor } from './registration-inbound.js';
+import { SubscriptionRenewalInboundProcessor } from './subscription-renewal-inbound.js';
 import { InboundIntentRouter } from './inbound-intent-router.js';
 import { AdminPanelNotificationProcessor } from './admin-panel-notification.js';
 import { MeditationAudioRenderProcessor } from './meditation-audio-render.js';
@@ -44,6 +48,11 @@ async function bootstrap(): Promise<void> {
   const studentPulseAi = new StudentPulseAiProcessor(prisma, config, systemClock);
   const studentReportAi = new StudentReportAiProcessor(prisma, config, systemClock);
   const registrationInbound = new RegistrationInboundProcessor(prisma, config, systemClock);
+  const subscriptionRenewalInbound = new SubscriptionRenewalInboundProcessor(
+    prisma,
+    config,
+    systemClock,
+  );
   const inboundIntentRouter = new InboundIntentRouter(llmAgent, prisma, systemClock, config);
   const adminPanelNotifications = new AdminPanelNotificationProcessor(prisma);
   const meditationAudioRender = new MeditationAudioRenderProcessor(prisma, config);
@@ -231,6 +240,9 @@ async function bootstrap(): Promise<void> {
   );
   await boss.createQueue('subscription.lifecycle');
   await boss.work('subscription.lifecycle', async () => {
+    const renewalReminders = await processSubscriptionRenewalReminders(prisma, systemClock, config);
+    if (renewalReminders > 0)
+      logger.info({ renewalReminders }, 'Subscription renewal reminders queued');
     await reconcileSubscriptions(prisma, systemClock);
   });
   await boss.schedule('subscription.lifecycle', '0 * * * *', {});
@@ -274,8 +286,10 @@ async function bootstrap(): Promise<void> {
     async (jobs) => {
       for (const job of jobs) {
         if (!job.data.inboxEventId) continue;
-        const result = await registrationInbound.process(job.data.inboxEventId);
-        if (result === 'unhandled') await inboundIntentRouter.process(job.data.inboxEventId);
+        const registrationResult = await registrationInbound.process(job.data.inboxEventId);
+        if (registrationResult === 'processed') continue;
+        const renewalResult = await subscriptionRenewalInbound.process(job.data.inboxEventId);
+        if (renewalResult === 'unhandled') await inboundIntentRouter.process(job.data.inboxEventId);
       }
       await relayOutbox();
     },

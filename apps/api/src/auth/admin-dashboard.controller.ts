@@ -41,6 +41,24 @@ function isTestProfile(name: string | undefined) {
   return name?.toLocaleLowerCase('tr-TR').includes('test') ?? false;
 }
 
+export function calculateNonCompletionStreak(
+  sessions: Array<{ startAt: Date; status: string }>,
+  now: Date,
+): number {
+  const concluded = sessions
+    .filter(
+      (session) =>
+        session.startAt <= now && ['COMPLETED', 'SKIPPED', 'MISSED'].includes(session.status),
+    )
+    .sort((left, right) => left.startAt.getTime() - right.startAt.getTime());
+  let streak = 0;
+  for (let index = concluded.length - 1; index >= 0; index -= 1) {
+    if (concluded[index]?.status === 'COMPLETED') break;
+    streak += 1;
+  }
+  return streak;
+}
+
 @Controller('v1/admin/dashboard')
 @UseGuards(AdminSessionGuard)
 export class AdminDashboardController {
@@ -263,14 +281,7 @@ export class AdminDashboardController {
       const previousCompletedMinutesForStudent = previous
         .filter((session) => session.status === 'COMPLETED')
         .reduce((total, session) => total + session.durationMinutes, 0);
-      const concludedRecent = student.practiceSessions.filter(
-        (session) => session.serviceDate < today && session.status !== 'AWAITING_RESPONSE',
-      );
-      let nonCompletionStreak = 0;
-      for (let index = concludedRecent.length - 1; index >= 0; index -= 1) {
-        if (concludedRecent[index]?.status === 'COMPLETED') break;
-        nonCompletionStreak += 1;
-      }
+      const nonCompletionStreak = calculateNonCompletionStreak(student.practiceSessions, now);
 
       completed += currentCompleted;
       skipped += currentSkipped;

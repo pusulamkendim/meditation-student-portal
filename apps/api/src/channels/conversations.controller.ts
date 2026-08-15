@@ -669,45 +669,57 @@ export class OperationsController {
     const deliveryReferences = deliveries.flatMap((item) =>
       item.providerMessageId ? [item.providerMessageId] : [],
     );
-    const [webhookMessages, deliveryHandoffs, deliveryMeetings] = await Promise.all([
-      webhookExternalIds.length
-        ? this.prisma.message.findMany({
-            where: { externalMessageId: { in: webhookExternalIds } },
-            select: {
-              externalMessageId: true,
-              student: {
-                select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+    const [webhookMessages, deliveryHandoffs, deliveryMeetings, deliveryRenewals] =
+      await Promise.all([
+        webhookExternalIds.length
+          ? this.prisma.message.findMany({
+              where: { externalMessageId: { in: webhookExternalIds } },
+              select: {
+                externalMessageId: true,
+                student: {
+                  select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+                },
               },
-            },
-          })
-        : [],
-      deliveryReferences.length
-        ? this.prisma.handoff.findMany({
-            where: { id: { in: deliveryReferences } },
-            select: {
-              id: true,
-              student: {
-                select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+            })
+          : [],
+        deliveryReferences.length
+          ? this.prisma.handoff.findMany({
+              where: { id: { in: deliveryReferences } },
+              select: {
+                id: true,
+                student: {
+                  select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+                },
               },
-            },
-          })
-        : [],
-      deliveryReferences.length
-        ? this.prisma.weeklyMeeting.findMany({
-            where: { id: { in: deliveryReferences } },
-            select: {
-              id: true,
-              meetingSeries: {
-                select: {
-                  student: {
-                    select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+            })
+          : [],
+        deliveryReferences.length
+          ? this.prisma.weeklyMeeting.findMany({
+              where: { id: { in: deliveryReferences } },
+              select: {
+                id: true,
+                meetingSeries: {
+                  select: {
+                    student: {
+                      select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+                    },
                   },
                 },
               },
-            },
-          })
-        : [],
-    ]);
+            })
+          : [],
+        deliveryReferences.length
+          ? this.prisma.subscriptionRenewal.findMany({
+              where: { id: { in: deliveryReferences } },
+              select: {
+                id: true,
+                student: {
+                  select: { id: true, fullNameEncrypted: true, fullNameKeyId: true },
+                },
+              },
+            })
+          : [],
+      ]);
     const webhookStudents = new Map(
       webhookMessages.flatMap((message) =>
         message.externalMessageId
@@ -721,6 +733,9 @@ export class OperationsController {
       ),
       ...deliveryMeetings.map(
         (meeting) => [meeting.id, this.presentStudent(meeting.meetingSeries.student)] as const,
+      ),
+      ...deliveryRenewals.map(
+        (renewal) => [renewal.id, this.presentStudent(renewal.student)] as const,
       ),
     ]);
     return {

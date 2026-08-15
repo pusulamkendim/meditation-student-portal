@@ -19,6 +19,8 @@ export const systemEventKeys = [
   'SUBSCRIPTION_SCHEDULED',
   'SUBSCRIPTION_STARTED',
   'SUBSCRIPTION_RENEWAL_REMINDER',
+  'SUBSCRIPTION_RENEWAL_PAYMENT_INSTRUCTIONS',
+  'SUBSCRIPTION_RENEWAL_DECLINED',
   'SUBSCRIPTION_EXPIRED',
   'SUBSCRIPTION_CANCELLED',
   'PRACTICE_PLAN_CONFIRMATION_REQUEST',
@@ -110,6 +112,7 @@ const financialKeys = new Set<SystemEventKey>([
   'PAYMENT_ACTION_REQUIRED',
   'PAYMENT_APPROVED',
   'PAYMENT_REFUNDED',
+  'SUBSCRIPTION_RENEWAL_PAYMENT_INSTRUCTIONS',
   'ADMIN_PAYMENT_REVIEW_REQUIRED',
 ]);
 
@@ -157,7 +160,24 @@ const variableSchemas = {
   STUDENT_ACTIVATED: personalizedTextVariables('subscriptionEndsAtText'),
   SUBSCRIPTION_SCHEDULED: textVariables('subscriptionStartsAtText', 'subscriptionEndsAtText'),
   SUBSCRIPTION_STARTED: textVariables('subscriptionEndsAtText'),
-  SUBSCRIPTION_RENEWAL_REMINDER: personalizedTextVariables('subscriptionEndsAtText', 'amountText'),
+  SUBSCRIPTION_RENEWAL_REMINDER: objectSchema(
+    {
+      subscriptionEndsAtText: 'string',
+      amountText: 'string',
+      studentDisplayName: 'string',
+    },
+    ['subscriptionEndsAtText', 'studentDisplayName'],
+  ),
+  SUBSCRIPTION_RENEWAL_PAYMENT_INSTRUCTIONS: objectSchema(
+    {
+      amountText: 'string',
+      iban: 'string',
+      accountHolder: 'string',
+      studentDisplayName: 'string',
+    },
+    ['amountText', 'iban', 'accountHolder', 'studentDisplayName'],
+  ),
+  SUBSCRIPTION_RENEWAL_DECLINED: personalizedTextVariables('subscriptionEndsAtText'),
   SUBSCRIPTION_EXPIRED: textVariables('expiredAtText'),
   SUBSCRIPTION_CANCELLED: textVariables('cancelledAtText'),
   PRACTICE_PLAN_CONFIRMATION_REQUEST: textVariables(
