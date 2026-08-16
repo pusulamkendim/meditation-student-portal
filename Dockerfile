@@ -24,11 +24,12 @@ ENV CI=true
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends curl openssl \
   && rm -rf /var/lib/apt/lists/*
-WORKDIR /app
+WORKDIR /app/apps/api
 COPY --from=api-build /out/api ./
+COPY --from=api-build /app/packages/prompts /app/packages/prompts
 ENV NODE_ENV=production
 EXPOSE 3000
-CMD ["sh", "-c", "cd node_modules/@meditation/database && ./node_modules/.bin/prisma migrate deploy && cd /app && node dist/commands/sync-prompts.js && node dist/main.js"]
+CMD ["sh", "-c", "cd node_modules/@meditation/database && ./node_modules/.bin/prisma migrate deploy && cd /app/apps/api && node dist/commands/sync-prompts.js && node dist/main.js"]
 
 FROM base AS admin-build
 ARG NEXT_PUBLIC_API_URL=https://meditation-api.pusulamkendim.com
