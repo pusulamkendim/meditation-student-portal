@@ -28,7 +28,8 @@
     "secrets:generate": "node scripts/generate-dev-secrets.mjs",
     "setup:local": "node scripts/setup-local-env.mjs",
     "seed:demo": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && tsx scripts/seed-demo-data.mts",
-    "import:reading": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && tsx --tsconfig apps/api/tsconfig.json scripts/import-reading.mts"
+    "import:reading": "pnpm --filter @meditation/core build && pnpm --filter @meditation/database build && tsx --tsconfig apps/api/tsconfig.json scripts/import-reading.mts",
+    "deploy:coolify": "node scripts/deploy-coolify.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

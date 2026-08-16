@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1.7
+
 FROM node:22.12.0-bookworm-slim AS base
 
 ENV CI=true
@@ -7,15 +9,30 @@ RUN apt-get update \
 RUN npm install --global pnpm@10.30.3
 
 WORKDIR /app
+
+# Keep dependency installation reusable when only application source changes.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/admin/package.json apps/admin/package.json
+COPY apps/api/package.json apps/api/package.json
+COPY apps/worker/package.json apps/worker/package.json
+COPY packages/core/package.json packages/core/package.json
+COPY packages/database/package.json packages/database/package.json
+COPY packages/design-tokens/package.json packages/design-tokens/package.json
+COPY packages/testing/package.json packages/testing/package.json
+COPY packages/ui/package.json packages/ui/package.json
+RUN pnpm config set store-dir /pnpm/store
+RUN --mount=type=cache,id=meditation-pnpm-store,target=/pnpm/store,sharing=locked \
+  pnpm install --frozen-lockfile
+
 COPY . .
-RUN pnpm install --frozen-lockfile
 RUN pnpm db:generate
 
 FROM base AS api-build
 RUN pnpm --filter @meditation/core build \
   && pnpm --filter @meditation/database build \
   && pnpm --filter @meditation/api build
-RUN pnpm --filter @meditation/api deploy --prod --legacy --prefer-offline /out/api \
+RUN --mount=type=cache,id=meditation-pnpm-store,target=/pnpm/store,sharing=locked \
+  pnpm --filter @meditation/api deploy --prod --legacy --prefer-offline /out/api \
   && cd /out/api/node_modules/@meditation/database \
   && ./node_modules/.bin/prisma generate
 
@@ -60,7 +77,8 @@ RUN apt-get update \
 RUN pnpm --filter @meditation/core build \
   && pnpm --filter @meditation/database build \
   && pnpm --filter @meditation/worker build
-RUN pnpm --filter @meditation/worker deploy --prod --legacy --prefer-offline /out/worker \
+RUN --mount=type=cache,id=meditation-pnpm-store,target=/pnpm/store,sharing=locked \
+  pnpm --filter @meditation/worker deploy --prod --legacy --prefer-offline /out/worker \
   && cd /out/worker/node_modules/@meditation/database \
   && ./node_modules/.bin/prisma generate
 

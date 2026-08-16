@@ -1703,6 +1703,14 @@ Coolify'da aynı Git revision'dan üç uygulama/süreç çalışır:
 - `meditation-worker`: public route yok
 - `meditation-admin`: admin için ayrı alan adı, kesin isim deploy öncesi seçilecek
 
+Rutin deploylarda GitHub otomatik deploy kapalıdır. `git push` sonrasında yalnızca
+etkilenen target `pnpm deploy:coolify <target...>` ile seçilir; birden fazla target
+API, worker, admin sırasıyla ve önceki deployment tamamlandıktan sonra başlatılır.
+Coolify `force` parametresi normal deployda gönderilmez. Böylece aynı commit için
+mükerrer build oluşmaz ve BuildKit katman cache'i sonraki target tarafından tekrar
+kullanılabilir. Sunucudaki rutin temizlik son yedi günlük build cache'ini korur;
+`builder prune -a` yalnızca disk kritik seviyedeyken uygulanır.
+
 Ek kaynaklar:
 
 - Projeye özel PostgreSQL ve persistent disk

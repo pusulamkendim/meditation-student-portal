@@ -5,7 +5,10 @@
 .env.*
 !.env.example
 **/.next
+**/.next-dev
 **/dist
 **/node_modules
 coverage
+test-results
+.DS_Store
 *.tsbuildinfo

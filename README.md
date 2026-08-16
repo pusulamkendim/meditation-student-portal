@@ -230,6 +230,27 @@ senkronizasyonunu çalıştırır; worker imajı meditasyon sesleri için ffmpeg
 Admin imajı oluşturulurken public API adresi `NEXT_PUBLIC_API_URL` build argümanı
 olarak verilmelidir.
 
+Rutin production deployları GitHub push webhook'undan otomatik başlamaz. Aynı
+commit'in bir kez webhook, bir kez API ile build edilmesini önlemek için deploy
+hedefi açıkça seçilir ve cache korunarak sıralı çalıştırılır:
+
+```bash
+pnpm deploy:coolify api
+pnpm deploy:coolify api worker
+pnpm deploy:coolify all
+```
+
+Hedef seçimi:
+
+- Yalnızca admin/UI değişikliği: `admin`
+- Yalnızca API değişikliği: `api`
+- Yalnızca queue/worker değişikliği: `worker`
+- `packages/core` veya `packages/database`: `api worker`
+- Lockfile, root manifest veya `Dockerfile`: `all`
+
+Komut varsayılan olarak Coolify `force` parametresini hiç göndermez. `--force`
+yalnızca bilinçli bir cold build gerektiğinde kullanılmalıdır.
+
 `v*` etiketi [release workflow'unu](.github/workflows/release.yml) başlatır. Akış
 kalite ve build kontrollerinden sonra önce `staging`, onay sonrasında `production`
 Coolify webhook'unu çağırır. Her GitHub Environment aşağıdaki secret'lara sahip
