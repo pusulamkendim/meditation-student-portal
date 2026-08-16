@@ -42,6 +42,9 @@ ARG NEXT_PUBLIC_API_URL=https://meditation-api.pusulamkendim.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
+RUN apt-get update \
+  && apt-get install --yes --no-install-recommends curl \
+  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=admin-build --chown=node:node /app/apps/admin/.next/standalone ./
 COPY --from=admin-build --chown=node:node /app/apps/admin/.next/static ./apps/admin/.next/static
