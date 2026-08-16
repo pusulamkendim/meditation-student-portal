@@ -15,7 +15,7 @@ FROM base AS api-build
 RUN pnpm --filter @meditation/core build \
   && pnpm --filter @meditation/database build \
   && pnpm --filter @meditation/api build
-RUN pnpm --filter @meditation/api deploy --prod --legacy --offline /out/api \
+RUN pnpm --filter @meditation/api deploy --prod --legacy --prefer-offline /out/api \
   && cd /out/api/node_modules/@meditation/database \
   && ./node_modules/.bin/prisma generate
 
@@ -56,7 +56,7 @@ RUN apt-get update \
 RUN pnpm --filter @meditation/core build \
   && pnpm --filter @meditation/database build \
   && pnpm --filter @meditation/worker build
-RUN pnpm --filter @meditation/worker deploy --prod --legacy --offline /out/worker \
+RUN pnpm --filter @meditation/worker deploy --prod --legacy --prefer-offline /out/worker \
   && cd /out/worker/node_modules/@meditation/database \
   && ./node_modules/.bin/prisma generate
 
