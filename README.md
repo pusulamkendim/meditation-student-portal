@@ -232,7 +232,8 @@ olarak verilmelidir.
 
 Rutin production deployları GitHub push webhook'undan otomatik başlamaz. Aynı
 commit'in bir kez webhook, bir kez API ile build edilmesini önlemek için deploy
-hedefi açıkça seçilir ve cache korunarak sıralı çalıştırılır:
+hedefi açıkça seçilir ve cache korunarak sıralı çalıştırılır. Her Coolify uygulaması
+kendi target cache'ini sonraki deploymentında yeniden kullanır:
 
 ```bash
 pnpm deploy:coolify api

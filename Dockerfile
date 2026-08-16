@@ -51,7 +51,9 @@ CMD ["sh", "-c", "cd node_modules/@meditation/database && ./node_modules/.bin/pr
 FROM base AS admin-build
 ARG NEXT_PUBLIC_API_URL=https://meditation-api.pusulamkendim.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
-RUN pnpm --filter @meditation/ui build \
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN --mount=type=cache,id=meditation-next-cache,target=/app/apps/admin/.next/cache,sharing=locked \
+  pnpm --filter @meditation/ui build \
   && pnpm --filter @meditation/admin build
 
 FROM node:22.12.0-bookworm-slim AS admin
@@ -59,6 +61,7 @@ ARG NEXT_PUBLIC_API_URL=https://meditation-api.pusulamkendim.com
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
+ENV NEXT_TELEMETRY_DISABLED=1
 RUN apt-get update \
   && apt-get install --yes --no-install-recommends curl \
   && rm -rf /var/lib/apt/lists/*

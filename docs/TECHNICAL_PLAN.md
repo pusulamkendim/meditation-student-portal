@@ -1707,9 +1707,10 @@ Rutin deploylarda GitHub otomatik deploy kapalıdır. `git push` sonrasında yal
 etkilenen target `pnpm deploy:coolify <target...>` ile seçilir; birden fazla target
 API, worker, admin sırasıyla ve önceki deployment tamamlandıktan sonra başlatılır.
 Coolify `force` parametresi normal deployda gönderilmez. Böylece aynı commit için
-mükerrer build oluşmaz ve BuildKit katman cache'i sonraki target tarafından tekrar
-kullanılabilir. Sunucudaki rutin temizlik son yedi günlük build cache'ini korur;
-`builder prune -a` yalnızca disk kritik seviyedeyken uygulanır.
+mükerrer build oluşmaz ve her target kendi BuildKit katman cache'ini sonraki
+deploymentında tekrar kullanır. Sunucudaki rutin temizlik BuildKit cache'ini 6 GB
+ile sınırlar; sınırsız `builder prune -a` yalnızca disk kritik seviyedeyken
+uygulanır.
 
 Ek kaynaklar:
 
