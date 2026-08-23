@@ -33,6 +33,7 @@ import {
   RefreshCw,
   Send,
   Share2,
+  Smartphone,
   Sparkles,
   Settings2,
   ShieldCheck,
@@ -204,6 +205,14 @@ type Channel = {
   isDefault?: boolean;
   verifiedAt?: string;
   lastInboundAt?: string;
+};
+
+type WhatsAppNumberTransfer = {
+  id: string;
+  command: string;
+  expiresAt: string;
+  url: string;
+  previousDefaultIdentityId?: string;
 };
 
 type Conversation = {
@@ -534,6 +543,9 @@ export default function StudentDetailPage() {
   );
   const [newSubscriptionDialog, setNewSubscriptionDialog] = useState(false);
   const [newSubscriptionStartDate, setNewSubscriptionStartDate] = useState('');
+  const [whatsAppTransferOpen, setWhatsAppTransferOpen] = useState(false);
+  const [whatsAppTransfer, setWhatsAppTransfer] = useState<WhatsAppNumberTransfer>();
+  const [whatsAppTransferError, setWhatsAppTransferError] = useState<string>();
 
   const load = useCallback(async () => {
     try {
@@ -558,10 +570,61 @@ export default function StudentDetailPage() {
         ),
         activeWeekdays: value.practicePlan?.activeWeekdays ?? [...allPracticeWeekdays],
       });
+      return value;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Öğrenci yüklenemedi');
     }
   }, [studentId]);
+
+  async function openWhatsAppNumberTransfer() {
+    setWhatsAppTransferOpen(true);
+    setWhatsAppTransfer(undefined);
+    setWhatsAppTransferError(undefined);
+    try {
+      setBusy(true);
+      const result = await requestJson<{
+        id: string;
+        command: string;
+        expiresAt: string;
+      }>(`/v1/admin/students/${studentId}/channel-links`, {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body: JSON.stringify({ channel: 'WHATSAPP' }),
+      });
+      const number = (process.env.NEXT_PUBLIC_WHATSAPP_CONTACT_NUMBER ?? '905428078429').replace(
+        /\D/gu,
+        '',
+      );
+      setWhatsAppTransfer({
+        ...result,
+        url: `https://wa.me/${number}?text=${encodeURIComponent(result.command)}`,
+        previousDefaultIdentityId: data?.channel?.id,
+      });
+    } catch (reason) {
+      setWhatsAppTransferError(
+        reason instanceof Error ? reason.message : 'Doğrulama bağlantısı oluşturulamadı.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function checkWhatsAppNumberTransfer() {
+    if (!whatsAppTransfer) return;
+    setBusy(true);
+    const refreshed = await load();
+    setBusy(false);
+    if (
+      refreshed?.channel?.type === 'WHATSAPP' &&
+      refreshed.channel.id !== whatsAppTransfer.previousDefaultIdentityId
+    ) {
+      setWhatsAppTransferOpen(false);
+      setWhatsAppTransfer(undefined);
+      setNotice('Yeni WhatsApp numarası doğrulandı ve varsayılan kanal olarak ayarlandı.');
+      return;
+    }
+    setNotice('Yeni numaradan doğrulama mesajı henüz alınmadı.');
+  }
 
   useEffect(() => {
     void load();
@@ -1220,12 +1283,82 @@ export default function StudentDetailPage() {
           }}
         />
       ) : null}
-      {activeTab === 'profile' ? <ProfileTab data={data} /> : null}
+      {activeTab === 'profile' ? (
+        <ProfileTab data={data} onChangeWhatsApp={() => void openWhatsAppNumberTransfer()} />
+      ) : null}
 
       {notice ? (
         <Toast tone="info" onDismiss={() => setNotice(undefined)}>
           {notice}
         </Toast>
+      ) : null}
+
+      {whatsAppTransferOpen ? (
+        <Modal
+          title="WhatsApp numarasını değiştir"
+          description="Bağlantı 24 saat geçerlidir. Öğrenci bağlantıyı yeni telefonunda açıp hazır mesajı göndererek numarasını doğrular."
+          onClose={() => setWhatsAppTransferOpen(false)}
+          actions={
+            <>
+              <Button variant="ghost" onClick={() => setWhatsAppTransferOpen(false)}>
+                Kapat
+              </Button>
+              <Button
+                variant="secondary"
+                loading={busy}
+                disabled={!whatsAppTransfer}
+                onClick={() => void checkWhatsAppNumberTransfer()}
+              >
+                <RefreshCw aria-hidden="true" /> Durumu kontrol et
+              </Button>
+            </>
+          }
+        >
+          <div className="student-channel-transfer">
+            <Alert tone="info" title="Yeni numaradan doğrulama gerekir">
+              Bu bağlantıyı öğrenciye e-posta, SMS veya güvendiğiniz başka bir kanal üzerinden
+              iletin. Eski WhatsApp numarasına göndermeyin.
+            </Alert>
+            {whatsAppTransferError ? (
+              <Alert tone="danger" title="Bağlantı oluşturulamadı">
+                {whatsAppTransferError}
+              </Alert>
+            ) : null}
+            {whatsAppTransfer ? (
+              <>
+                <div className="student-channel-transfer__link">
+                  <span>Öğrenci bağlantısı</span>
+                  <strong>{whatsAppTransfer.url}</strong>
+                  <small>
+                    Son kullanım: {formatDateTime(whatsAppTransfer.expiresAt)}. Bağlantı yalnızca
+                    bir kez kullanılabilir.
+                  </small>
+                </div>
+                <div className="student-action-row">
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(whatsAppTransfer.url);
+                      setNotice('WhatsApp doğrulama bağlantısı panoya kopyalandı.');
+                    }}
+                  >
+                    <Copy aria-hidden="true" /> Bağlantıyı kopyala
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() =>
+                      window.open(whatsAppTransfer.url, '_blank', 'noopener,noreferrer')
+                    }
+                  >
+                    <MessageCircle aria-hidden="true" /> WhatsApp'ta aç
+                  </Button>
+                </div>
+              </>
+            ) : busy ? (
+              <Skeleton className="student-detail-skeleton" />
+            ) : null}
+          </div>
+        </Modal>
       ) : null}
 
       {subscriptionDialog && currentSubscription ? (
@@ -3481,7 +3614,7 @@ function PaymentsTab({
   );
 }
 
-function ProfileTab({ data }: { data: Detail }) {
+function ProfileTab({ data, onChangeWhatsApp }: { data: Detail; onChangeWhatsApp: () => void }) {
   return (
     <div className="student-tab-content">
       <div className="student-profile-grid">
@@ -3529,6 +3662,11 @@ function ProfileTab({ data }: { data: Detail }) {
               <h2>İletişim hesapları</h2>
             </div>
             <MessageCircle aria-hidden="true" />
+          </div>
+          <div className="student-channel-actions">
+            <Button variant="secondary" onClick={onChangeWhatsApp}>
+              <Smartphone aria-hidden="true" /> WhatsApp numarasını değiştir
+            </Button>
           </div>
           <div className="student-channel-list">
             {data.channels.length ? (

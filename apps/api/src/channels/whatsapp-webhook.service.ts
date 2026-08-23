@@ -14,6 +14,7 @@ import { ChannelType, MessageStatus, Prisma } from '@meditation/database';
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { requeueSuppressedWhatsAppIntents } from './whatsapp-intent-retry.js';
+import { ChannelLinkService, parseWhatsAppNumberTransferCommand } from './channel-link.service.js';
 
 @Injectable()
 export class WhatsAppWebhookService {
@@ -22,6 +23,7 @@ export class WhatsAppWebhookService {
 
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(ChannelLinkService) private readonly channelLinks: ChannelLinkService,
     @Inject(APPLICATION_CONFIG) config: ApplicationConfig,
   ) {
     if (
@@ -138,6 +140,21 @@ export class WhatsAppWebhookService {
               normalizedData: protectedData as Prisma.InputJsonValue,
             },
           });
+          const numberTransferToken =
+            event.eventType === 'MESSAGE_RECEIVED' && event.sender && event.text
+              ? parseWhatsAppNumberTransferCommand(event.text)
+              : undefined;
+          if (numberTransferToken && event.sender) {
+            await this.channelLinks.consumeWhatsAppInbound(transaction, {
+              token: numberTransferToken,
+              accountExternalId: event.accountExternalId,
+              externalUserId: event.sender,
+              inboxEventId: inbox.id,
+              externalMessageId: event.externalMessageId,
+              occurredAt: event.occurredAt,
+            });
+            return;
+          }
           if (event.sender && event.eventType === 'MESSAGE_RECEIVED') {
             const identities = await transaction.studentChannelIdentity.findMany({
               where: {

@@ -7204,6 +7204,32 @@ a {
   font-size: 0.8125rem;
   font-weight: 650;
 }
+.student-channel-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-3) 0;
+  border-top: 1px solid var(--color-border);
+}
+.student-channel-transfer {
+  display: grid;
+  gap: var(--space-4);
+}
+.student-channel-transfer__link {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-subtle);
+}
+.student-channel-transfer__link > span,
+.student-channel-transfer__link > small {
+  color: var(--color-ink-muted);
+  font-size: 0.8125rem;
+}
+.student-channel-transfer__link > strong {
+  overflow-wrap: anywhere;
+  font-size: 0.875rem;
+}
 .student-consent-list > div > div {
   grid-column: 1 / 3;
 }

@@ -882,6 +882,18 @@ Bu durumda onaylı ödeme kaydı, paket ve dört görüşme hakkı tek transacti
 oluşturulur; işlemi yapan admin ile başlangıç/bitiş tarihleri audit log'a yazılır.
 Admin hesabı en az iki aşamalı doğrulama ile korunmalıdır.
 
+### WhatsApp Numara Değişikliği
+
+Admin, öğrenci profilinden 24 saat geçerli ve tek kullanımlık bir numara doğrulama
+bağlantısı üretir. Bağlantı doğrudan agent WhatsApp konuşmasını açar ve
+`NUMARA DEGISTIR <token>` mesajını hazırlar. Öğrenci mesajı yeni numarasından
+gönderdiğinde yalnızca imzası doğrulanmış WhatsApp webhook'u token ile gönderen
+`wa_id` değerini eşleştirebilir. Doğrulama başarılı olursa eski WhatsApp kimliği
+iptal edilir, yeni kimlik varsayılan kanal olur ve süresi dolmamış bekleyen mesajlar
+yeni kimliğe taşınır. Adminin numarayı yalnızca veritabanında değiştirmesi WhatsApp
+24 saat müşteri hizmeti penceresini açmaz; pencere yeni numaradan gelen mesajla
+başlar.
+
 ### Konuşma Ekranı
 
 Admin tüm öğrenci konuşmalarını tek ekranda görebilir. Liste öğrenci/kanal,

@@ -141,6 +141,11 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
       'Pratik programını şimdilik duraklattım. Bu süre boyunca hatırlatma mesajı göndermeyeceğim. Yeniden başlattığımda sana bilgi vereceğim.',
   },
   {
+    eventKey: 'CHANNEL_LINK_CONFIRMED',
+    content:
+      '{{channelName}} numaran doğrulandı. Bundan sonraki pratik hatırlatmalarını ve diğer mesajlarını bu numaradan alacaksın.',
+  },
+  {
     eventKey: 'PRACTICE_RESUMED',
     content:
       'Pratik programını yeniden başlattım. Güncel programın: {{scheduleSummary}}. Bundan sonraki pratiklerinde hatırlatmaların tekrar gönderilecek.',
