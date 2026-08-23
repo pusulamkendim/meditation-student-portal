@@ -148,12 +148,7 @@ export class ConversationsController {
       )
         continue;
       const threadKey = `${event.channel}:${normalized.accountExternalId}:${normalized.senderHmac}`;
-      const rawContent = this.decryptInboxField(event.dedupeKey, normalized, 'content');
-      const content = rawContent
-        ? humanizePracticeResponsePayload(rawContent)
-        : normalized.media
-          ? 'Sesli mesaj'
-          : undefined;
+      const content = this.describeInboxContent(event.dedupeKey, normalized);
       const existing = threads.get(threadKey);
       const readingInquiry =
         content?.toLocaleLowerCase('tr-TR').includes('birebir meditasyon dersleri hakkında') ??
@@ -339,23 +334,7 @@ export class ConversationsController {
         .filter((item) => !representedInboxIds.has(item.id))
         .map((item) => {
           const normalized = item.normalizedData as Record<string, unknown>;
-          let content: string | undefined;
-          if (
-            typeof normalized.contentEncrypted === 'string' &&
-            typeof normalized.contentKeyId === 'string'
-          ) {
-            try {
-              content = this.encryption.decrypt(
-                {
-                  ciphertext: Buffer.from(normalized.contentEncrypted, 'base64'),
-                  keyId: normalized.contentKeyId,
-                },
-                item.dedupeKey,
-              );
-            } catch {
-              content = undefined;
-            }
-          }
+          const content = this.describeInboxContent(item.dedupeKey, normalized);
           const normalizedOccurredAt =
             typeof normalized.occurredAt === 'string' ? new Date(normalized.occurredAt) : undefined;
           return {
@@ -367,7 +346,7 @@ export class ConversationsController {
                 ? normalizedOccurredAt.toISOString()
                 : item.createdAt.toISOString(),
             channelIdentityId: student.defaultChannelIdentityId,
-            content: content ? humanizePracticeResponsePayload(content) : undefined,
+            content,
             voiceMedia: item.voiceMedia,
             context: item.contextResolution,
           };
@@ -441,6 +420,20 @@ export class ConversationsController {
     } catch {
       return undefined;
     }
+  }
+
+  private describeInboxContent(dedupeKey: string, normalized: Record<string, unknown>) {
+    const content = this.decryptInboxField(dedupeKey, normalized, 'content');
+    if (content) return humanizePracticeResponsePayload(content);
+    if (normalized.media) return 'Sesli mesaj';
+    if (normalized.messageType !== 'reaction') return undefined;
+
+    const reaction = normalized.reaction;
+    if (!reaction || typeof reaction !== 'object') return 'Bir mesaja tepki verdi';
+    const emoji = (reaction as Record<string, unknown>).emoji;
+    return typeof emoji === 'string' && emoji.trim()
+      ? `Mesaja tepki verdi: ${emoji}`
+      : 'Mesaj tepkisini kaldırdı';
   }
   @Post(':studentId/reply')
   @UseGuards(AdminCsrfGuard)

@@ -106,4 +106,43 @@ describe('ConversationsController inbox', () => {
     ]);
     expect(auditCreate).toHaveBeenCalledOnce();
   });
+
+  it('renders a WhatsApp reaction without exposing it as an empty message', async () => {
+    const key = Buffer.alloc(32, 31);
+    const controller = new ConversationsController(
+      {
+        inboxEvent: {
+          findMany: vi.fn().mockResolvedValue([
+            {
+              id: '10000000-0000-4000-8000-000000000004',
+              studentId: '20000000-0000-4000-8000-000000000004',
+              channel: 'WHATSAPP',
+              dedupeKey: 'message-reaction',
+              normalizedData: {
+                senderHmac: 'sender-hmac',
+                accountExternalId: 'account-1',
+                messageType: 'reaction',
+                occurredAt: '2026-08-23T11:45:01.000Z',
+                reaction: { targetExternalMessageId: 'wamid.target', emoji: '❤️' },
+              },
+              createdAt: new Date('2026-08-23T11:45:02.000Z'),
+              student: { fullNameEncrypted: null, fullNameKeyId: null },
+            },
+          ]),
+        },
+        auditLog: { create: vi.fn().mockResolvedValue({}) },
+      } as never,
+      {
+        DATA_ENCRYPTION_KEYS_JSON: JSON.stringify({ test: key.toString('base64') }),
+        ACTIVE_DATA_KEY_ID: 'test',
+      } as ApplicationConfig,
+      {} as never,
+    );
+
+    const result = await controller.inbox({
+      admin: { id: '20000000-0000-4000-8000-000000000001' },
+    } as never);
+
+    expect(result.items[0]?.content).toBe('Mesaja tepki verdi: ❤️');
+  });
 });

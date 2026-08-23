@@ -11,6 +11,7 @@ export interface NormalizedWhatsAppEvent {
   status?: string;
   repliedToExternalMessageId?: string;
   audio?: NormalizedInboundAudio;
+  reaction?: NormalizedInboundReaction;
   occurredAt: Date;
 }
 
@@ -22,6 +23,11 @@ export interface NormalizedInboundAudio {
   durationSeconds?: number;
   byteSize?: number;
   fileName?: string;
+}
+
+export interface NormalizedInboundReaction {
+  targetExternalMessageId: string;
+  emoji?: string;
 }
 
 const payloadSchema = z
@@ -60,6 +66,12 @@ const payloadSchema = z
                               mime_type: z.string().optional(),
                               sha256: z.string().optional(),
                               voice: z.boolean().optional(),
+                            })
+                            .optional(),
+                          reaction: z
+                            .object({
+                              message_id: z.string().min(1),
+                              emoji: z.string(),
                             })
                             .optional(),
                         }),
@@ -101,13 +113,19 @@ export function normalizeWhatsAppPayload(payload: unknown): NormalizedWhatsAppEv
           text:
             message.text?.body ?? message.button?.payload ?? message.interactive?.button_reply?.id,
           messageType: message.type,
-          repliedToExternalMessageId: message.context?.id,
+          repliedToExternalMessageId: message.context?.id ?? message.reaction?.message_id,
           audio: message.audio
             ? {
                 kind: message.audio.voice === false ? 'AUDIO' : 'VOICE',
                 providerFileId: message.audio.id,
                 mimeType: message.audio.mime_type,
                 checksum: message.audio.sha256,
+              }
+            : undefined,
+          reaction: message.reaction
+            ? {
+                targetExternalMessageId: message.reaction.message_id,
+                emoji: message.reaction.emoji || undefined,
               }
             : undefined,
           occurredAt: new Date(Number(message.timestamp) * 1000),

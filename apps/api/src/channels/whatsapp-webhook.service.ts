@@ -131,6 +131,9 @@ export class WhatsAppWebhookService {
               fileName: event.audio.fileName,
             };
           }
+          if (event.reaction) {
+            protectedData.reaction = event.reaction;
+          }
           const inbox = await transaction.inboxEvent.create({
             data: {
               channel: ChannelType.WHATSAPP,
@@ -161,8 +164,18 @@ export class WhatsAppWebhookService {
                 externalUserHmac: this.lookup.digest(event.sender),
                 channelAccount: { type: ChannelType.WHATSAPP, externalId: event.accountExternalId },
               },
-              select: { id: true },
+              select: { id: true, studentId: true },
             });
+            const studentIds = [...new Set(identities.map((identity) => identity.studentId))];
+            if (studentIds.length === 1) {
+              await transaction.inboxEvent.update({
+                where: { id: inbox.id },
+                data: {
+                  studentId: studentIds[0],
+                  ...(event.reaction ? { processedAt: event.occurredAt } : {}),
+                },
+              });
+            }
             await transaction.studentChannelIdentity.updateMany({
               where: { id: { in: identities.map((identity) => identity.id) } },
               data: { lastInboundAt: event.occurredAt },
@@ -172,6 +185,7 @@ export class WhatsAppWebhookService {
               identities.map((identity) => identity.id),
               event.occurredAt,
             );
+            if (event.reaction) return;
           }
           const topic = event.audio
             ? 'media.voice-inbound'

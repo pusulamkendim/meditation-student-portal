@@ -98,4 +98,38 @@ describe('WhatsApp normalizer', () => {
       checksum: 'checksum',
     });
   });
+
+  it('preserves reactions and the target message without treating them as text', () => {
+    const [event] = normalizeWhatsAppPayload({
+      entry: [
+        {
+          changes: [
+            {
+              value: {
+                metadata: { phone_number_id: 'phone-1' },
+                messages: [
+                  {
+                    id: 'wamid.reaction',
+                    from: '90500',
+                    type: 'reaction',
+                    timestamp: '11',
+                    reaction: { message_id: 'wamid.target', emoji: '👍' },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(event).toEqual(
+      expect.objectContaining({
+        messageType: 'reaction',
+        text: undefined,
+        repliedToExternalMessageId: 'wamid.target',
+        reaction: { targetExternalMessageId: 'wamid.target', emoji: '👍' },
+      }),
+    );
+  });
 });
