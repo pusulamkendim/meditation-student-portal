@@ -6713,6 +6713,11 @@ a {
 .student-consent-list {
   display: grid;
 }
+.student-channel-list {
+  align-self: start;
+  align-content: start;
+  width: 100%;
+}
 .student-session-row,
 .student-meeting-row,
 .student-payment-row,
@@ -7204,11 +7209,20 @@ a {
   font-size: 0.8125rem;
   font-weight: 650;
 }
-.student-channel-actions {
+.student-channel-list > div > .student-channel-row-actions {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  padding: var(--space-3) 0;
-  border-top: 1px solid var(--color-border);
+  gap: var(--space-2);
+}
+.student-channel-list > div > .student-channel-row-actions .ui-button {
+  min-height: 32px;
+  padding: 4px 8px;
+  font-size: 0.75rem;
+}
+.student-channel-list > div > .student-channel-row-actions .ui-button svg {
+  width: 14px;
+  height: 14px;
 }
 .student-channel-transfer {
   display: grid;
@@ -7407,6 +7421,16 @@ a {
   }
   .student-payment-row > .student-row-actions {
     justify-content: flex-start;
+  }
+  .student-channel-list > div {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .student-channel-list > div > span {
+    grid-column: 1;
+  }
+  .student-channel-row-actions {
+    grid-column: 2;
+    grid-row: 1 / span 2;
   }
   .student-section-heading {
     flex-direction: column;

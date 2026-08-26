@@ -698,6 +698,27 @@ export class ReadingService {
     };
   }
 
+  async publicContent(slug: string) {
+    const share = await this.publicShareForSlug(slug);
+    return {
+      slug: share.slug,
+      title: share.reading.title,
+      description: share.reading.description,
+      author: share.reading.author,
+      estimatedMinutes: share.reading.estimatedMinutes,
+      hasPdf: share.allowPdf && Boolean(share.reading.pdfStorageKey),
+      allowIndexing: share.allowIndexing,
+      canonicalUrl: this.publicReadingUrl(share.slug),
+      updatedAt: share.reading.updatedAt.toISOString(),
+      sections: share.reading.sections.map((section) => ({
+        position: section.position,
+        title: section.title,
+        contentMarkdown: section.contentMarkdown,
+        wordCount: section.wordCount,
+      })),
+    };
+  }
+
   async publicAccess(slug: string, visitorId: string, attribution: PublicAttribution) {
     const share = await this.publicShareForSlug(slug);
     const now = this.clock.now();

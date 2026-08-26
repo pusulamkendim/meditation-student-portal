@@ -9,6 +9,10 @@ const RESOURCES = {
   admin: 'wd45ufa1ta1zkougz081a3qv',
 };
 
+if (process.env.SAKINZIHIN_WEB_COOLIFY_RESOURCE) {
+  RESOURCES['sakinzihin-web'] = process.env.SAKINZIHIN_WEB_COOLIFY_RESOURCE;
+}
+
 const TERMINAL_STATUSES = new Set(['finished', 'failed', 'cancelled', 'cancelled-by-user']);
 const SUCCESS_STATUS = 'finished';
 const POLL_INTERVAL_MS = 10_000;
@@ -18,10 +22,14 @@ const args = process.argv.slice(2);
 const force = args.includes('--force');
 const noWait = args.includes('--no-wait');
 const requested = args.filter((arg) => !arg.startsWith('--'));
-const targets = requested.includes('all') ? ['api', 'worker', 'admin'] : requested;
+const targets = requested.includes('all')
+  ? ['api', 'worker', 'admin', ...(RESOURCES['sakinzihin-web'] ? ['sakinzihin-web'] : [])]
+  : requested;
 
 if (targets.length === 0 || targets.some((target) => !(target in RESOURCES))) {
-  console.error('Kullanim: pnpm deploy:coolify <api|worker|admin|all> [--no-wait] [--force]');
+  console.error(
+    'Kullanim: pnpm deploy:coolify <api|worker|admin|sakinzihin-web|all> [--no-wait] [--force]',
+  );
   process.exit(1);
 }
 

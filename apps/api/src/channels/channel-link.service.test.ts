@@ -39,6 +39,30 @@ describe('parseWhatsAppNumberTransferCommand', () => {
 });
 
 describe('ChannelLinkService', () => {
+  it('reports an active request without exposing its token hash', async () => {
+    const prisma = {
+      student: { findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'student-1' }) },
+      channelLinkToken: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 'link-1',
+          createdAt: new Date('2026-08-23T08:00:00.000Z'),
+          expiresAt: new Date('2026-08-24T08:00:00.000Z'),
+          usedAt: null,
+          revokedAt: null,
+        }),
+      },
+    };
+
+    await expect(createService(prisma).status('student-1', ChannelType.WHATSAPP)).resolves.toEqual({
+      id: 'link-1',
+      createdAt: new Date('2026-08-23T08:00:00.000Z'),
+      expiresAt: new Date('2026-08-24T08:00:00.000Z'),
+      usedAt: null,
+      revokedAt: null,
+      status: 'PENDING',
+    });
+  });
+
   it('creates a single-use WhatsApp link that expires after 24 hours', async () => {
     const tx = {
       student: { findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 'student-1' }) },

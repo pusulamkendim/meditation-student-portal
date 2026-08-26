@@ -335,6 +335,21 @@ describe.runIf(runE2e)('E2E-READINGS student reading flow', () => {
       canonicalUrl: `http://localhost:3001/oku/${publicSlug}`,
     });
 
+    const content = await app.inject({
+      method: 'GET',
+      url: `/v1/readings/public/${publicSlug}/content`,
+    });
+    expect(content.statusCode).toBe(200);
+    expect(content.headers['cache-control']).toContain('public');
+    expect(content.json()).toMatchObject({
+      slug: publicSlug,
+      title: 'E2E Okuma',
+      hasPdf: true,
+      sections: [{ position: 1 }, { position: 2 }],
+    });
+    expect(content.json()).not.toHaveProperty('studentFirstName');
+    expect(content.json()).not.toHaveProperty('response');
+
     for (let view = 0; view < 2; view += 1) {
       const opened = await app.inject({
         method: 'POST',

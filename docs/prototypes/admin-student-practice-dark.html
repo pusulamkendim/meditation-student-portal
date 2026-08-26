@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sakin Zihin · Yönetim (karanlık) · Öğrenci · Pratikler</title>
+<meta name="robots" content="noindex" />
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap');
+
+  :root{
+    --ink:#0b1a18;
+    --scene:#061819;
+    --canvas:#0a1f1e;
+    --surface:#0d2624;
+    --surface-2:#122d2a;
+    --ivory:#f3eadb;
+    --muted:#c4b8a3;
+    --border:rgb(241 233 219 / 14%);
+    --border-strong:rgb(241 233 219 / 28%);
+    --gold:#c99551;
+    --gold-2:#d6a25e;
+    --gold-light:#e5bb76;
+    --ok:#8fc7a8;  --ok-soft:rgb(143 199 168 / 15%);
+    --warn:#d6a25e; --warn-soft:rgb(214 162 94 / 16%);
+    --danger:#e08b80; --danger-soft:rgb(224 139 128 / 15%);
+    --info:#9db9c6; --info-soft:rgb(157 185 198 / 15%);
+    --focus:0 0 0 3px rgb(214 162 94 / 30%);
+    --serif:'Lora','Didot','Bodoni 72',Georgia,serif;
+    --sans:'Inter','SF Pro Text',system-ui,-apple-system,'Segoe UI',sans-serif;
+    --tr:150ms ease; --r:16px; --ctrl:40px; --sbw:250px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--scene);color:var(--ivory);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+
+  .layout{display:grid;grid-template-columns:var(--sbw) 1fr;min-height:100vh;position:relative}
+  .ambient{position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(130% 100% at 50% -10%,rgb(18 48 48 / 60%) 0%,var(--scene) 62%)}
+  .ambient::after{content:"";position:absolute;inset:0;opacity:.045;mix-blend-mode:screen;
+    background-image:radial-gradient(rgb(255 255 255 / 50%) .55px,transparent .8px);background-size:9px 9px}
+
+  /* ---------- sidebar ---------- */
+  .side{position:relative;z-index:2;background:rgb(5 22 22 / 82%);backdrop-filter:blur(6px);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .side .brand{display:flex;align-items:center;gap:10px;padding:22px 20px 18px;font-weight:750;font-size:.9rem}
+  .side .brand svg{width:20px;height:20px;color:var(--gold-2)}
+  .side nav{flex:1;overflow:auto;padding:0 12px 16px;display:grid;gap:2px}
+  .side nav .grp{font-size:.6rem;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);opacity:.8;padding:16px 12px 7px}
+  .side nav a{display:flex;align-items:center;gap:11px;padding:9px 12px;border-radius:12px;color:var(--muted);text-decoration:none;font-size:.82rem;font-weight:550;border:1px solid transparent;transition:all var(--tr)}
+  .side nav a svg{width:16px;height:16px;flex:0 0 auto;opacity:.92}
+  .side nav a:hover{color:var(--ivory);background:var(--surface)}
+  .side nav a.active{color:var(--gold-2);background:var(--warn-soft);border-color:rgb(214 162 94 / 26%)}
+  .side .foot{padding:16px 18px;border-top:1px solid var(--border);display:flex;align-items:center;gap:11px;font-size:.78rem}
+  .side .foot .ava{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#ad7b3d,var(--gold-light));color:var(--ink);display:grid;place-items:center;font-size:.7rem;font-weight:800}
+  .side .foot small{display:block;color:var(--muted)}
+
+  /* ---------- main ---------- */
+  .main{position:relative;z-index:1;overflow:auto}
+  .topbar{position:sticky;top:0;z-index:5;background:rgb(6 25 25 / 82%);backdrop-filter:blur(8px);border-bottom:1px solid var(--border);padding:11px 30px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .crumb{font-size:.78rem;color:var(--muted)}
+  .crumb a{color:var(--muted);text-decoration:none}
+  .crumb a:hover{color:var(--gold-light)}
+  .crumb b{color:var(--ivory);font-weight:650}
+  .search{display:flex;align-items:center;gap:8px;min-width:200px;height:var(--ctrl);padding:0 14px;border:1px solid var(--border);border-radius:999px;background:rgb(5 22 22 / 70%)}
+  .search svg{width:15px;height:15px;color:var(--muted)}
+  .search input{flex:1;background:none;border:0;outline:none;color:var(--ivory);font:inherit;font-size:.78rem}
+  .search input::placeholder{color:var(--muted)}
+  .topbar .right{display:flex;gap:10px;align-items:center}
+
+  .btn{display:inline-flex;align-items:center;gap:7px;min-height:var(--ctrl);padding:0 18px;border-radius:999px;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;border:1px solid transparent;transition:all var(--tr);text-decoration:none;white-space:nowrap}
+  .btn svg{width:15px;height:15px}
+  .btn.pri{border-color:#bd8847;background:linear-gradient(105deg,#ad7b3d,var(--gold-light) 50%,#d29b53);color:var(--ink);box-shadow:inset 0 1px rgb(255 255 255 / 26%),0 10px 24px rgb(0 0 0 / 22%)}
+  .btn.pri:hover{filter:brightness(1.06)}
+  .btn.ghost{border-color:var(--border-strong);background:rgb(5 22 22 / 55%);color:var(--ivory)}
+  .btn.ghost:hover{border-color:var(--gold-2);color:var(--gold-light)}
+  .btn:focus-visible{outline:none;box-shadow:var(--focus)}
+
+  .content{max-width:1340px;padding:22px 30px 50px}
+
+  /* ---------- öğrenci kartı ---------- */
+  .stu-card{display:flex;flex-wrap:wrap;align-items:center;gap:18px;padding:20px 22px;border:1px solid var(--border);border-radius:var(--r);
+    background:linear-gradient(150deg,rgb(8 25 25 / 92%),rgb(15 33 30 / 88%));box-shadow:0 18px 44px rgb(0 0 0 / 24%)}
+  .stu-card .ava{width:58px;height:58px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;font-size:1.05rem;font-weight:780;color:var(--ink);background:linear-gradient(135deg,#ad7b3d,#e5bb76)}
+  .stu-card .who{min-width:0}
+  .stu-card .who h1{margin:0;font-family:var(--serif);font-weight:400;font-size:1.4rem;letter-spacing:0}
+  .stu-card .meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:7px;color:var(--muted);font-size:.74rem}
+  .stu-card .meta svg{width:13px;height:13px;vertical-align:-2px;margin-right:4px}
+  .badges{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px}
+  .stu-actions{margin-left:auto;display:flex;gap:8px}
+
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:.68rem;font-weight:700;border-radius:999px;padding:5px 12px;white-space:nowrap}
+  .badge svg{width:12px;height:12px}
+  .b-ok{background:var(--ok-soft);color:var(--ok)}
+  .b-warn{background:var(--warn-soft);color:var(--warn)}
+  .b-danger{background:var(--danger-soft);color:var(--danger)}
+  .b-info{background:var(--info-soft);color:var(--info)}
+  .b-mute{background:rgb(241 233 219 / 8%);color:var(--muted)}
+  .b-gold{background:var(--warn-soft);color:var(--gold-light);border:1px solid rgb(214 162 94 / 26%)}
+
+  /* ---------- sekmeler ---------- */
+  .tabs{display:flex;gap:2px;margin:18px 0 22px;border-bottom:1px solid var(--border);overflow-x:auto}
+  .tabs a{padding:11px 16px;font-size:.82rem;font-weight:650;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;transition:all var(--tr);white-space:nowrap}
+  .tabs a:hover{color:var(--ivory)}
+  .tabs a.on{color:var(--gold-light);border-bottom-color:var(--gold-2)}
+  .tabs a .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--danger);margin-left:7px;vertical-align:2px}
+
+  /* ---------- panel başlığı ---------- */
+  .seg{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:26px 0 12px}
+  .seg h2{margin:0;font-size:.7rem;font-weight:780;text-transform:uppercase;letter-spacing:.1em;color:var(--gold-2)}
+  .seg .hint{color:var(--muted);font-size:.72rem}
+  select{min-height:var(--ctrl);padding:0 34px 0 14px;border:1px solid var(--border-strong);border-radius:999px;background:rgb(5 22 22 / 70%) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23c4b8a3' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 12px center;color:var(--ivory);font:inherit;font-size:.76rem;appearance:none;cursor:pointer}
+  select:focus-visible{outline:none;box-shadow:var(--focus)}
+
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--border)}
+  .kpis>div{background:linear-gradient(150deg,rgb(8 25 25 / 92%),rgb(15 33 30 / 88%));padding:16px 18px;display:grid;gap:5px}
+  .kpis b{font-variant-numeric:tabular-nums;font-size:1.35rem;font-weight:740;color:var(--ivory);display:flex;align-items:baseline;gap:9px}
+  .kpis b small{font-size:.7rem;font-weight:650;color:var(--muted)}
+  .kpis span.lbl{color:var(--muted);font-size:.72rem;font-weight:600}
+  .kpis .fire{font-size:1rem}
+  .bar{height:4px;border-radius:999px;background:rgb(241 233 219 / 12%);overflow:hidden;margin-top:5px}
+  .bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#ad7b3d,var(--gold-light))}
+  .bar i.ok{background:linear-gradient(90deg,#2f6b4f,#7fbf9d)}
+  .bar i.worst{background:linear-gradient(90deg,#a85f55,#e08b80)}
+
+  /* ---------- 14 gün tablosu ---------- */
+  .grid{overflow:hidden;border:1px solid var(--border);border-radius:var(--r);background:linear-gradient(150deg,rgb(8 25 25 / 92%),rgb(15 33 30 / 88%));box-shadow:0 18px 44px rgb(0 0 0 / 24%)}
+  .ghead,.grow{display:grid;grid-template-columns:150px 1fr 1fr;gap:14px;padding:0 18px;align-items:center}
+  .ghead{min-height:42px;background:rgb(6 24 25 / 55%);border-bottom:1px solid var(--border)}
+  .ghead span{color:var(--muted);font-size:.64rem;text-transform:uppercase;letter-spacing:.08em;font-weight:760}
+  .ghead span.gd{color:var(--gold-2)}
+  .grow{min-height:58px;border-bottom:1px solid rgb(241 233 219 / 7%);transition:background var(--tr)}
+  .grow:last-child{border-bottom:0}
+  .grow:hover{background:var(--surface-2)}
+  .grow.today{background:rgb(214 162 94 / 7%)}
+  .grow .day{display:flex;align-items:baseline;gap:8px;font-variant-numeric:tabular-nums}
+  .grow .day b{font-weight:680;font-size:.86rem}
+  .grow .day small{color:var(--muted);font-size:.68rem;text-transform:uppercase;letter-spacing:.05em}
+  .grow.today .day b{color:var(--gold-light)}
+  .grow.today .day .tag{font-size:.58rem;font-weight:760;letter-spacing:.05em;background:var(--warn-soft);color:var(--gold-light);border-radius:999px;padding:2px 8px}
+
+  .slot{display:flex;align-items:center;gap:9px;min-height:30px}
+  .slot .dot{width:11px;height:11px;border-radius:50%;flex:0 0 auto}
+  .slot.done .dot{background:radial-gradient(circle at 34% 30%,var(--gold-light),var(--gold) 62%)}
+  .slot.missed .dot{background:radial-gradient(circle at 34% 30%,#e6a195,var(--danger) 62%)}
+  .slot.pending .dot{border:2px solid var(--gold-2);background:transparent;width:10px;height:10px}
+  .slot.none .dot{background:rgb(241 233 219 / 16%)}
+  .slot .chk{width:14px;height:14px;color:var(--ok);flex:0 0 auto}
+  .slot .pen{width:12px;height:12px;color:var(--gold-2);flex:0 0 auto}
+  .slot .lbl{font-size:.72rem;font-weight:650}
+  .slot.done .lbl{color:var(--ok)}
+  .slot.missed .lbl{color:var(--danger)}
+  .slot.pending .lbl{color:var(--gold-light)}
+  .slot.none .lbl{color:rgb(241 233 219 / 35%)}
+
+  .legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin-top:12px;color:var(--muted);font-size:.7rem}
+  .legend .lg{display:inline-flex;align-items:center;gap:7px}
+  .legend .dot{width:9px;height:9px;border-radius:50%}
+  .legend .dot.d{background:var(--gold)}
+  .legend .dot.m{background:var(--danger)}
+  .legend .dot.p{border:2px solid var(--gold-2);background:transparent;width:8px;height:8px}
+  .legend .dot.n{background:rgb(241 233 219 / 16%)}
+  .legend .pen{width:11px;height:11px;color:var(--gold-2)}
+
+  /* ---------- alt iki kolon ---------- */
+  .cols{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;margin-top:16px;align-items:start}
+  .panel{overflow:hidden;border:1px solid var(--border);border-radius:var(--r);background:linear-gradient(150deg,rgb(8 25 25 / 92%),rgb(15 33 30 / 88%));box-shadow:0 18px 44px rgb(0 0 0 / 24%)}
+  .panel .ph2{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 18px;border-bottom:1px solid var(--border);background:rgb(6 24 25 / 55%)}
+  .panel .ph2 h3{margin:0;font-size:.64rem;font-weight:780;text-transform:uppercase;letter-spacing:.09em;color:var(--gold-2)}
+  .panel .ph2 a{color:var(--muted);font-size:.72rem;font-weight:650;text-decoration:none}
+  .panel .ph2 a:hover{color:var(--gold-light)}
+  .panel .body{padding:6px 18px}
+
+  /* dikkat gerektirenler */
+  .alert{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid rgb(241 233 219 / 8%);align-items:flex-start}
+  .alert:last-child{border-bottom:0}
+  .alert .ic{width:26px;height:26px;border-radius:9px;flex:0 0 auto;display:grid;place-items:center;font-size:.85rem}
+  .alert .ic svg{width:13px;height:13px}
+  .alert.warn .ic{background:var(--warn-soft);color:var(--warn)}
+  .alert.warn .tx b{color:var(--warn)}
+  .alert.info .ic{background:var(--ok-soft);color:var(--ok)}
+  .alert.info .tx b{color:var(--ok)}
+  .alert.neg .ic{background:var(--danger-soft);color:var(--danger)}
+  .alert.neg .tx b{color:var(--danger)}
+  .alert .tx{font-size:.78rem;line-height:1.5;color:var(--muted)}
+  .alert .tx b{display:block;margin-bottom:1px;font-size:.78rem}
+
+  /* refleksiyonlar */
+  .ref{display:flex;gap:12px;padding:13px 0;border-bottom:1px solid rgb(241 233 219 / 8%);align-items:center}
+  .ref:last-child{border-bottom:0}
+  .ref .tbl{width:34px;height:34px;flex:0 0 auto;border-radius:50%;display:grid;place-items:center;font-size:.6rem;font-weight:780;color:var(--gold-light);border:1px solid rgb(214 162 94 / 40%)}
+  .ref .tbl.am{background:var(--warn-soft)}
+  .ref .tbl.pm{background:var(--info-soft);color:var(--info);border-color:rgb(157 185 198 / 45%)}
+  .ref .tx{min-width:0;flex:1}
+  .ref .tx .h{display:flex;align-items:baseline;gap:8px;font-size:.76rem;font-weight:680;color:var(--ivory);margin-bottom:2px}
+  .ref .tx .h small{color:var(--muted);font-weight:550}
+  .ref .tx p{margin:0;font-size:.76rem;line-height:1.5;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ref .tx p b{color:var(--ivory);font-weight:650}
+  .ref .go{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;font-size:.74rem;font-weight:700;color:var(--gold-light);text-decoration:none;padding:7px 12px;border:1px solid rgb(214 162 94 / 30%);border-radius:999px;transition:all var(--tr)}
+  .ref .go:hover{background:var(--warn-soft);border-color:var(--gold-2)}
+  .ref .go svg{width:13px;height:13px}
+
+  @media(max-width:1020px){
+    .cols{grid-template-columns:1fr}
+  }
+  @media(max-width:960px){
+    .layout{grid-template-columns:1fr}
+    .side{display:none}
+    .kpis{grid-template-columns:repeat(2,1fr)}
+    .ghead{display:none}
+    .grow{grid-template-columns:110px 1fr 1fr;padding-block:12px}
+    .topbar{padding:10px 18px}
+    .content{padding:18px 18px 40px}
+    .stu-actions{margin-left:0;width:100%}
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<div class="ambient"></div>
+<div class="layout">
+
+  <aside class="side">
+    <div class="brand">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 3-1 5-4 6-1 3 0 5 2 6 1 3 4 5 6 5-1-3 1-5 3-6 1-3 0-5-2-6-1-2-3-4-5-5z"/></svg>
+      Sakin Zihin
+    </div>
+    <nav>
+      <span class="grp">Genel</span>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Genel bakış</a>
+      <a class="active" href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 8.5a3.2 3.2 0 010 0M20 20c0-2.6-1.6-4.8-4-5.7"/></svg>Öğrenciler</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M2 10h20"/></svg>Ödemeler</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Pratik</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/></svg>Görüşmeler</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-8.5 8.5 8.5 8.5 0 01-3.7-.86L3 21l1.9-5.7a8.5 8.5 0 1116.1-3.8z"/></svg>Konuşmalar</a>
+      <span class="grp">İçerik</span>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20V2H6.5A2.5 2.5 0 004 4.5z"/><path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5"/></svg>Okumalar</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3c1 3-1 5-4 6-1 3 0 5 2 6 1 3 4 5 6 5-1-3 1-5 3-6 1-3 0-5-2-6-1-2-3-4-5-5z"/></svg>Meditasyonlar</a>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/><circle cx="12" cy="12" r="3.5"/></svg>LLM Platformu</a>
+      <span class="grp">Sistem</span>
+      <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>Operations</a>
+    </nav>
+    <div class="foot">
+      <span class="ava">N</span>
+      <div><span style="font-weight:650">Necip</span><small>Yönetici · admin@example.com</small></div>
+    </div>
+  </aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="crumb">Yönetim / <a href="#">Öğrenciler</a> / <b>Dilge Sağtaş</b></div>
+      <div class="right">
+        <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg><input placeholder="Öğrenci, ödeme, konuşma…"/></label>
+      </div>
+    </div>
+
+    <div class="content">
+
+      <!-- öğrenci kartı -->
+      <div class="stu-card">
+        <span class="ava">DS</span>
+        <div class="who">
+          <h1>Dilge Sağtaş</h1>
+          <div class="meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-8.5 8.5 8.5 8.5 0 01-3.7-.86L3 21l1.9-5.7a8.5 8.5 0 1116.1-3.8z"/></svg>WhatsApp · 0 532 111 22 33</span>
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M10 9l5 3-5 3z"/></svg>8 Ağu'da görüşme yapıldı</span>
+          </div>
+        </div>
+        <div class="badges">
+          <span class="badge b-ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>Aktif</span>
+          <span class="badge b-gold">4. Hafta</span>
+        </div>
+        <div class="stu-actions">
+          <button class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 01-8.5 8.5 8.5 8.5 0 01-3.7-.86L3 21l1.9-5.7a8.5 8.5 0 1116.1-3.8z"/></svg>Mesaj gönder</button>
+          <button class="btn ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Pratik ekle</button>
+        </div>
+      </div>
+
+      <!-- sekmeler -->
+      <nav class="tabs">
+        <a href="#">Profil</a>
+        <a class="on" href="#">Pratikler</a>
+        <a href="#">Görüşmeler</a>
+        <a href="#">Ödemeler</a>
+        <a href="#">Konuşmalar</a>
+        <a href="#">Notlar</a>
+      </nav>
+
+      <!-- pratik durumu -->
+      <div class="seg">
+        <h2>Pratik durumu</h2>
+        <select>
+          <option>Son 14 gün</option>
+          <option>Son 7 gün</option>
+          <option>Son 30 gün</option>
+          <option>Tüm dönem</option>
+        </select>
+      </div>
+      <div class="kpis">
+        <div>
+          <span class="lbl">Pratik oranı</span>
+          <b>%82<small>11 / 14 oturum</small></b>
+          <span class="bar"><i style="width:82%"></i></span>
+        </div>
+        <div>
+          <span class="lbl">Seri</span>
+          <b>7 gün <span class="fire">🔥</span></b>
+          <span class="bar"><i class="ok" style="width:72%"></i></span>
+        </div>
+        <div>
+          <span class="lbl">Kaçırılan oturum</span>
+          <b>3</b>
+          <span class="bar"><i class="worst" style="width:21%"></i></span>
+        </div>
+        <div>
+          <span class="lbl">Refleksiyon oranı</span>
+          <b>%64<small>7 / 11 pratik</small></b>
+          <span class="bar"><i style="width:64%"></i></span>
+        </div>
+      </div>
+
+      <!-- son 14 gün -->
+      <div class="seg">
+        <h2>Son 14 gün</h2>
+        <span class="hint">Bir satıra tıklayarak gün detayını açın</span>
+      </div>
+      <div class="grid">
+        <div class="ghead">
+          <span>Gün</span>
+          <span class="gd">Sabah</span>
+          <span>Akşam</span>
+        </div>
+
+        <div class="grow today">
+          <div class="day"><b>19 Ağu</b><small>Çar</small><span class="tag">Bugün</span></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><svg class="pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot pending"><span class="dot"></span><span class="lbl">Bekliyor</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>18 Ağu</b><small>Sal</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span class="lbl">Tamamlandı</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>17 Ağu</b><small>Pzt</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>16 Ağu</b><small>Paz</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><svg class="pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>15 Ağu</b><small>Cum</small></div>
+          <div class="slot missed"><span class="dot"></span><span class="lbl">Kaçırıldı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>14 Ağu</b><small>Per</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><svg class="pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>13 Ağu</b><small>Çar</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>12 Ağu</b><small>Sal</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><svg class="pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>11 Ağu</b><small>Pzt</small></div>
+          <div class="slot missed"><span class="dot"></span><span class="lbl">Kaçırıldı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>10 Ağu</b><small>Paz</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><svg class="pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>9 Ağu</b><small>Cum</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>8 Ağu</b><small>Per</small></div>
+          <div class="slot missed"><span class="dot"></span><span class="lbl">Kaçırıldı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>7 Ağu</b><small>Çar</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+
+        <div class="grow">
+          <div class="day"><b>6 Ağu</b><small>Sal</small></div>
+          <div class="slot done"><span class="dot"></span><svg class="chk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg><svg class="pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg><span class="lbl">Tamamlandı</span></div>
+          <div class="slot none"><span class="dot"></span><span class="lbl">—</span></div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span class="lg"><span class="dot d"></span>tamamlandı</span>
+        <span class="lg"><span class="dot m"></span>kaçırıldı</span>
+        <span class="lg"><span class="dot p"></span>bekliyor</span>
+        <span class="lg"><span class="dot n"></span>seans yok</span>
+        <span class="lg"><svg class="pen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>refleksiyon var</span>
+      </div>
+
+      <!-- alt iki kolon -->
+      <div class="cols">
+        <div class="panel">
+          <div class="ph2"><h3>Dikkat gerektirenler</h3><a href="#">Tümünü gör</a></div>
+          <div class="body">
+            <div class="alert warn">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 8v5M12 16h.01"/><path d="M10.3 3.9a1.8 1.8 0 013.4 0l7.2 14a1.8 1.8 0 01-1.7 2.6H4.8a1.8 1.8 0 01-1.7-2.6z"/></svg></span>
+              <div class="tx"><b>Son 3 akşam pratiğinin 2'si yapılmadı</b>Son akşam seanslarında devamlılık düşüyor; görüşmede gündeme getirin.</div>
+            </div>
+            <div class="alert info">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg></span>
+              <div class="tx"><b>4 tamamlanmış pratikte refleksiyon bulunmuyor</b>Refleksiyon gönderildiğinde seans otomatik işaretlenir.</div>
+            </div>
+            <div class="alert neg">
+              <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></span>
+              <div class="tx"><b>Sabah pratiği son 6 gündür düzenli</b>Sabah rutini korunurak ilerliyor; akşam seanslarını destekleyin.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="ph2"><h3>Son refleksiyonlar</h3><a href="#">Tümünü gör</a></div>
+          <div class="body">
+            <div class="ref">
+              <span class="tbl am">Sabah</span>
+              <div class="tx">
+                <div class="h">19 Ağu <small>· Sabah</small></div>
+                <p>“Bugün kayda odaklanmakta zorlandım...”</p>
+              </div>
+              <a class="go" href="#">Gör <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+            </div>
+            <div class="ref">
+              <span class="tbl am">Sabah</span>
+              <div class="tx">
+                <div class="h">12 Ağu <small>· Sabah</small></div>
+                <p>“Akşam yapabildim ama korkmadım...”</p>
+              </div>
+              <a class="go" href="#">Gör <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+            </div>
+            <div class="ref">
+              <span class="tbl am">Sabah</span>
+              <div class="tx">
+                <div class="h">10 Ağu <small>· Sabah</small></div>
+                <p>“Bugün iki kere oturdum...”</p>
+              </div>
+              <a class="go" href="#">Gör <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>

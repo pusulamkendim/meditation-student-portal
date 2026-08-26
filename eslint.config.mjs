@@ -37,6 +37,16 @@ export default tseslint.config(
     },
   },
   {
+    files: ['apps/sakinzihin-web/**/*.{ts,tsx}'],
+    plugins: { '@next/next': next },
+    settings: { next: { rootDir: 'apps/sakinzihin-web' } },
+    rules: {
+      ...next.configs.recommended.rules,
+      ...next.configs['core-web-vitals'].rules,
+      '@next/next/no-html-link-for-pages': 'off',
+    },
+  },
+  {
     files: ['packages/core/src/**/*.ts', 'apps/*/src/**/*.ts'],
     rules: {
       'no-restricted-properties': [

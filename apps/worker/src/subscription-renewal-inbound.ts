@@ -120,13 +120,68 @@ export class SubscriptionRenewalInboundProcessor {
 
       const student = await tx.student.findUniqueOrThrow({ where: { id: identity.studentId } });
       const now = this.clock.now();
+      const existingInbound = await tx.message.findUnique({
+        where: { inboxEventId: inbox.id },
+        select: { id: true },
+      });
+      if (!existingInbound) {
+        const protectedContent = content
+          ? this.encryption.encrypt(content, `message:${inbox.id}`)
+          : undefined;
+        const occurredAt =
+          typeof normalized.occurredAt === 'string' &&
+          !Number.isNaN(new Date(normalized.occurredAt).getTime())
+            ? new Date(normalized.occurredAt)
+            : inbox.createdAt;
+        await tx.message.create({
+          data: {
+            studentId: student.id,
+            channelIdentityId: identity.id,
+            direction: 'INBOUND',
+            status: 'RECEIVED',
+            externalMessageId:
+              typeof normalized.externalMessageId === 'string'
+                ? normalized.externalMessageId
+                : null,
+            contentEncrypted: protectedContent ? new Uint8Array(protectedContent.ciphertext) : null,
+            contentKeyId: protectedContent?.keyId,
+            inboxEventId: inbox.id,
+            occurredAt,
+          },
+        });
+      }
+
+      const repeatedAction =
+        (action === 'CONTINUE' &&
+          renewal.status === SubscriptionRenewalStatus.CONTINUE_REQUESTED) ||
+        (action === 'DECLINE' && renewal.status === SubscriptionRenewalStatus.DECLINED) ||
+        (action === 'PAYMENT_REPORTED' &&
+          renewal.status === SubscriptionRenewalStatus.PAYMENT_REPORTED &&
+          Boolean(renewal.payment));
+      if (repeatedAction) {
+        await tx.inboxEvent.update({
+          where: { id: inbox.id },
+          data: { studentId: student.id, processedAt: now },
+        });
+        await tx.inboundResponseOwnership.create({
+          data: { inboundMessageId: inbox.id, owner: 'NO_REPLY' },
+        });
+        return true;
+      }
+
       let eventKey: SystemEventKey;
       let variables: Record<string, unknown>;
       let quickReplies: Array<{ id: string; title: string }> | undefined;
 
       if (action === 'CONTINUE') {
         const changed = await tx.subscriptionRenewal.updateMany({
-          where: { id: renewal.id, version: renewal.version },
+          where: {
+            id: renewal.id,
+            version: renewal.version,
+            status: {
+              in: [SubscriptionRenewalStatus.REMINDER_QUEUED, SubscriptionRenewalStatus.DECLINED],
+            },
+          },
           data: {
             status: SubscriptionRenewalStatus.CONTINUE_REQUESTED,
             choiceRecordedAt: now,
@@ -139,7 +194,16 @@ export class SubscriptionRenewalInboundProcessor {
         quickReplies = [{ id: 'ÖDEME YAPTIM', title: 'Ödeme yaptım' }];
       } else if (action === 'DECLINE') {
         const changed = await tx.subscriptionRenewal.updateMany({
-          where: { id: renewal.id, version: renewal.version },
+          where: {
+            id: renewal.id,
+            version: renewal.version,
+            status: {
+              in: [
+                SubscriptionRenewalStatus.REMINDER_QUEUED,
+                SubscriptionRenewalStatus.CONTINUE_REQUESTED,
+              ],
+            },
+          },
           data: {
             status: SubscriptionRenewalStatus.DECLINED,
             choiceRecordedAt: now,
@@ -198,37 +262,6 @@ export class SubscriptionRenewalInboundProcessor {
           reference: payment.referenceCode,
           reportedAtText: this.formatDateTime(now),
         };
-      }
-
-      const existingInbound = await tx.message.findUnique({
-        where: { inboxEventId: inbox.id },
-        select: { id: true },
-      });
-      if (!existingInbound) {
-        const protectedContent = content
-          ? this.encryption.encrypt(content, `message:${inbox.id}`)
-          : undefined;
-        const occurredAt =
-          typeof normalized.occurredAt === 'string' &&
-          !Number.isNaN(new Date(normalized.occurredAt).getTime())
-            ? new Date(normalized.occurredAt)
-            : inbox.createdAt;
-        await tx.message.create({
-          data: {
-            studentId: student.id,
-            channelIdentityId: identity.id,
-            direction: 'INBOUND',
-            status: 'RECEIVED',
-            externalMessageId:
-              typeof normalized.externalMessageId === 'string'
-                ? normalized.externalMessageId
-                : null,
-            contentEncrypted: protectedContent ? new Uint8Array(protectedContent.ciphertext) : null,
-            contentKeyId: protectedContent?.keyId,
-            inboxEventId: inbox.id,
-            occurredAt,
-          },
-        });
       }
 
       const rendered = await this.render(

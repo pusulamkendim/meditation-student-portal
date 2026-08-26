@@ -32,7 +32,7 @@ export class ContentHubService {
           },
         },
         orderBy: { updatedAt: 'desc' },
-        take: 24,
+        take: 25,
       }),
       this.prisma.meditationPublicShare.findMany({
         where: {
@@ -42,7 +42,7 @@ export class ContentHubService {
         },
         include: { meditationType: true },
         orderBy: { updatedAt: 'desc' },
-        take: 24,
+        take: 25,
       }),
     ]);
 

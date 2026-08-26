@@ -66,6 +66,15 @@ test.beforeEach(async ({ page }) => {
   await page.route(`**/v1/admin/students/${studentId}`, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detail) }),
   );
+  await page.route(
+    `**/v1/admin/students/${studentId}/channel-links/status?channel=WHATSAPP`,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: '{"status":"NONE"}',
+      }),
+  );
   await page.route(`**/v1/admin/students/${studentId}/channel-links`, async (route) => {
     expect(route.request().postDataJSON()).toEqual({ channel: 'WHATSAPP' });
     return route.fulfill({
@@ -81,6 +90,16 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('creates a 24-hour link that opens the agent WhatsApp conversation', async ({ page }) => {
+  let createRequestCount = 0;
+  page.on('request', (request) => {
+    if (
+      request.method() === 'POST' &&
+      request.url().endsWith(`/v1/admin/students/${studentId}/channel-links`)
+    ) {
+      createRequestCount += 1;
+    }
+  });
+
   await page.goto(`/students/${studentId}`);
   await page.getByRole('tab', { name: 'Profil ve izinler' }).click();
   await page.getByRole('button', { name: 'WhatsApp numarasını değiştir' }).click();
@@ -88,6 +107,9 @@ test('creates a 24-hour link that opens the agent WhatsApp conversation', async 
   const dialog = page.getByRole('dialog', { name: 'WhatsApp numarasını değiştir' });
   await expect(dialog).toBeVisible();
   await expect(dialog).toContainText('Bağlantı 24 saat geçerlidir');
+  expect(createRequestCount).toBe(0);
+  await dialog.getByRole('button', { name: 'Bağlantı oluştur' }).click();
+  expect(createRequestCount).toBe(1);
   await expect(dialog).toContainText(
     `https://wa.me/905428078429?text=NUMARA%20DEGISTIR%20${token}`,
   );
@@ -98,4 +120,25 @@ test('creates a 24-hour link that opens the agent WhatsApp conversation', async 
     clientWidth: document.documentElement.clientWidth,
   }));
   expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+});
+
+test('reopening the dialog does not create or revoke a link', async ({ page }) => {
+  let createRequestCount = 0;
+  page.on('request', (request) => {
+    if (
+      request.method() === 'POST' &&
+      request.url().endsWith(`/v1/admin/students/${studentId}/channel-links`)
+    ) {
+      createRequestCount += 1;
+    }
+  });
+
+  await page.goto(`/students/${studentId}`);
+  await page.getByRole('tab', { name: 'Profil ve izinler' }).click();
+  await page.getByRole('button', { name: 'WhatsApp numarasını değiştir' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Kapat', exact: true }).click();
+  await page.getByRole('button', { name: 'WhatsApp numarasını değiştir' }).click();
+
+  expect(createRequestCount).toBe(0);
+  await expect(page.getByRole('dialog')).toContainText('Bağlantı oluştur');
 });

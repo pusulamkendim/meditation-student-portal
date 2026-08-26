@@ -258,6 +258,12 @@ export class PublicReadingController {
     return this.readings.publicMeta(slug);
   }
 
+  @Get('public/:slug/content')
+  publicContent(@Param('slug') slug: string, @Res({ passthrough: true }) reply: FastifyReply) {
+    reply.header('cache-control', 'public, max-age=60, stale-while-revalidate=300');
+    return this.readings.publicContent(slug);
+  }
+
   @Post('public/:slug/access')
   publicAccess(@Param('slug') slug: string, @Body() body: unknown) {
     const parsed = publicAccessSchema.safeParse(body);

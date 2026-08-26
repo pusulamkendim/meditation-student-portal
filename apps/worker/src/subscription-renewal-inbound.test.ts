@@ -309,6 +309,15 @@ describe.runIf(runDatabaseTests)('subscription renewal inbound flow', () => {
     const instructionText = (instructions.payload as { rendered: string }).rendered;
     expect(instructionText).toContain('TR00 TEST');
     expect(instructionText).toContain('Test Hesap');
+    await send('DEVAM ETMEK İSTERİM');
+    await expect(
+      prisma.messageIntent.count({
+        where: {
+          studentId,
+          payload: { path: ['eventKey'], equals: 'SUBSCRIPTION_RENEWAL_PAYMENT_INSTRUCTIONS' },
+        },
+      }),
+    ).resolves.toBe(1);
 
     await send('ÖDEME YAPTIM');
     await send('ÖDEME YAPTIM');
@@ -325,6 +334,14 @@ describe.runIf(runDatabaseTests)('subscription renewal inbound flow', () => {
           aggregateType: 'Payment',
           aggregateId: renewal.paymentId!,
           eventType: 'ADMIN_PAYMENT_REVIEW_REQUIRED',
+        },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      prisma.messageIntent.count({
+        where: {
+          studentId,
+          payload: { path: ['eventKey'], equals: 'PAYMENT_REPORTED' },
         },
       }),
     ).resolves.toBe(1);

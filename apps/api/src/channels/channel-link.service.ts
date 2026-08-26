@@ -75,6 +75,32 @@ export class ChannelLinkService {
     this.lookup = new LookupHmac(Buffer.from(config.LOOKUP_HMAC_KEY, 'base64'));
   }
 
+  async status(studentId: string, channel: ChannelType) {
+    await this.prisma.student.findUniqueOrThrow({ where: { id: studentId }, select: { id: true } });
+    const latest = await this.prisma.channelLinkToken.findFirst({
+      where: { studentId, channel },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        createdAt: true,
+        expiresAt: true,
+        usedAt: true,
+        revokedAt: true,
+      },
+    });
+    if (!latest) return { status: 'NONE' as const };
+
+    const now = this.clock.now();
+    const status = latest.usedAt
+      ? ('CONFIRMED' as const)
+      : latest.revokedAt
+        ? ('REVOKED' as const)
+        : latest.expiresAt <= now
+          ? ('EXPIRED' as const)
+          : ('PENDING' as const);
+    return { ...latest, status };
+  }
+
   async create(studentId: string, channel: ChannelType, actorId?: string) {
     if (channel !== ChannelType.WHATSAPP) {
       throw new BadRequestException('Bu akış yalnızca WhatsApp numarası değişikliği içindir.');

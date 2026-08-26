@@ -215,6 +215,15 @@ type WhatsAppNumberTransfer = {
   previousDefaultIdentityId?: string;
 };
 
+type WhatsAppNumberTransferStatus = {
+  id?: string;
+  status: 'NONE' | 'PENDING' | 'CONFIRMED' | 'EXPIRED' | 'REVOKED';
+  createdAt?: string;
+  expiresAt?: string;
+  usedAt?: string;
+  revokedAt?: string;
+};
+
 type Conversation = {
   items: Array<{
     id: string;
@@ -545,6 +554,8 @@ export default function StudentDetailPage() {
   const [newSubscriptionStartDate, setNewSubscriptionStartDate] = useState('');
   const [whatsAppTransferOpen, setWhatsAppTransferOpen] = useState(false);
   const [whatsAppTransfer, setWhatsAppTransfer] = useState<WhatsAppNumberTransfer>();
+  const [whatsAppTransferStatus, setWhatsAppTransferStatus] =
+    useState<WhatsAppNumberTransferStatus>();
   const [whatsAppTransferError, setWhatsAppTransferError] = useState<string>();
 
   const load = useCallback(async () => {
@@ -578,7 +589,32 @@ export default function StudentDetailPage() {
 
   async function openWhatsAppNumberTransfer() {
     setWhatsAppTransferOpen(true);
-    setWhatsAppTransfer(undefined);
+    setWhatsAppTransferError(undefined);
+    await refreshWhatsAppNumberTransferStatus();
+  }
+
+  async function refreshWhatsAppNumberTransferStatus() {
+    try {
+      setBusy(true);
+      const result = await requestJson<WhatsAppNumberTransferStatus>(
+        `/v1/admin/students/${studentId}/channel-links/status?channel=WHATSAPP`,
+      );
+      setWhatsAppTransferStatus(result);
+      setWhatsAppTransfer((current) =>
+        current && current.id === result.id && result.status === 'PENDING' ? current : undefined,
+      );
+      return result;
+    } catch (reason) {
+      setWhatsAppTransferError(
+        reason instanceof Error ? reason.message : 'Doğrulama durumu alınamadı.',
+      );
+      return undefined;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createWhatsAppNumberTransfer() {
     setWhatsAppTransferError(undefined);
     try {
       setBusy(true);
@@ -600,6 +636,11 @@ export default function StudentDetailPage() {
         url: `https://wa.me/${number}?text=${encodeURIComponent(result.command)}`,
         previousDefaultIdentityId: data?.channel?.id,
       });
+      setWhatsAppTransferStatus({
+        id: result.id,
+        status: 'PENDING',
+        expiresAt: result.expiresAt,
+      });
     } catch (reason) {
       setWhatsAppTransferError(
         reason instanceof Error ? reason.message : 'Doğrulama bağlantısı oluşturulamadı.',
@@ -610,20 +651,39 @@ export default function StudentDetailPage() {
   }
 
   async function checkWhatsAppNumberTransfer() {
-    if (!whatsAppTransfer) return;
-    setBusy(true);
-    const refreshed = await load();
-    setBusy(false);
-    if (
-      refreshed?.channel?.type === 'WHATSAPP' &&
-      refreshed.channel.id !== whatsAppTransfer.previousDefaultIdentityId
-    ) {
-      setWhatsAppTransferOpen(false);
-      setWhatsAppTransfer(undefined);
-      setNotice('Yeni WhatsApp numarası doğrulandı ve varsayılan kanal olarak ayarlandı.');
-      return;
+    try {
+      setBusy(true);
+      const [refreshed, transferStatus] = await Promise.all([
+        load(),
+        requestJson<WhatsAppNumberTransferStatus>(
+          `/v1/admin/students/${studentId}/channel-links/status?channel=WHATSAPP`,
+        ),
+      ]);
+      setWhatsAppTransferStatus(transferStatus);
+      setWhatsAppTransfer((current) =>
+        current && current.id === transferStatus.id && transferStatus.status === 'PENDING'
+          ? current
+          : undefined,
+      );
+      if (
+        transferStatus.status === 'CONFIRMED' ||
+        (whatsAppTransfer &&
+          refreshed?.channel?.type === 'WHATSAPP' &&
+          refreshed.channel.id !== whatsAppTransfer.previousDefaultIdentityId)
+      ) {
+        setWhatsAppTransferOpen(false);
+        setWhatsAppTransfer(undefined);
+        setNotice('Yeni WhatsApp numarası doğrulandı ve varsayılan kanal olarak ayarlandı.');
+        return;
+      }
+      setNotice('Yeni numaradan doğrulama mesajı henüz alınmadı.');
+    } catch (reason) {
+      setWhatsAppTransferError(
+        reason instanceof Error ? reason.message : 'Doğrulama durumu alınamadı.',
+      );
+    } finally {
+      setBusy(false);
     }
-    setNotice('Yeni numaradan doğrulama mesajı henüz alınmadı.');
   }
 
   useEffect(() => {
@@ -1306,7 +1366,6 @@ export default function StudentDetailPage() {
               <Button
                 variant="secondary"
                 loading={busy}
-                disabled={!whatsAppTransfer}
                 onClick={() => void checkWhatsAppNumberTransfer()}
               >
                 <RefreshCw aria-hidden="true" /> Durumu kontrol et
@@ -1322,6 +1381,16 @@ export default function StudentDetailPage() {
             {whatsAppTransferError ? (
               <Alert tone="danger" title="Bağlantı oluşturulamadı">
                 {whatsAppTransferError}
+              </Alert>
+            ) : null}
+            {!whatsAppTransfer && whatsAppTransferStatus?.status === 'PENDING' ? (
+              <Alert tone="info" title="Aktif doğrulama bağlantısı var">
+                Mevcut bağlantı{' '}
+                {whatsAppTransferStatus.expiresAt
+                  ? formatDateTime(whatsAppTransferStatus.expiresAt)
+                  : 'belirtilen süreye'}{' '}
+                kadar geçerli. Güvenlik nedeniyle bağlantı metni tekrar gösterilmez. Yeni bağlantı
+                oluşturursanız önceki bağlantı geçersiz olur.
               </Alert>
             ) : null}
             {whatsAppTransfer ? (
@@ -1356,7 +1425,16 @@ export default function StudentDetailPage() {
               </>
             ) : busy ? (
               <Skeleton className="student-detail-skeleton" />
-            ) : null}
+            ) : (
+              <div className="student-action-row">
+                <Button onClick={() => void createWhatsAppNumberTransfer()}>
+                  <Smartphone aria-hidden="true" />
+                  {whatsAppTransferStatus?.status === 'PENDING'
+                    ? 'Yeni bağlantı oluştur'
+                    : 'Bağlantı oluştur'}
+                </Button>
+              </div>
+            )}
           </div>
         </Modal>
       ) : null}
@@ -3615,6 +3693,10 @@ function PaymentsTab({
 }
 
 function ProfileTab({ data, onChangeWhatsApp }: { data: Detail; onChangeWhatsApp: () => void }) {
+  const changeableWhatsAppId = data.channels.find(
+    (channel) => channel.type === 'WHATSAPP' && channel.status === 'ACTIVE',
+  )?.id;
+
   return (
     <div className="student-tab-content">
       <div className="student-profile-grid">
@@ -3663,11 +3745,6 @@ function ProfileTab({ data, onChangeWhatsApp }: { data: Detail; onChangeWhatsApp
             </div>
             <MessageCircle aria-hidden="true" />
           </div>
-          <div className="student-channel-actions">
-            <Button variant="secondary" onClick={onChangeWhatsApp}>
-              <Smartphone aria-hidden="true" /> WhatsApp numarasını değiştir
-            </Button>
-          </div>
           <div className="student-channel-list">
             {data.channels.length ? (
               data.channels.map((channel) => (
@@ -3680,9 +3757,22 @@ function ProfileTab({ data, onChangeWhatsApp }: { data: Detail; onChangeWhatsApp
                     <small>{channel.displayName}</small>
                   </div>
                   <span>{channel.identifier ?? 'Tanımlayıcı çözülemedi'}</span>
-                  <Badge tone={channel.status === 'ACTIVE' ? 'success' : 'neutral'}>
-                    {label(channel.status)}
-                  </Badge>
+                  <div className="student-channel-row-actions">
+                    <Badge tone={channel.status === 'ACTIVE' ? 'success' : 'neutral'}>
+                      {label(channel.status)}
+                    </Badge>
+                    {channel.id === changeableWhatsAppId ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label="WhatsApp numarasını değiştir"
+                        title="WhatsApp numarasını değiştir"
+                        onClick={onChangeWhatsApp}
+                      >
+                        <Smartphone aria-hidden="true" /> Değiştir
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
               ))
             ) : (

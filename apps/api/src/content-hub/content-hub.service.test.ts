@@ -81,6 +81,7 @@ describe('ContentHubService', () => {
     expect(prisma.readingPublicShare.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({ status: 'ACTIVE', reading: { status: 'PUBLISHED' } }),
+        take: 25,
       }),
     );
     expect(prisma.meditationPublicShare.findMany).toHaveBeenCalledWith(
@@ -89,6 +90,7 @@ describe('ContentHubService', () => {
           status: 'ACTIVE',
           meditationType: { status: 'PUBLISHED' },
         }),
+        take: 25,
       }),
     );
   });
