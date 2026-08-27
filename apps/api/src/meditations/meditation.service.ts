@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -27,6 +28,11 @@ import {
 } from '@meditation/core';
 
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
+import {
+  normalizeCoverImageAlt,
+  type CoverImageUpload,
+  validateCoverImage,
+} from '../content-images/cover-image.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { type ObjectStorage, R2ObjectStorage } from '../knowledge/storage.js';
 
@@ -109,6 +115,8 @@ export function reconcilePublicShareDurations(
 
 @Injectable()
 export class MeditationService {
+  private readonly logger = new Logger(MeditationService.name);
+
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(APPLICATION_CONFIG) private readonly config: ApplicationConfig,
@@ -189,6 +197,7 @@ export class MeditationService {
       guidanceMode?: MeditationGuidanceMode;
       targetDurations?: number[];
       status?: MeditationTypeStatus;
+      coverImageAlt?: string | null;
     },
     adminId: string,
   ) {
@@ -247,6 +256,9 @@ export class MeditationService {
             : durationsChanged
               ? { status: MeditationTypeStatus.DRAFT }
               : {}),
+          ...(input.coverImageAlt !== undefined
+            ? { coverImageAlt: normalizeCoverImageAlt(input.coverImageAlt) }
+            : {}),
           ...(durationsChanged ? { audioRevision: { increment: 1 } } : {}),
           updatedByAdminId: adminId,
           version: { increment: 1 },
@@ -294,7 +306,10 @@ export class MeditationService {
   async remove(id: string, expectedVersion: number, adminId: string) {
     const current = await this.prisma.meditationType.findUnique({
       where: { id },
-      include: {
+      select: {
+        title: true,
+        version: true,
+        coverImageStorageKey: true,
         audioAssets: { select: { storageKey: true } },
         renders: { where: { storageKey: { not: null } }, select: { storageKey: true } },
         _count: { select: { practiceSlots: true, practiceSessions: true } },
@@ -345,13 +360,120 @@ export class MeditationService {
     const storageKeys = [
       ...current.audioAssets.map((asset) => asset.storageKey),
       ...current.renders.flatMap((render) => (render.storageKey ? [render.storageKey] : [])),
+      current.coverImageStorageKey,
     ];
-    await Promise.allSettled(
+    await Promise.all(
       [...new Set(storageKeys)].map((key) =>
-        this.storage.remove(this.config.R2_PRIVATE_BUCKET, key),
+        this.removeStorageObject(key, 'Meditasyon depolama nesnesi silinemedi'),
       ),
     );
     return { mode: 'DELETED' as const, message: 'Meditasyon kalıcı olarak silindi.' };
+  }
+
+  async uploadCoverImage(
+    id: string,
+    file: CoverImageUpload,
+    alt: string | undefined,
+    expectedVersion: number,
+    adminId: string,
+  ) {
+    const validated = validateCoverImage(file);
+    const current = await this.prisma.meditationType.findUnique({
+      where: { id },
+      select: { version: true, status: true, coverImageStorageKey: true },
+    });
+    if (!current) throw new NotFoundException('Meditasyon türü bulunamadı.');
+    if (current.status === MeditationTypeStatus.ARCHIVED)
+      throw new BadRequestException('Arşivlenmiş meditasyona kapak görseli yüklenemez.');
+    const storageKey = `meditations/${id}/cover-${randomUUID()}.${validated.extension}`;
+    const hash = createHash('sha256').update(file.buffer).digest('hex');
+    await this.storage.put(
+      this.config.R2_PRIVATE_BUCKET,
+      storageKey,
+      file.buffer,
+      validated.contentType,
+    );
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const changed = await tx.meditationType.updateMany({
+          where: { id, version: expectedVersion },
+          data: {
+            coverImageStorageKey: storageKey,
+            coverImageMimeType: validated.contentType,
+            coverImageAlt: normalizeCoverImageAlt(alt) ?? null,
+            coverImageByteSize: file.buffer.byteLength,
+            coverImageHash: hash,
+            updatedByAdminId: adminId,
+            version: { increment: 1 },
+          },
+        });
+        if (changed.count !== 1)
+          throw new ConflictException('Meditasyon başka bir oturumda güncellendi.');
+        await this.audit(tx, adminId, 'MEDITATION_COVER_IMAGE_UPDATED', id, {
+          contentType: validated.contentType,
+          byteSize: file.buffer.byteLength,
+          contentHash: hash,
+        });
+      });
+    } catch (error) {
+      await this.removeStorageObject(storageKey, 'Yeni meditasyon kapak görseli temizlenemedi');
+      throw error;
+    }
+    await this.removeStorageObject(
+      current.coverImageStorageKey,
+      'Eski meditasyon kapak görseli silinemedi',
+    );
+    return { id, updated: true };
+  }
+
+  async removeCoverImage(id: string, expectedVersion: number, adminId: string) {
+    const current = await this.prisma.meditationType.findUnique({
+      where: { id },
+      select: { coverImageStorageKey: true },
+    });
+    if (!current) throw new NotFoundException('Meditasyon türü bulunamadı.');
+    const changed = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.meditationType.updateMany({
+        where: { id, version: expectedVersion },
+        data: {
+          coverImageStorageKey: null,
+          coverImageMimeType: null,
+          coverImageAlt: null,
+          coverImageByteSize: null,
+          coverImageHash: null,
+          updatedByAdminId: adminId,
+          version: { increment: 1 },
+        },
+      });
+      if (result.count !== 1)
+        throw new ConflictException('Meditasyon başka bir oturumda güncellendi.');
+      await this.audit(tx, adminId, 'MEDITATION_COVER_IMAGE_REMOVED', id, {});
+      return result;
+    });
+    await this.removeStorageObject(
+      current.coverImageStorageKey,
+      'Meditasyon kapak görseli silinemedi',
+    );
+    return { id, removed: changed.count === 1 };
+  }
+
+  async image(id: string) {
+    const meditation = await this.prisma.meditationType.findUnique({
+      where: { id },
+      select: { coverImageStorageKey: true, coverImageMimeType: true, coverImageHash: true },
+    });
+    if (!meditation) throw new NotFoundException('Meditasyon türü bulunamadı.');
+    if (!meditation.coverImageStorageKey || !meditation.coverImageMimeType)
+      throw new NotFoundException('Bu meditasyonun kapak görseli bulunamadı.');
+    const buffer = await this.storage.get(
+      this.config.R2_PRIVATE_BUCKET,
+      meditation.coverImageStorageKey,
+    );
+    return {
+      contentType: meditation.coverImageMimeType,
+      buffer,
+      etag: meditation.coverImageHash,
+    };
   }
 
   async createPublicShare(
@@ -779,6 +901,10 @@ export class MeditationService {
     return {
       title: meditation.title,
       description: meditation.description,
+      coverImageUrl: meditation.coverImageStorageKey
+        ? this.publicMeditationImagePath(share.slug, meditation.coverImageHash)
+        : null,
+      coverImageAlt: meditation.coverImageAlt ?? null,
       durationMinutes,
       allowedDurations: share.allowDurationSelection
         ? share.allowedDurations
@@ -804,11 +930,44 @@ export class MeditationService {
     )
       throw new NotFoundException('Meditasyon bağlantısı kullanılamıyor.');
     return {
+      slug: share.slug,
       title: share.meditationType.title,
       description: share.meditationType.description,
+      guided: share.meditationType.guidanceMode === MeditationGuidanceMode.GUIDED,
       allowIndexing: share.allowIndexing,
       canonicalUrl: this.publicMeditationUrl(share.slug),
       durations: share.allowedDurations,
+      defaultDurationMinutes: share.defaultDurationMinutes,
+      allowDurationSelection: share.allowDurationSelection,
+      coverImageUrl: share.meditationType.coverImageStorageKey
+        ? this.publicMeditationImagePath(share.slug, share.meditationType.coverImageHash)
+        : null,
+      coverImageAlt: share.meditationType.coverImageAlt ?? null,
+    };
+  }
+
+  async publicMeditationImage(slug: string) {
+    const share = await this.prisma.meditationPublicShare.findUnique({
+      where: { slug },
+      include: { meditationType: true },
+    });
+    if (
+      !share ||
+      share.status !== MeditationPublicShareStatus.ACTIVE ||
+      (share.expiresAt && share.expiresAt <= this.clock.now()) ||
+      share.meditationType.status !== MeditationTypeStatus.PUBLISHED
+    )
+      throw new NotFoundException('Meditasyon bağlantısı kullanılamıyor.');
+    const key = share.meditationType.coverImageStorageKey;
+    const contentType = share.meditationType.coverImageMimeType;
+    if (!key || !contentType)
+      throw new NotFoundException('Bu meditasyonun kapak görseli bulunamadı.');
+    const buffer = await this.storage.get(this.config.R2_PRIVATE_BUCKET, key);
+    return {
+      contentType,
+      buffer,
+      etag:
+        share.meditationType.coverImageHash ?? createHash('sha256').update(buffer).digest('hex'),
     };
   }
 
@@ -1017,6 +1176,23 @@ export class MeditationService {
       'http://localhost:3001'
     ).replace(/\/+$/u, '');
     return `${origin}/meditasyon/${slug}`;
+  }
+
+  private publicMeditationImagePath(slug: string, hash?: string | null) {
+    const path = `/v1/public/meditations/${encodeURIComponent(slug)}/image`;
+    return hash ? `${path}?v=${encodeURIComponent(hash.slice(0, 16))}` : path;
+  }
+
+  private async removeStorageObject(key: string | null | undefined, message: string) {
+    if (!key) return;
+    try {
+      await this.storage.remove(this.config.R2_PRIVATE_BUCKET, key);
+    } catch (error) {
+      this.logger.warn(
+        `${message}: ${key}`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
   private createPublicMeditationToken(claims: PublicMeditationClaims) {

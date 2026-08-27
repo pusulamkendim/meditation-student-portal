@@ -11,6 +11,7 @@ import mountainLakeWideAsset from '../../public/images/scene-10-mountain-lake-wi
 import aboutMeAsset from '../../public/images/aboutme.png';
 import practicePortraitAsset from '../../public/images/me2.jpg';
 import practiceBackdropAsset from '../../public/images/me4.jpg';
+import { siteConfig } from '../config/site';
 
 export type ImageKey =
   | 'hero'
@@ -31,6 +32,22 @@ export interface EditorialImage {
   src: string;
   alt: string;
 }
+
+export const editorialImageKeys = [
+  'forestPath',
+  'forestLight',
+  'lakeGolden',
+  'lakeSunrise',
+  'lakeReflection',
+  'mountainLake',
+  'stoneBranch',
+  'quietRoom',
+  'mountainLakeWide',
+] as const satisfies readonly ImageKey[];
+
+export type EditorialImageKey = (typeof editorialImageKeys)[number];
+
+export const contentImageOverrides: Partial<Record<string, EditorialImageKey>> = {};
 
 export const imageRegistry: Record<ImageKey, EditorialImage> = {
   hero: {
@@ -87,12 +104,35 @@ export const imageRegistry: Record<ImageKey, EditorialImage> = {
   },
 };
 
-const imageKeys = Object.keys(imageRegistry) as ImageKey[];
-
 function stableIndex(value: string): number {
   return [...value].reduce((sum, character) => sum + character.codePointAt(0)!, 0);
 }
 
 export function imageForContent(slug: string, offset = 0): EditorialImage {
-  return imageRegistry[imageKeys[(stableIndex(slug) + offset) % imageKeys.length]];
+  const override = contentImageOverrides[slug];
+  if (override) return imageRegistry[override];
+
+  const index = (stableIndex(slug) + offset) % editorialImageKeys.length;
+  return imageRegistry[editorialImageKeys[index]];
+}
+
+export type ContentImageInput = {
+  slug: string;
+  title: string;
+  coverImageUrl?: string | null;
+  coverImageAlt?: string | null;
+};
+
+export function resolveImageUrl(source: string): string {
+  if (/^https?:\/\//u.test(source)) return source;
+  return `${siteConfig.apiUrl}${source.startsWith('/') ? source : `/${source}`}`;
+}
+
+export function resolveContentImage(content: ContentImageInput, offset = 0): EditorialImage {
+  const fallback = imageForContent(content.slug, offset);
+  if (!content.coverImageUrl) return fallback;
+  return {
+    src: resolveImageUrl(content.coverImageUrl),
+    alt: content.coverImageAlt?.trim() || content.title || fallback.alt,
+  };
 }

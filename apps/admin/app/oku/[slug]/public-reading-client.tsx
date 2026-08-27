@@ -208,7 +208,11 @@ export function PublicReadingClient({ slug }: { slug: string }) {
         <div className="public-reader-frame" />
       </div>
       <header className="public-reader-header">
-        <a className="public-reader-brand" href="https://sakinzihin.com" aria-label="Sakin Zihin kütüphanesi">
+        <a
+          className="public-reader-brand"
+          href="https://sakinzihin.com"
+          aria-label="Sakin Zihin kütüphanesi"
+        >
           <span>
             <Flower2 aria-hidden="true" />
           </span>

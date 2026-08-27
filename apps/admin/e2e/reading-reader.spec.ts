@@ -308,9 +308,14 @@ test('shows the reading library and section preview in the admin portal', async 
       buttons.first().boundingBox(),
       buttons.last().boundingBox(),
     ]);
-    expect(
-      (lastButtonBox?.x ?? 0) - ((firstButtonBox?.x ?? 0) + (firstButtonBox?.width ?? 0)),
-    ).toBeGreaterThanOrEqual(12);
+    if (!firstButtonBox || !lastButtonBox) throw new Error('Dialog actions are not visible.');
+    const actionSpacing = Math.max(
+      lastButtonBox.x - (firstButtonBox.x + firstButtonBox.width),
+      firstButtonBox.x - (lastButtonBox.x + lastButtonBox.width),
+      lastButtonBox.y - (firstButtonBox.y + firstButtonBox.height),
+      firstButtonBox.y - (lastButtonBox.y + lastButtonBox.height),
+    );
+    expect(actionSpacing).toBeGreaterThanOrEqual(12);
     await dialog.screenshot({ path: testInfo.outputPath(screenshotName) });
   }
 

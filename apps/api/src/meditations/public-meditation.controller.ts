@@ -12,6 +12,7 @@ import {
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 
+import { sendPublicImage } from '../content-images/image-response.js';
 import { sendAudio } from './audio-response.js';
 import { MeditationService } from './meditation.service.js';
 
@@ -46,6 +47,16 @@ export class PublicMeditationController {
   @Get(':slug/meta')
   meta(@Param('slug') slug: string) {
     return this.meditations.publicMeditationMeta(slug);
+  }
+
+  @Get(':slug/image')
+  async image(
+    @Param('slug') slug: string,
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ) {
+    const file = await this.meditations.publicMeditationImage(slug);
+    return sendPublicImage(request, reply, file);
   }
 
   @Post('events')

@@ -70,6 +70,9 @@ type MeditationType = {
   audioRevision: number;
   version: number;
   updatedAt: string;
+  coverImageMimeType?: string | null;
+  coverImageAlt?: string | null;
+  coverImageByteSize?: number | null;
   openingAudio?: AudioAsset | null;
   closingAudio?: AudioAsset | null;
   audioAssets?: AudioAsset[];
@@ -215,6 +218,7 @@ export default function MeditationsPage() {
   const [guidanceMode, setGuidanceMode] = useState<GuidanceMode>('SILENT');
   const [durations, setDurations] = useState<number[]>(standardDurations);
   const [customDuration, setCustomDuration] = useState('');
+  const [coverImageAlt, setCoverImageAlt] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [publicShareOpen, setPublicShareOpen] = useState(false);
@@ -231,6 +235,7 @@ export default function MeditationsPage() {
   const [notice, setNotice] = useState<Notice>();
   const openingInput = useRef<HTMLInputElement>(null);
   const closingInput = useRef<HTMLInputElement>(null);
+  const coverInput = useRef<HTMLInputElement>(null);
 
   const loadItems = useCallback(async (preferredId?: string) => {
     setError(undefined);
@@ -257,6 +262,7 @@ export default function MeditationsPage() {
       setLevel(result.level);
       setGuidanceMode(result.guidanceMode);
       setDurations(result.targetDurations);
+      setCoverImageAlt(result.coverImageAlt ?? '');
     } catch (reason) {
       setNotice({
         tone: 'danger',
@@ -338,6 +344,8 @@ export default function MeditationsPage() {
   async function createMeditation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const coverImage = form.get('coverImage');
+    const coverImageAlt = String(form.get('coverImageAlt') ?? '');
     setBusy(true);
     try {
       const created = await request<MeditationType>('/v1/admin/meditations', {
@@ -351,9 +359,29 @@ export default function MeditationsPage() {
           targetDurations: standardDurations,
         }),
       });
+      let coverImageError: string | undefined;
+      if (coverImage instanceof File && coverImage.size > 0) {
+        const coverBody = new FormData();
+        coverBody.set('coverImage', coverImage);
+        coverBody.set('expectedVersion', String(created.version));
+        coverBody.set('coverImageAlt', coverImageAlt);
+        try {
+          await request(`/v1/admin/meditations/${created.id}/cover-image`, {
+            method: 'POST',
+            headers: csrfHeaders(),
+            body: coverBody,
+          });
+        } catch (reason) {
+          coverImageError = reason instanceof Error ? reason.message : 'Kapak görseli yüklenemedi.';
+        }
+      }
       setCreateOpen(false);
       await loadItems(created.id);
-      setNotice({ tone: 'success', text: 'Meditasyon türü oluşturuldu.' });
+      setNotice(
+        coverImageError
+          ? { tone: 'info', text: `Meditasyon oluşturuldu; ${coverImageError}` }
+          : { tone: 'success', text: 'Meditasyon türü oluşturuldu.' },
+      );
     } catch (reason) {
       setNotice({
         tone: 'danger',
@@ -378,6 +406,7 @@ export default function MeditationsPage() {
           level,
           guidanceMode,
           targetDurations: durations,
+          coverImageAlt: coverImageAlt || null,
         }),
       });
       await Promise.all([loadDetail(detail.id), loadItems(detail.id)]);
@@ -386,6 +415,53 @@ export default function MeditationsPage() {
       setNotice({
         tone: 'danger',
         text: reason instanceof Error ? reason.message : 'Değişiklikler kaydedilemedi.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadCoverImage(file?: File) {
+    if (!detail || !file) return;
+    const body = new FormData();
+    body.set('coverImage', file);
+    body.set('expectedVersion', String(detail.version));
+    body.set('coverImageAlt', coverImageAlt);
+    setBusy(true);
+    try {
+      await request(`/v1/admin/meditations/${detail.id}/cover-image`, {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body,
+      });
+      await Promise.all([loadDetail(detail.id), loadItems(detail.id)]);
+      setNotice({ tone: 'success', text: 'Meditasyon kapak görseli güncellendi.' });
+    } catch (reason) {
+      setNotice({
+        tone: 'danger',
+        text: reason instanceof Error ? reason.message : 'Kapak görseli yüklenemedi.',
+      });
+    } finally {
+      setBusy(false);
+      if (coverInput.current) coverInput.current.value = '';
+    }
+  }
+
+  async function removeCoverImage() {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await request(`/v1/admin/meditations/${detail.id}/cover-image`, {
+        method: 'DELETE',
+        headers: csrfHeaders(true),
+        body: JSON.stringify({ expectedVersion: detail.version }),
+      });
+      await Promise.all([loadDetail(detail.id), loadItems(detail.id)]);
+      setNotice({ tone: 'success', text: 'Özel kapak kaldırıldı; editorial görsel kullanılacak.' });
+    } catch (reason) {
+      setNotice({
+        tone: 'danger',
+        text: reason instanceof Error ? reason.message : 'Kapak görseli kaldırılamadı.',
       });
     } finally {
       setBusy(false);
@@ -838,6 +914,55 @@ export default function MeditationsPage() {
                       </div>
                     ) : null}
                   </div>
+                  <div className="admin-cover-image-field">
+                    <div className="admin-cover-image-preview">
+                      {detail.coverImageMimeType ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`${api}/v1/admin/meditations/${detail.id}/cover-image?v=${detail.version}`}
+                          alt={coverImageAlt || detail.title}
+                        />
+                      ) : (
+                        <span>Editorial fallback kullanılacak</span>
+                      )}
+                    </div>
+                    <div className="admin-cover-image-controls">
+                      <TextField
+                        label="Kapak görseli alt metni"
+                        value={coverImageAlt}
+                        onChange={(event) => setCoverImageAlt(event.target.value)}
+                        maxLength={500}
+                      />
+                      <input
+                        ref={coverInput}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(event) => void uploadCoverImage(event.currentTarget.files?.[0])}
+                      />
+                      <div className="admin-cover-image-actions">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={busy || detail.status === 'ARCHIVED'}
+                          onClick={() => coverInput.current?.click()}
+                        >
+                          <Upload aria-hidden="true" />
+                          {detail.coverImageMimeType ? 'Görseli değiştir' : 'Görsel yükle'}
+                        </Button>
+                        {detail.coverImageMimeType ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={busy}
+                            onClick={() => void removeCoverImage()}
+                          >
+                            Görseli kaldır
+                          </Button>
+                        ) : null}
+                      </div>
+                      <small>JPEG, PNG veya WebP · en fazla 8 MiB</small>
+                    </div>
+                  </div>
                   <Button loading={busy} onClick={() => void save()}>
                     <Save aria-hidden="true" /> Değişiklikleri kaydet
                   </Button>
@@ -1240,6 +1365,19 @@ export default function MeditationsPage() {
                 <option value="SILENT">Sessiz sayaç</option>
                 <option value="GUIDED">Sesli yönlendirme</option>
               </select>
+            </label>
+            <TextField
+              label="Kapak görseli alt metni (isteğe bağlı)"
+              name="coverImageAlt"
+              maxLength={500}
+            />
+            <label className="reading-file-input">
+              <Upload aria-hidden="true" />
+              <span>
+                <strong>Kapak görseli</strong>
+                <small>JPEG, PNG veya WebP · en fazla 8 MiB · isteğe bağlı</small>
+              </span>
+              <input name="coverImage" type="file" accept="image/jpeg,image/png,image/webp" />
             </label>
           </form>
         </Modal>

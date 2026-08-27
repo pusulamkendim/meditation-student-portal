@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -24,6 +25,11 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import pdfParse from 'pdf-parse';
 
 import { APPLICATION_CONFIG } from '../config/application-config.module.js';
+import {
+  normalizeCoverImageAlt,
+  type CoverImageUpload,
+  validateCoverImage,
+} from '../content-images/cover-image.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { type ObjectStorage, R2ObjectStorage } from '../knowledge/storage.js';
 import { SystemMessageOrchestrator } from '../message-catalog/system-message-orchestrator.js';
@@ -36,6 +42,8 @@ const PUBLIC_READER_ACTIVE_WINDOW_MS = 5 * 60 * 1_000;
 type ReadingUpload = {
   markdown?: { filename: string; mimetype: string; buffer: Buffer };
   pdf?: { filename: string; mimetype: string; buffer: Buffer };
+  coverImage?: CoverImageUpload;
+  coverImageAlt?: string;
   title?: string;
   description?: string;
   author?: string;
@@ -126,10 +134,7 @@ export function parseReadingMarkdown(
 
   const groups = groupUnits(units, targetSectionCount);
   const sections = groups.map((group, index) => {
-    const title =
-      group.length === 1
-        ? group[0]!.title
-        : `${group[0]!.title} – ${group[group.length - 1]!.title}`;
+    const title = group[0]!.title;
     const contentMarkdown = group
       .map((unit, unitIndex) => (unitIndex === 0 ? unit.body : `### ${unit.title}\n\n${unit.body}`))
       .join('\n\n')
@@ -224,6 +229,7 @@ function groupUnits(units: MarkdownUnit[], requestedGroups: number): MarkdownUni
 
 @Injectable()
 export class ReadingService {
+  private readonly logger = new Logger(ReadingService.name);
   private readonly encryption: FieldEncryption;
   private readonly lookup: LookupHmac;
 
@@ -310,6 +316,8 @@ export class ReadingService {
 
   async upload(input: ReadingUpload, adminId: string) {
     validateUpload(input);
+    const coverImage = input.coverImage ? validateCoverImage(input.coverImage) : undefined;
+    const coverImageAlt = normalizeCoverImageAlt(input.coverImageAlt);
     let markdown = input.markdown;
     if (!markdown && input.pdf) {
       const parsedPdf = await pdfParse(input.pdf.buffer);
@@ -331,20 +339,30 @@ export class ReadingService {
     const id = randomUUID();
     const sourceKey = `readings/${id}/source-${randomUUID()}.md`;
     const pdfKey = input.pdf ? `readings/${id}/document-${randomUUID()}.pdf` : undefined;
-    await this.storage.put(
-      this.config.R2_PRIVATE_BUCKET,
-      sourceKey,
-      markdown.buffer,
-      'text/markdown; charset=utf-8',
-    );
-    if (input.pdf && pdfKey)
+    const coverKey = input.coverImage
+      ? `readings/${id}/cover-${randomUUID()}.${coverImage!.extension}`
+      : undefined;
+    try {
       await this.storage.put(
         this.config.R2_PRIVATE_BUCKET,
-        pdfKey,
-        input.pdf.buffer,
-        'application/pdf',
+        sourceKey,
+        markdown.buffer,
+        'text/markdown; charset=utf-8',
       );
-    try {
+      if (input.pdf && pdfKey)
+        await this.storage.put(
+          this.config.R2_PRIVATE_BUCKET,
+          pdfKey,
+          input.pdf.buffer,
+          'application/pdf',
+        );
+      if (input.coverImage && coverKey)
+        await this.storage.put(
+          this.config.R2_PRIVATE_BUCKET,
+          coverKey,
+          input.coverImage.buffer,
+          coverImage!.contentType,
+        );
       return await this.prisma.$transaction(async (tx) => {
         const reading = await tx.reading.create({
           data: {
@@ -363,6 +381,11 @@ export class ReadingService {
             pdfStorageKey: pdfKey,
             pdfHash: input.pdf ? contentHash(input.pdf.buffer) : undefined,
             pdfByteSize: input.pdf?.buffer.byteLength,
+            coverImageStorageKey: coverKey,
+            coverImageMimeType: coverImage?.contentType,
+            coverImageAlt: coverImageAlt ?? null,
+            coverImageByteSize: input.coverImage?.buffer.byteLength,
+            coverImageHash: input.coverImage ? contentHash(input.coverImage.buffer) : undefined,
             createdByAdminId: adminId,
             updatedByAdminId: adminId,
             sections: {
@@ -381,13 +404,16 @@ export class ReadingService {
           sections: reading.sections.length,
           words: parsed.wordCount,
           pdfAttached: Boolean(input.pdf),
+          coverImageAttached: Boolean(input.coverImage),
         });
         return reading;
       });
     } catch (error) {
-      await this.storage.remove(this.config.R2_PRIVATE_BUCKET, sourceKey).catch(() => undefined);
-      if (pdfKey)
-        await this.storage.remove(this.config.R2_PRIVATE_BUCKET, pdfKey).catch(() => undefined);
+      await Promise.all([
+        this.removeStorageObject(sourceKey, 'Okuma kaynağı temizlenemedi'),
+        this.removeStorageObject(pdfKey, 'Okuma PDF kaynağı temizlenemedi'),
+        this.removeStorageObject(coverKey, 'Okuma kapak görseli temizlenemedi'),
+      ]);
       throw error;
     }
   }
@@ -402,6 +428,7 @@ export class ReadingService {
       estimatedMinutes?: number;
       allowAgent?: boolean;
       status?: ReadingStatus;
+      coverImageAlt?: string | null;
     },
     adminId: string,
   ) {
@@ -426,6 +453,9 @@ export class ReadingService {
             : {}),
           ...(input.allowAgent !== undefined ? { allowAgent: input.allowAgent } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
+          ...(input.coverImageAlt !== undefined
+            ? { coverImageAlt: normalizeCoverImageAlt(input.coverImageAlt) }
+            : {}),
           updatedByAdminId: adminId,
           version: { increment: 1 },
         },
@@ -451,6 +481,7 @@ export class ReadingService {
         title: true,
         sourceStorageKey: true,
         pdfStorageKey: true,
+        coverImageStorageKey: true,
         _count: { select: { assignments: true } },
         publicShare: { select: { id: true } },
       },
@@ -476,16 +507,117 @@ export class ReadingService {
       await this.audit(tx, 'ADMIN', adminId, 'READING_DELETED', id, {
         title: reading.title,
         pdfAttached: Boolean(reading.pdfStorageKey),
+        coverImageAttached: Boolean(reading.coverImageStorageKey),
       });
     });
 
-    const storageKeys = [reading.sourceStorageKey, reading.pdfStorageKey].filter(
-      (key): key is string => Boolean(key),
-    );
-    await Promise.allSettled(
-      storageKeys.map((key) => this.storage.remove(this.config.R2_PRIVATE_BUCKET, key)),
-    );
+    await Promise.all([
+      this.removeStorageObject(reading.sourceStorageKey, 'Okuma kaynağı silinemedi'),
+      this.removeStorageObject(reading.pdfStorageKey, 'Okuma PDF kaynağı silinemedi'),
+      this.removeStorageObject(reading.coverImageStorageKey, 'Okuma kapak görseli silinemedi'),
+    ]);
     return { id, deleted: true };
+  }
+
+  async uploadCoverImage(
+    id: string,
+    file: CoverImageUpload,
+    alt: string | undefined,
+    expectedVersion: number,
+    adminId: string,
+  ) {
+    const validated = validateCoverImage(file);
+    const current = await this.prisma.reading.findUnique({
+      where: { id },
+      select: { version: true, coverImageStorageKey: true },
+    });
+    if (!current) throw new NotFoundException('Okuma bulunamadı.');
+    const storageKey = `readings/${id}/cover-${randomUUID()}.${validated.extension}`;
+    const hash = contentHash(file.buffer);
+    await this.storage.put(
+      this.config.R2_PRIVATE_BUCKET,
+      storageKey,
+      file.buffer,
+      validated.contentType,
+    );
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const changed = await tx.reading.updateMany({
+          where: { id, version: expectedVersion },
+          data: {
+            coverImageStorageKey: storageKey,
+            coverImageMimeType: validated.contentType,
+            coverImageAlt: normalizeCoverImageAlt(alt) ?? null,
+            coverImageByteSize: file.buffer.byteLength,
+            coverImageHash: hash,
+            updatedByAdminId: adminId,
+            version: { increment: 1 },
+          },
+        });
+        if (changed.count !== 1)
+          throw new ConflictException(
+            'Okuma başka bir oturumda güncellendi. Sayfayı yenileyip tekrar deneyin.',
+          );
+        await this.audit(tx, 'ADMIN', adminId, 'READING_COVER_IMAGE_UPDATED', id, {
+          contentType: validated.contentType,
+          byteSize: file.buffer.byteLength,
+          contentHash: hash,
+        });
+      });
+    } catch (error) {
+      await this.removeStorageObject(storageKey, 'Yeni okuma kapak görseli temizlenemedi');
+      throw error;
+    }
+    await this.removeStorageObject(
+      current.coverImageStorageKey,
+      'Eski okuma kapak görseli silinemedi',
+    );
+    return { id, updated: true };
+  }
+
+  async removeCoverImage(id: string, expectedVersion: number, adminId: string) {
+    const current = await this.prisma.reading.findUnique({
+      where: { id },
+      select: { version: true, coverImageStorageKey: true },
+    });
+    if (!current) throw new NotFoundException('Okuma bulunamadı.');
+    const changed = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.reading.updateMany({
+        where: { id, version: expectedVersion },
+        data: {
+          coverImageStorageKey: null,
+          coverImageMimeType: null,
+          coverImageAlt: null,
+          coverImageByteSize: null,
+          coverImageHash: null,
+          updatedByAdminId: adminId,
+          version: { increment: 1 },
+        },
+      });
+      if (result.count !== 1)
+        throw new ConflictException(
+          'Okuma başka bir oturumda güncellendi. Sayfayı yenileyip tekrar deneyin.',
+        );
+      await this.audit(tx, 'ADMIN', adminId, 'READING_COVER_IMAGE_REMOVED', id, {});
+      return result;
+    });
+    await this.removeStorageObject(current.coverImageStorageKey, 'Okuma kapak görseli silinemedi');
+    return { id, removed: changed.count === 1 };
+  }
+
+  async image(id: string) {
+    const reading = await this.prisma.reading.findUnique({
+      where: { id },
+      select: { coverImageStorageKey: true, coverImageMimeType: true, coverImageHash: true },
+    });
+    if (!reading) throw new NotFoundException('Okuma bulunamadı.');
+    if (!reading.coverImageStorageKey || !reading.coverImageMimeType)
+      throw new NotFoundException('Bu okumanın kapak görseli bulunamadı.');
+    const buffer = await this.storage.get(
+      this.config.R2_PRIVATE_BUCKET,
+      reading.coverImageStorageKey,
+    );
+    return { contentType: reading.coverImageMimeType, buffer, etag: reading.coverImageHash };
   }
 
   async createPublicShare(readingId: string, input: PublicShareSettings, adminId: string) {
@@ -695,6 +827,10 @@ export class ReadingService {
       sectionCount: share.reading._count.sections,
       allowIndexing: share.allowIndexing,
       canonicalUrl: this.publicReadingUrl(share.slug),
+      coverImageUrl: share.reading.coverImageStorageKey
+        ? this.publicReadingImagePath(share.slug, share.reading.coverImageHash)
+        : null,
+      coverImageAlt: share.reading.coverImageAlt ?? null,
     };
   }
 
@@ -709,6 +845,10 @@ export class ReadingService {
       hasPdf: share.allowPdf && Boolean(share.reading.pdfStorageKey),
       allowIndexing: share.allowIndexing,
       canonicalUrl: this.publicReadingUrl(share.slug),
+      coverImageUrl: share.reading.coverImageStorageKey
+        ? this.publicReadingImagePath(share.slug, share.reading.coverImageHash)
+        : null,
+      coverImageAlt: share.reading.coverImageAlt ?? null,
       updatedAt: share.reading.updatedAt.toISOString(),
       sections: share.reading.sections.map((section) => ({
         position: section.position,
@@ -716,6 +856,19 @@ export class ReadingService {
         contentMarkdown: section.contentMarkdown,
         wordCount: section.wordCount,
       })),
+    };
+  }
+
+  async publicImage(slug: string) {
+    const share = await this.publicShareForSlug(slug);
+    const key = share.reading.coverImageStorageKey;
+    const contentType = share.reading.coverImageMimeType;
+    if (!key || !contentType) throw new NotFoundException('Bu okumanın kapak görseli bulunamadı.');
+    const buffer = await this.storage.get(this.config.R2_PRIVATE_BUCKET, key);
+    return {
+      contentType,
+      buffer,
+      etag: share.reading.coverImageHash ?? contentHash(buffer),
     };
   }
 
@@ -740,6 +893,10 @@ export class ReadingService {
       title: share.reading.title,
       description: share.reading.description,
       author: share.reading.author,
+      coverImageUrl: share.reading.coverImageStorageKey
+        ? this.publicReadingImagePath(share.slug, share.reading.coverImageHash)
+        : null,
+      coverImageAlt: share.reading.coverImageAlt ?? null,
       estimatedMinutes: share.reading.estimatedMinutes,
       hasPdf: share.allowPdf && Boolean(share.reading.pdfStorageKey),
       sections: share.reading.sections.map((section) => ({
@@ -1137,6 +1294,23 @@ export class ReadingService {
       'http://localhost:3001'
     ).replace(/\/+$/u, '');
     return `${origin}/oku/${slug}`;
+  }
+
+  private publicReadingImagePath(slug: string, hash?: string | null): string {
+    const path = `/v1/readings/public/${encodeURIComponent(slug)}/image`;
+    return hash ? `${path}?v=${encodeURIComponent(hash.slice(0, 16))}` : path;
+  }
+
+  private async removeStorageObject(key: string | null | undefined, message: string) {
+    if (!key) return;
+    try {
+      await this.storage.remove(this.config.R2_PRIVATE_BUCKET, key);
+    } catch (error) {
+      this.logger.warn(
+        `${message}: ${key}`,
+        error instanceof Error ? error.message : String(error),
+      );
+    }
   }
 
   private async assignmentForToken(token: string) {

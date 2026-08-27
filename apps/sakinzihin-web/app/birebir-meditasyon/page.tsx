@@ -38,10 +38,10 @@ export default function OneToOnePage() {
       <section className="one-to-one-hero site-shell">
         <div className="one-to-one-hero-copy">
           <span className="eyebrow">Birebir meditasyon</span>
-          <h1>Pratiğini tek başına sürdürmek zorunda değilsin.</h1>
+          <h1>Meditasyon pratiğini tek başına sürdürmek zorunda değilsin.</h1>
           <p>
-            Haftada yalnızca bir görüşme yapmıyoruz. Seni olduğun yerden alan, kendi ritmine uygun,
-            sürdürülebilir bir yol oluşturuyoruz.
+            Haftada yalnızca bir görüşmeyle sınırlı kalmıyorum. Seni olduğun yerden alan, kendi
+            ritmine uygun, sürdürülebilir bir yol oluşturuyorum.
           </p>
           <div className="hero-actions">
             <TrackedLink
@@ -84,8 +84,7 @@ export default function OneToOnePage() {
             <span>01</span>
             <h3>Seni olduğun yerden alır</h3>
             <p>
-              Yeni başlıyor olman veya yıllardır pratik yapıyor olman, birlikte nereden
-              başlayacağımızı belirler.
+              Yeni başlıyor olman veya yıllardır meditasyon yapıyor olman, başlangıç noktanı belirler.
             </p>
           </div>
           <div className="difference-card difference-card-accent">
@@ -100,8 +99,8 @@ export default function OneToOnePage() {
             <span>03</span>
             <h3>Deneyimine göre uyumlanır</h3>
             <p>
-              İyi giden, zorlayan veya değişen şeylere birlikte bakar; pratiği teorik bir programa
-              sıkıştırmayız.
+              İyi giden, zorlayan veya değişen şeyleri dikkate alarak meditasyon pratiğini teorik bir programa
+              sıkıştırmıyorum.
             </p>
           </div>
         </div>
@@ -111,7 +110,7 @@ export default function OneToOnePage() {
         <div className="site-shell">
           <SectionHeading
             eyebrow="Birebir çalışma süreci"
-            title="Altı adımda kendi pratiğini kur."
+            title="Altı adımda kendi meditasyon pratiğini kur."
             description="Süreç, yalnızca görüşme anını değil, görüşmeler arasındaki günlük deneyimini de kapsar."
             light
           />
@@ -124,7 +123,7 @@ export default function OneToOnePage() {
           <span className="eyebrow">Görüşmeler arasında</span>
           <h2 id="tracking-title">Pratiğin görünür hale gelir.</h2>
           <p>
-            Ne zaman pratik yaptığını, ne kadar sürdüğünü veya sonrasında neler fark ettiğini takip
+            Ne zaman meditasyon yaptığını, ne kadar sürdüğünü veya sonrasında neler fark ettiğini takip
             edebilmek; değerlendirmeyi yalnızca hafızaya bırakmamanı sağlar.
           </p>
           <div className="tracking-points">
@@ -135,7 +134,7 @@ export default function OneToOnePage() {
               <Check size={16} /> Kısa check-in ve refleksiyon
             </span>
             <span>
-              <Check size={16} /> Haftalık birlikte değerlendirme
+              <Check size={16} /> Haftalık değerlendirme
             </span>
           </div>
         </div>
@@ -146,7 +145,7 @@ export default function OneToOnePage() {
         <SectionHeading
           eyebrow="Sana uygun mu?"
           title="Bu çalışma ne aradığını bilenler için."
-          description="Birebir süreç, herkese aynı şeyi vaat etmek yerine birlikte nasıl çalışabileceğimizi baştan açıkça ortaya koyar."
+          description="Birebir süreç, herkese aynı şeyi vaat etmek yerine sana uygun olup olmadığını baştan açıkça ortaya koyar."
         />
         <div className="suitable-grid">
           <div className="suitable-card suitable-card-positive">
@@ -154,7 +153,7 @@ export default function OneToOnePage() {
             {[
               'Meditasyona başlamak veya pratiğini düzenli hale getirmek istiyorsan',
               'Kendi deneyimine göre şekillenen bir yol arıyorsan',
-              'Pratiğini gündelik hayatın içine taşımak istiyorsan',
+              'Meditasyonu gündelik hayatın içine taşımak istiyorsan',
               'Farkındalık ve içgörü üzerine derinleşmek istiyorsan',
             ].map((item) => (
               <p key={item}>
@@ -213,13 +212,13 @@ export default function OneToOnePage() {
         <div className="site-shell pricing-grid">
           <div>
             <span className="eyebrow eyebrow-light">Aylık birebir çalışma</span>
-            <h2 id="pricing-title">Pratiğini birlikte sürdürelim.</h2>
-            <p>Haftalık görüşmeler, kişiye özel pratik planı ve görüşmeler arasındaki takip.</p>
+            <h2 id="pricing-title">Meditasyonuna sürdürülebilir bir yön ver.</h2>
+            <p>Haftalık görüşmeler, kişiye özel meditasyon planı ve görüşmeler arasındaki takip.</p>
           </div>
           <div className="price-card">
             <span>Aylık program</span>
             <strong>{siteConfig.price}</strong>
-            <small>4 hafta · haftalık birebir görüşme</small>
+            <small>4 hafta · haftalık birebir görüşme · günlük pratik takibi</small>
             <TrackedLink
               className="button button-light"
               href={siteConfig.links.introCallWhatsapp}
@@ -240,7 +239,7 @@ export default function OneToOnePage() {
       <section className="conversion-section" aria-labelledby="final-conversion-title">
         <div className="site-shell conversion-inner">
           <span className="eyebrow eyebrow-light">Birlikte başlayalım</span>
-          <h2 id="final-conversion-title">Kendi pratiğini oluşturmaya başlamak ister misin?</h2>
+          <h2 id="final-conversion-title">Kendi meditasyon pratiğini oluşturmaya başlamak ister misin?</h2>
           <p>15 dakikalık ücretsiz bir tanışma görüşmesinde ihtiyaçlarını ve süreci konuşalım.</p>
           <TrackedLink
             className="button button-light"

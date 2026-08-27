@@ -96,7 +96,7 @@ Meditasyonu hayatın dışında yapılan ayrı bir aktivite olarak değil, günd
 
 Sakin Zihin'i bu yaklaşımın bir uzantısı olarak oluşturdum.
 
-Burada yalnızca “nasıl meditasyon yapılır?” sorusuna cevap vermek istemiyorum. Dikkat, beden farkındalığı, düşünceler, duygular, tepki verme biçimlerimiz ve meditasyonun gündelik yaşama nasıl taşınabileceği üzerine okumalar ve pratikler paylaşmak istiyorum.
+Burada yalnızca “nasıl meditasyon yapılır?” sorusuna cevap vermiyorum. Aynı zamanda dikkat, beden farkındalığı, düşünceler, duygular, tepki verme biçimlerimiz ve meditasyonun gündelik yaşama nasıl taşınabileceği üzerine okumalar ve pratikler paylaşıyorum.
 
 İstersen ücretsiz meditasyonlarla başlayabilir, okumaları keşfedebilir veya kendi pratiğini daha düzenli ve kişisel bir şekilde geliştirmek için benimle birebir çalışabilirsin.
 

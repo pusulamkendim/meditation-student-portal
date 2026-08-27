@@ -3,7 +3,7 @@ import { ArrowUpRight, Clock3, Headphones } from 'lucide-react';
 import Link from 'next/link';
 
 import type { HubMeditation, HubReading } from '../../lib/api/types';
-import { imageForContent } from '../../lib/content/images';
+import { resolveContentImage } from '../../lib/content/images';
 
 const levelLabels = {
   INTRODUCTION: 'Başlangıç',
@@ -12,7 +12,7 @@ const levelLabels = {
 } as const;
 
 export function ReadingCard({ reading, index = 0 }: { reading: HubReading; index?: number }) {
-  const image = imageForContent(reading.slug, index);
+  const image = resolveContentImage(reading, index);
   return (
     <Link className="reading-card" href={`/oku/${reading.slug}`}>
       <div className="card-image card-image-reading">
@@ -41,7 +41,7 @@ export function MeditationCard({
   meditation: HubMeditation;
   index?: number;
 }) {
-  const image = imageForContent(meditation.slug, index + 2);
+  const image = resolveContentImage(meditation, index + 2);
   return (
     <Link className="meditation-card" href={`/meditasyon/${meditation.slug}`}>
       <div className="card-image card-image-meditation">

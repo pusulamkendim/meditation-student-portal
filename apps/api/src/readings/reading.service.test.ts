@@ -53,6 +53,31 @@ describe('reading Markdown parser', () => {
     });
   });
 
+  it('uses the first H2 as the title for a grouped section', () => {
+    const result = parseReadingMarkdown(
+      Buffer.from(`# Makale\n\n## Giriş\n\nA\n\n## Orta\n\nB\n\n## Son Söz\n\nC`),
+      1,
+    );
+
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0]!.title).toBe('Giriş');
+    expect(result.sections[0]!.title).not.toContain(' – ');
+    expect(result.sections[0]!.contentMarkdown).toContain('### Orta');
+    expect(result.sections[0]!.contentMarkdown).toContain('### Son Söz');
+  });
+
+  it('uses the first H2 title independently for each grouped section', () => {
+    const result = parseReadingMarkdown(
+      Buffer.from(
+        '# Makale\n\n## Birinci\n\nA\n\n## İkinci\n\nB\n\n## Üçüncü\n\nC\n\n## Dördüncü\n\nD',
+      ),
+      2,
+    );
+
+    expect(result.sections.map((section) => section.title)).toEqual(['Birinci', 'Üçüncü']);
+    expect(result.sections.every((section) => !section.title.includes(' – '))).toBe(true);
+  });
+
   it('turns extracted PDF text into the requested number of readable sections', () => {
     const extractedText = Array.from(
       { length: 20 },

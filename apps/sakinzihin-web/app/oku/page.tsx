@@ -5,7 +5,7 @@ import Image from 'next/image';
 
 import { ReadingCard } from '../../components/shared/content-cards';
 import { SectionHeading } from '../../components/shared/section-heading';
-import { imageRegistry } from '../../lib/content/images';
+import { resolveContentImage } from '../../lib/content/images';
 import { getHub } from '../../lib/api/client';
 import { publicRoutes } from '../../lib/config/site';
 
@@ -35,8 +35,7 @@ export default async function ReadingsPage() {
         <section className="featured-reading site-shell" aria-labelledby="featured-reading-title">
           <div className="featured-reading-image">
             <Image
-              src={imageRegistry.stoneBranch.src}
-              alt={imageRegistry.stoneBranch.alt}
+              {...resolveContentImage(featured, 3)}
               fill
               priority
               sizes="(max-width: 800px) 100vw, 55vw"

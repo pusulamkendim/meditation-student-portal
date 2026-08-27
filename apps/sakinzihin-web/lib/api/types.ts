@@ -9,6 +9,8 @@ export interface HubReading {
   sectionCount: number;
   hasPdf: boolean;
   allowIndexing: boolean;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
   updatedAt: string;
 }
 
@@ -22,6 +24,8 @@ export interface HubMeditation {
   defaultDurationMinutes: number;
   allowDurationSelection: boolean;
   allowIndexing: boolean;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
   updatedAt: string;
 }
 
@@ -47,6 +51,8 @@ export interface PublicReadingMeta {
   sectionCount: number;
   allowIndexing: boolean;
   canonicalUrl: string;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
 }
 
 export interface PublicReadingContent extends PublicReadingMeta {
@@ -59,7 +65,12 @@ export interface PublicMeditationMeta {
   slug: string;
   title: string;
   description: string | null;
+  guided: boolean;
   allowIndexing: boolean;
   canonicalUrl: string;
   durations: number[];
+  defaultDurationMinutes: number;
+  allowDurationSelection: boolean;
+  coverImageUrl: string | null;
+  coverImageAlt: string | null;
 }

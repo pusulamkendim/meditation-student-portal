@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 
 import { ReadingDetail } from '../../../components/readings/reading-detail';
 import { getHub, getReadingContent, getReadingMeta } from '../../../lib/api/client';
+import { resolveImageUrl } from '../../../lib/content/images';
 import { siteConfig } from '../../../lib/config/site';
 
 type PageProps = { params: Promise<{ slug: string }> };
@@ -17,6 +18,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     meta.description ??
     `${meta.author ? `${meta.author} tarafından hazırlanan ` : ''}${meta.title} okuması.`;
   const canonicalUrl = `${siteConfig.siteUrl}/oku/${encodeURIComponent(slug)}`;
+  const ogImage = meta.coverImageUrl
+    ? resolveImageUrl(meta.coverImageUrl)
+    : `${canonicalUrl}/opengraph-image`;
   return {
     title: meta.title,
     description,
@@ -29,13 +33,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       description,
       url: canonicalUrl,
       siteName: 'Sakin Zihin',
-      images: [{ url: `${canonicalUrl}/opengraph-image`, width: 1200, height: 630 }],
+      images: [{ url: ogImage, width: 1200, height: 630 }],
     },
     twitter: {
       card: 'summary_large_image',
       title: meta.title,
       description,
-      images: [`${canonicalUrl}/opengraph-image`],
+      images: [ogImage],
     },
   };
 }

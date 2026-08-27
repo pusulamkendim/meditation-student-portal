@@ -26,7 +26,7 @@ export default function OpenGraphImage() {
           MEDITASYON · FARKINDALIK · İÇGÖRÜ
         </div>
         <div style={{ display: 'flex', fontSize: 66, lineHeight: 1.08 }}>
-          Zihni susturmaya değil, onu anlamaya başla.
+          Meditasyon yapmayı öğren. Zihnini daha yakından tanı.
         </div>
       </div>
       <div style={{ display: 'flex', color: '#cbbfac', fontSize: 23 }}>sakinzihin.com</div>

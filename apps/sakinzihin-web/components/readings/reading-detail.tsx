@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { ArrowRight, Clock3 } from 'lucide-react';
 
 import type { HubMeditation, HubReading, PublicReadingContent } from '../../lib/api/types';
-import { imageForContent } from '../../lib/content/images';
+import { resolveContentImage } from '../../lib/content/images';
 import { siteConfig } from '../../lib/config/site';
 import { ReadingActions } from './reading-actions';
 import { ReadingBody } from './reading-body';
@@ -19,7 +19,8 @@ export function ReadingDetail({
   relatedReading?: HubReading;
   relatedMeditation?: HubMeditation;
 }) {
-  const cover = imageForContent(reading.slug, 3);
+  const cover = resolveContentImage(reading, 3);
+  const hasToc = reading.sections.length >= 2;
   const canonicalUrl = `${siteConfig.siteUrl}/oku/${encodeURIComponent(reading.slug)}`;
   const breadcrumbStructuredData = {
     '@context': 'https://schema.org',
@@ -35,10 +36,18 @@ export function ReadingDetail({
     '@type': 'Article',
     headline: reading.title,
     description: reading.description ?? undefined,
-    image: [`${siteConfig.siteUrl}${cover.src}`],
+    image: [cover.src.startsWith('http') ? cover.src : `${siteConfig.siteUrl}${cover.src}`],
     dateModified: reading.updatedAt,
     mainEntityOfPage: canonicalUrl,
-    author: reading.author ? { '@type': 'Person', name: reading.author } : undefined,
+    author: reading.author
+      ? {
+          '@type': 'Person',
+          name: reading.author,
+          ...(reading.author.trim().toLocaleLowerCase('tr-TR') === 'necip sülbü'
+            ? { url: `${siteConfig.siteUrl}/hakkimda` }
+            : {}),
+        }
+      : undefined,
     publisher: { '@type': 'Organization', name: siteConfig.name, url: siteConfig.siteUrl },
   };
   return (
@@ -59,7 +68,11 @@ export function ReadingDetail({
         </div>
 
         <article className="reading-article site-shell">
-          <div className="reading-layout">
+          <div
+            className={`reading-layout ${
+              hasToc ? 'reading-layout-with-toc' : 'reading-layout-without-toc'
+            }`}
+          >
             <ReadingTocDesktop sections={reading.sections} />
             <div className="reading-main">
               <header className="reading-hero">

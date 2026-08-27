@@ -42,3 +42,4 @@ jobs:
       - run: pnpm db:generate
       - run: pnpm --filter @meditation/database exec prisma migrate deploy
       - run: pnpm check
+      - run: pnpm --filter @meditation/sakinzihin-web build

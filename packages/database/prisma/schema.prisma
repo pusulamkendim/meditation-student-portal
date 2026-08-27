@@ -1382,6 +1382,11 @@ model Reading {
   sourceStorageKey String        @map("source_storage_key")
   sourceHash       String        @map("source_hash")
   sourceByteSize   Int           @map("source_byte_size")
+  coverImageStorageKey String?    @map("cover_image_storage_key")
+  coverImageMimeType   String?    @map("cover_image_mime_type")
+  coverImageAlt        String?    @map("cover_image_alt")
+  coverImageByteSize   Int?      @map("cover_image_byte_size")
+  coverImageHash       String?    @map("cover_image_hash")
   pdfFilename      String?       @map("pdf_filename")
   pdfStorageKey    String?       @map("pdf_storage_key")
   pdfHash          String?       @map("pdf_hash")
@@ -1506,6 +1511,11 @@ model MeditationType {
   status              MeditationTypeStatus   @default(DRAFT)
   guidanceMode        MeditationGuidanceMode @default(SILENT) @map("guidance_mode")
   targetDurations     Int[]                  @default([15, 20, 25, 30]) @map("target_durations")
+  coverImageStorageKey String?                @map("cover_image_storage_key")
+  coverImageMimeType   String?                @map("cover_image_mime_type")
+  coverImageAlt        String?                @map("cover_image_alt")
+  coverImageByteSize   Int?                  @map("cover_image_byte_size")
+  coverImageHash       String?                @map("cover_image_hash")
   openingAudioAssetId String?                @map("opening_audio_asset_id") @db.Uuid
   closingAudioAssetId String?                @map("closing_audio_asset_id") @db.Uuid
   audioRevision       Int                    @default(1) @map("audio_revision")

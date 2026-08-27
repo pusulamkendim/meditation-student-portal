@@ -14,6 +14,8 @@ const practiceSessionId = '50000000-0000-4000-8000-000000000001';
 test('updates membership end date and publishes an independent weekday plan', async ({
   page,
 }, testInfo) => {
+  await page.clock.setFixedTime(new Date('2026-08-10T10:00:00.000Z'));
+
   let subscriptionPayload: Record<string, unknown> | undefined;
   let newPackagePayload: Record<string, unknown> | undefined;
   let planPayload: Record<string, unknown> | undefined;

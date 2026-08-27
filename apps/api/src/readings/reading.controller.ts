@@ -18,6 +18,7 @@ import { z } from 'zod';
 
 import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
 import { AdminSessionGuard } from '../auth/admin-session.guard.js';
+import { sendImage, sendPublicImage } from '../content-images/image-response.js';
 import { ReadingService } from './reading.service.js';
 
 const updateSchema = z.object({
@@ -28,7 +29,9 @@ const updateSchema = z.object({
   estimatedMinutes: z.number().int().min(1).max(600).optional(),
   allowAgent: z.boolean().optional(),
   status: z.nativeEnum(ReadingStatus).optional(),
+  coverImageAlt: z.string().max(500).nullable().optional(),
 });
+const coverImageRemoveSchema = z.object({ expectedVersion: z.number().int().positive() });
 const assignmentSchema = z.object({
   studentIds: z.array(z.string().uuid()).min(1).max(200),
 });
@@ -87,16 +90,25 @@ export class AdminReadingController {
     return this.readings.detail(id);
   }
 
+  @Get(':id/cover-image')
+  async image(@Param('id') id: string, @Res() reply: FastifyReply) {
+    const file = await this.readings.image(id);
+    return sendImage(reply, file);
+  }
+
   @Post('upload')
   @UseGuards(AdminCsrfGuard)
   async upload(@Req() request: FastifyRequest) {
     if (!request.isMultipart()) throw new BadRequestException('multipart/form-data bekleniyor.');
     let markdown: { filename: string; mimetype: string; buffer: Buffer } | undefined;
     let pdf: { filename: string; mimetype: string; buffer: Buffer } | undefined;
+    let coverImage: { filename: string; mimetype: string; buffer: Buffer } | undefined;
     const fields: Record<string, string> = {};
     for await (const part of request.parts()) {
       if (part.type === 'file') {
         const buffer = await part.toBuffer();
+        if (part.fieldname === 'coverImage' && part.filename && buffer.byteLength === 0)
+          throw new BadRequestException('Kapak görseli boş olamaz.');
         if (!part.filename || buffer.byteLength === 0) continue;
         const file = {
           filename: part.filename,
@@ -105,6 +117,7 @@ export class AdminReadingController {
         };
         if (part.fieldname === 'markdown') markdown = file;
         else if (part.fieldname === 'pdf') pdf = file;
+        else if (part.fieldname === 'coverImage') coverImage = file;
         else throw new BadRequestException('Bilinmeyen dosya alanı.');
       } else {
         fields[part.fieldname] = String(part.value);
@@ -124,6 +137,8 @@ export class AdminReadingController {
       {
         markdown,
         pdf,
+        coverImage,
+        coverImageAlt: fields.coverImageAlt,
         title: fields.title,
         description: fields.description,
         author: fields.author,
@@ -133,6 +148,42 @@ export class AdminReadingController {
       },
       request.admin!.id,
     );
+  }
+
+  @Post(':id/cover-image')
+  @UseGuards(AdminCsrfGuard)
+  async uploadCoverImage(@Param('id') id: string, @Req() request: FastifyRequest) {
+    if (!request.isMultipart()) throw new BadRequestException('multipart/form-data bekleniyor.');
+    let file: { filename: string; mimetype: string; buffer: Buffer } | undefined;
+    const fields: Record<string, string> = {};
+    for await (const part of request.parts()) {
+      if (part.type === 'file') {
+        if (part.fieldname !== 'coverImage' || file)
+          throw new BadRequestException('Her yüklemede tek kapak görseli seçin.');
+        file = { filename: part.filename, mimetype: part.mimetype, buffer: await part.toBuffer() };
+      } else {
+        fields[part.fieldname] = String(part.value);
+      }
+    }
+    if (!file) throw new BadRequestException('Bir kapak görseli seçin.');
+    const expectedVersion = Number(fields.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1)
+      throw new BadRequestException('Geçersiz okuma sürümü.');
+    return this.readings.uploadCoverImage(
+      id,
+      file,
+      fields.coverImageAlt,
+      expectedVersion,
+      request.admin!.id,
+    );
+  }
+
+  @Delete(':id/cover-image')
+  @UseGuards(AdminCsrfGuard)
+  removeCoverImage(@Param('id') id: string, @Body() body: unknown, @Req() request: FastifyRequest) {
+    const parsed = coverImageRemoveSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Geçersiz kapak görseli silme isteği.');
+    return this.readings.removeCoverImage(id, parsed.data.expectedVersion, request.admin!.id);
   }
 
   @Patch(':id')
@@ -256,6 +307,16 @@ export class PublicReadingController {
   publicMeta(@Param('slug') slug: string, @Res({ passthrough: true }) reply: FastifyReply) {
     reply.header('cache-control', 'public, max-age=60, stale-while-revalidate=300');
     return this.readings.publicMeta(slug);
+  }
+
+  @Get('public/:slug/image')
+  async publicImage(
+    @Param('slug') slug: string,
+    @Req() request: FastifyRequest,
+    @Res() reply: FastifyReply,
+  ) {
+    const file = await this.readings.publicImage(slug);
+    return sendPublicImage(request, reply, file);
   }
 
   @Get('public/:slug/content')

@@ -157,6 +157,53 @@ describe('MeditationService practice access', () => {
 });
 
 describe('MeditationService public access', () => {
+  it('returns public meditation metadata for the public site', async () => {
+    const secret = randomBytes(32);
+    const clock = new FakeClock('2026-08-01T10:00:00.000Z');
+    const prisma = {
+      meditationPublicShare: {
+        findUnique: vi.fn(async () => ({
+          slug: 'nefese-donus',
+          status: 'ACTIVE',
+          expiresAt: null,
+          allowedDurations: [10, 20],
+          defaultDurationMinutes: 10,
+          allowDurationSelection: true,
+          allowIndexing: true,
+          meditationType: {
+            title: 'Nefese Dönüş',
+            description: 'Nefese nazikçe geri dön.',
+            status: 'PUBLISHED',
+            guidanceMode: 'GUIDED',
+          },
+        })),
+      },
+    };
+    const service = new MeditationService(
+      prisma as never,
+      {
+        LOOKUP_HMAC_KEY: secret.toString('base64'),
+        PUBLIC_CONTENT_ORIGIN: 'https://sakinzihin.com',
+      } as never,
+      {} as never,
+      clock,
+    );
+
+    await expect(service.publicMeditationMeta('nefese-donus')).resolves.toEqual({
+      slug: 'nefese-donus',
+      title: 'Nefese Dönüş',
+      description: 'Nefese nazikçe geri dön.',
+      guided: true,
+      allowIndexing: true,
+      canonicalUrl: 'https://sakinzihin.com/meditasyon/nefese-donus',
+      durations: [10, 20],
+      defaultDurationMinutes: 10,
+      allowDurationSelection: true,
+      coverImageUrl: null,
+      coverImageAlt: null,
+    });
+  });
+
   it('opens a silent meditation without requiring a rendered audio file', async () => {
     const secret = randomBytes(32);
     const clock = new FakeClock('2026-08-01T10:00:00.000Z');

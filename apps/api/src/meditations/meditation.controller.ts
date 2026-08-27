@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { AdminCsrfGuard } from '../auth/admin-csrf.guard.js';
 import { AdminSessionGuard } from '../auth/admin-session.guard.js';
 import { sendAudio } from './audio-response.js';
+import { sendImage } from '../content-images/image-response.js';
 import { MeditationService } from './meditation.service.js';
 
 const durationSchema = z.array(z.number().int().min(1).max(180)).min(1).max(12);
@@ -43,8 +44,10 @@ const updateSchema = z.object({
   guidanceMode: z.nativeEnum(MeditationGuidanceMode).optional(),
   targetDurations: durationSchema.optional(),
   status: z.nativeEnum(MeditationTypeStatus).optional(),
+  coverImageAlt: z.string().max(500).nullable().optional(),
 });
 const deleteSchema = z.object({ expectedVersion: z.number().int().positive() });
+const coverImageRemoveSchema = z.object({ expectedVersion: z.number().int().positive() });
 const publicShareCreateSchema = z.object({
   slug: z
     .string()
@@ -100,6 +103,48 @@ export class MeditationController {
     const parsed = deleteSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException('Geçersiz silme isteği.');
     return this.meditations.remove(id, parsed.data.expectedVersion, request.admin!.id);
+  }
+
+  @Post(':id/cover-image')
+  @UseGuards(AdminCsrfGuard)
+  async uploadCoverImage(@Param('id') id: string, @Req() request: FastifyRequest) {
+    if (!request.isMultipart()) throw new BadRequestException('multipart/form-data bekleniyor.');
+    let file: { filename: string; mimetype: string; buffer: Buffer } | undefined;
+    const fields: Record<string, string> = {};
+    for await (const part of request.parts()) {
+      if (part.type === 'file') {
+        if (part.fieldname !== 'coverImage' || file)
+          throw new BadRequestException('Her yüklemede tek kapak görseli seçin.');
+        file = { filename: part.filename, mimetype: part.mimetype, buffer: await part.toBuffer() };
+      } else {
+        fields[part.fieldname] = String(part.value);
+      }
+    }
+    if (!file) throw new BadRequestException('Bir kapak görseli seçin.');
+    const expectedVersion = Number(fields.expectedVersion);
+    if (!Number.isInteger(expectedVersion) || expectedVersion < 1)
+      throw new BadRequestException('Geçersiz meditasyon sürümü.');
+    return this.meditations.uploadCoverImage(
+      id,
+      file,
+      fields.coverImageAlt,
+      expectedVersion,
+      request.admin!.id,
+    );
+  }
+
+  @Delete(':id/cover-image')
+  @UseGuards(AdminCsrfGuard)
+  removeCoverImage(@Param('id') id: string, @Body() body: unknown, @Req() request: FastifyRequest) {
+    const parsed = coverImageRemoveSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Geçersiz kapak görseli silme isteği.');
+    return this.meditations.removeCoverImage(id, parsed.data.expectedVersion, request.admin!.id);
+  }
+
+  @Get(':id/cover-image')
+  async image(@Param('id') id: string, @Res() reply: FastifyReply) {
+    const file = await this.meditations.image(id);
+    return sendImage(reply, file);
   }
 
   @Get(':id/public-share')

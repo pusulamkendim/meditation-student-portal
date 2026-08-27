@@ -24,11 +24,7 @@ export function HomePage({ catalog }: { catalog: HubCatalog | null }) {
         <div className="site-shell home-hero-grid">
           <div className="home-hero-copy">
             <span className="eyebrow">{homeCopy.eyebrow}</span>
-            <h1>
-              <span className="hero-title-line">Zihni susturmaya</span>{' '}
-              <span className="hero-title-line">değil, onu anlamaya</span>{' '}
-              <span className="hero-title-line">başla.</span>
-            </h1>
+            <h1>{homeCopy.title}</h1>
             <p className="home-hero-description-long">{homeCopy.description}</p>
             <p className="home-hero-description-short">{homeCopy.mobileDescription}</p>
             <div className="hero-actions">
@@ -64,7 +60,7 @@ export function HomePage({ catalog }: { catalog: HubCatalog | null }) {
             />
             <div className="hero-image-caption">
               <span>Fark etmek için</span>
-              <strong>biraz alan</strong>
+              <strong>Alan aç</strong>
             </div>
           </div>
         </div>
@@ -182,8 +178,8 @@ export function HomePage({ catalog }: { catalog: HubCatalog | null }) {
             <span className="eyebrow">Birebir meditasyon</span>
             <h2 id="one-to-one-title">Pratik, görüşmeler arasında da devam eder.</h2>
             <p>
-              Haftada yalnızca bir görüşme yapmıyoruz. Sana uygun planı günlük pratik, check-in ve
-              refleksiyonlarla birlikte sürdürüyoruz.
+              Haftada yalnızca bir görüşmeyle sınırlı kalmıyorum. Sana uygun planla günlük pratik,
+              check-in ve refleksiyonlar arasında pratiğine eşlik ediyorum.
             </p>
           </div>
           <TrackedLink
@@ -210,8 +206,11 @@ export function HomePage({ catalog }: { catalog: HubCatalog | null }) {
         <div className="site-shell final-cta-inner">
           <div>
             <span className="eyebrow eyebrow-light">Kendi ritmin</span>
-            <h2>Kendi pratiğini oluşturmaya başlamak ister misin?</h2>
-            <p>İstersen ücretsiz pratiklerle başla, istersen sana özel bir yol oluşturalım.</p>
+            <h2>Kendi meditasyon pratiğini oluşturmaya başlamak ister misin?</h2>
+            <p>
+              İstersen ücretsiz pratiklerle başla, istersen senin için sana uygun bir yol
+              hazırlayayım.
+            </p>
           </div>
           <div className="hero-actions">
             <TrackedLink

@@ -7,7 +7,7 @@ import { MeditationCard } from '../../components/shared/content-cards';
 import { SectionHeading } from '../../components/shared/section-heading';
 import { getHub } from '../../lib/api/client';
 import { publicRoutes } from '../../lib/config/site';
-import { imageRegistry } from '../../lib/content/images';
+import { resolveContentImage } from '../../lib/content/images';
 
 export const metadata: Metadata = {
   title: 'Meditasyonlar',
@@ -35,8 +35,7 @@ export default async function MeditationsPage() {
         <section className="featured-practice site-shell" aria-labelledby="featured-practice-title">
           <div className="featured-practice-image">
             <Image
-              src={imageRegistry.mountainLake.src}
-              alt={imageRegistry.mountainLake.alt}
+              {...resolveContentImage(featured, 2)}
               fill
               priority
               sizes="(max-width: 800px) 100vw, 55vw"
@@ -66,7 +65,7 @@ export default async function MeditationsPage() {
         <SectionHeading
           eyebrow="Yayınlanmış pratikler"
           title="Tüm meditasyonlar"
-          description="Her pratik gerçek public içerik akışından gelir; yayınlanmamış kayıtlar burada görünmez."
+          description="Kısa bir pratikle başlayabilir veya ihtiyacına uygun meditasyonu seçebilirsin."
         />
         {meditations.length > 0 ? (
           <div className="content-grid three-columns">

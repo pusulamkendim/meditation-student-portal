@@ -1255,9 +1255,16 @@ p {
 
 .reading-layout {
   display: grid;
-  grid-template-columns: 190px minmax(0, 820px);
   justify-content: center;
   gap: 53px;
+}
+
+.reading-layout-with-toc {
+  grid-template-columns: 190px minmax(0, 820px);
+}
+
+.reading-layout-without-toc {
+  grid-template-columns: minmax(0, 820px);
 }
 
 .reading-main {
@@ -2313,6 +2320,503 @@ p {
   margin-top: 19px;
 }
 
+.practice-player,
+.practice-player-state {
+  min-height: min(900px, calc(100svh - 68px));
+  box-sizing: border-box;
+  background: #102a23;
+  color: #f7f3e9;
+}
+
+.practice-player-state {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 14px;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.practice-player-state > svg {
+  width: 34px;
+  height: 34px;
+  color: #d5aa59;
+}
+
+.practice-player-state h1,
+.practice-player-state p {
+  margin: 0;
+}
+
+.practice-player-state p {
+  max-width: 440px;
+  color: #c8d0c7;
+}
+
+.practice-player {
+  --meditation-ivory: #f7f3e9;
+  --meditation-muted: #c8d0c7;
+  --meditation-gold: #d5aa59;
+  --meditation-control-ink: #19372f;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  padding: max(38px, env(safe-area-inset-top)) max(46px, env(safe-area-inset-right))
+    max(38px, env(safe-area-inset-bottom)) max(46px, env(safe-area-inset-left));
+}
+
+.practice-player-scene,
+.practice-player-background,
+.practice-player-shade,
+.practice-player-grain,
+.practice-player-frame {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.practice-player-scene {
+  z-index: -1;
+  overflow: hidden;
+}
+
+.practice-player-background {
+  inset: -3%;
+  background-image: url('/images/scene-01-lake-mist.png');
+  background-position: center 54%;
+  background-size: cover;
+  filter: brightness(0.68) saturate(0.82) sepia(0.08);
+  transform: scale(1.04);
+  transition: transform 900ms ease;
+}
+
+.practice-player.is-playing .practice-player-background {
+  transform: scale(1.09);
+}
+
+.practice-player-shade {
+  background:
+    linear-gradient(180deg, rgb(8 32 27 / 76%) 0%, rgb(8 32 27 / 28%) 45%, rgb(5 25 21 / 84%) 100%),
+    linear-gradient(90deg, rgb(8 32 27 / 46%) 0%, transparent 68%);
+}
+
+.practice-player-grain {
+  z-index: 2;
+  background-image: radial-gradient(rgb(255 255 255 / 38%) 0.6px, transparent 0.8px);
+  background-size: 8px 8px;
+  mix-blend-mode: screen;
+  opacity: 0.045;
+}
+
+.practice-player-frame {
+  z-index: 3;
+  inset: 22px;
+  border: 1px solid rgb(247 243 233 / 28%);
+  border-radius: 30px;
+}
+
+.practice-player-brand {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  color: var(--meditation-ivory);
+  font-size: 0.74rem;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+}
+
+.practice-player-brand > a,
+.practice-player-brand > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.practice-player-brand svg {
+  width: 19px;
+  height: 19px;
+  color: var(--meditation-gold);
+}
+
+.practice-player-brand > span {
+  color: var(--meditation-muted);
+  font-size: 0.68rem;
+}
+
+.practice-player-stage {
+  position: relative;
+  z-index: 4;
+  width: min(100%, 720px);
+  align-self: center;
+  display: grid;
+  justify-items: center;
+  gap: clamp(14px, 2.4vh, 26px);
+  margin: 0 auto;
+}
+
+.practice-player-heading {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  text-align: center;
+  text-wrap: balance;
+}
+
+.practice-player-heading > span,
+.practice-player-clock > span,
+.practice-player-cta-copy > div > span {
+  color: var(--meditation-gold);
+  font-size: 0.66rem;
+  font-weight: 760;
+  letter-spacing: 0.13em;
+}
+
+.practice-player-heading h1 {
+  margin: 0;
+  color: var(--meditation-ivory);
+  font-family: var(--serif);
+  font-size: clamp(2.2rem, 5vw, 4.2rem);
+  font-weight: 400;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+.practice-player-heading p {
+  max-width: 540px;
+  margin: 0;
+  color: var(--meditation-muted);
+  font-size: clamp(0.88rem, 1.4vw, 1rem);
+  line-height: 1.55;
+}
+
+.practice-player-durations {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.practice-player-durations button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgb(247 243 233 / 32%);
+  border-radius: 999px;
+  background: rgb(16 42 35 / 48%);
+  color: rgb(247 243 233 / 82%);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.practice-player-durations button:hover,
+.practice-player-durations button.is-active {
+  border-color: var(--meditation-gold);
+  background: rgb(213 170 89 / 19%);
+  color: var(--meditation-ivory);
+}
+
+.practice-player-durations button:disabled,
+.practice-player-controls button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.practice-player-timer-shell {
+  position: relative;
+  width: min(43vmin, 410px);
+  min-width: 280px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(
+    circle,
+    rgb(8 32 27 / 28%) 0%,
+    rgb(8 32 27 / 10%) 56%,
+    transparent 73%
+  );
+}
+
+.practice-player.is-playing .practice-player-timer-shell {
+  animation: meditation-player-breathe 8s ease-in-out infinite;
+}
+
+.practice-player-ring {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.practice-player-ring-base {
+  fill: rgb(8 32 27 / 18%);
+  stroke: rgb(247 243 233 / 35%);
+  stroke-width: 1.5;
+}
+
+.practice-player-ring-dots {
+  fill: none;
+  stroke: rgb(213 170 89 / 45%);
+  stroke-dasharray: 1 8;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.practice-player-ring-progress {
+  fill: none;
+  stroke: var(--meditation-gold);
+  stroke-dasharray: 100;
+  stroke-linecap: round;
+  stroke-width: 5;
+  transform: rotate(-90deg);
+  transform-origin: center;
+  filter: drop-shadow(0 0 10px rgb(213 170 89 / 48%));
+  transition: stroke-dashoffset 250ms linear;
+}
+
+.practice-player-clock {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: var(--meditation-ivory);
+  text-align: center;
+}
+
+.practice-player-clock strong {
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(3.1rem, 8vmin, 5.4rem);
+  font-weight: 430;
+  line-height: 0.95;
+}
+
+.practice-player-clock small {
+  color: var(--meditation-muted);
+  font-family: var(--serif);
+  font-size: 0.94rem;
+  font-style: italic;
+}
+
+.practice-player-controls {
+  width: min(100%, 310px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.practice-player-controls button {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.practice-player-controls button svg {
+  width: 18px;
+}
+
+.practice-player-primary {
+  order: 1;
+  width: 100%;
+  border: 1px solid var(--surface);
+  background: var(--surface);
+  color: var(--meditation-control-ink);
+  box-shadow: 0 12px 28px rgb(0 0 0 / 20%);
+}
+
+.practice-player-primary:hover {
+  background: #fffaf1;
+}
+
+.practice-player-secondary {
+  order: 2;
+  width: 48px;
+  min-height: 48px !important;
+  border: 1px solid rgb(247 243 233 / 42%);
+  background: rgb(16 42 35 / 48%);
+  color: var(--meditation-ivory);
+}
+
+.practice-player-cta {
+  width: min(100%, 620px);
+  box-sizing: border-box;
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border: 1px solid rgb(213 170 89 / 50%);
+  border-radius: 24px;
+  background: rgb(16 42 35 / 91%);
+  color: var(--meditation-ivory);
+}
+
+.practice-player-cta-copy {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.practice-player-cta-copy > div {
+  display: grid;
+  gap: 7px;
+}
+
+.practice-player-cta-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgb(213 170 89 / 58%);
+  border-radius: 50%;
+  color: var(--meditation-gold);
+}
+
+.practice-player-cta-icon svg {
+  width: 23px;
+}
+
+.practice-player-cta strong {
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.practice-player-cta p {
+  margin: 0;
+  color: var(--meditation-muted);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.practice-player-cta > a {
+  min-height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--meditation-control-ink);
+  font-size: 0.88rem;
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.practice-player-cta > a svg {
+  width: 18px;
+}
+
+.practice-player.is-completed .practice-player-timer-shell,
+.practice-player.is-completed .practice-player-durations {
+  display: none;
+}
+
+.practice-player.is-completed .practice-player-stage {
+  width: min(100%, 680px);
+  gap: 20px;
+}
+
+.practice-player.is-completed .practice-player-secondary {
+  display: none;
+}
+
+.practice-player-completion-note {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  color: rgb(213 170 89 / 82%);
+  font-family: var(--serif);
+  font-size: 0.78rem;
+}
+
+.practice-player-completion-note svg {
+  width: 22px;
+  height: 22px;
+}
+
+@media (max-width: 600px) {
+  .practice-player {
+    min-height: calc(100svh - 68px);
+    padding: max(28px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+      max(28px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  }
+
+  .practice-player-frame {
+    inset: 12px;
+    border-radius: 24px;
+  }
+
+  .practice-player-brand {
+    font-size: 0.67rem;
+  }
+
+  .practice-player-brand > span {
+    font-size: 0.6rem;
+  }
+
+  .practice-player-heading h1 {
+    max-width: 350px;
+    font-size: clamp(2.15rem, 10vw, 3rem);
+  }
+
+  .practice-player-heading p {
+    max-width: 330px;
+  }
+
+  .practice-player-timer-shell {
+    width: min(76vw, 42svh, 360px);
+    min-width: 0;
+  }
+
+  .practice-player-cta {
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .practice-player-cta-copy {
+    grid-template-columns: 46px minmax(0, 1fr);
+    gap: 13px;
+  }
+
+  .practice-player-cta-icon {
+    width: 42px;
+    height: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .practice-player-background,
+  .practice-player-timer-shell {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+@keyframes meditation-player-breathe {
+  0%,
+  100% {
+    transform: scale(0.98);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
 @media (max-width: 1080px) {
   .desktop-nav {
     gap: 16px;
@@ -2328,8 +2832,15 @@ p {
   }
 
   .reading-layout {
-    grid-template-columns: 165px minmax(0, 820px);
     gap: 34px;
+  }
+
+  .reading-layout-with-toc {
+    grid-template-columns: 165px minmax(0, 820px);
+  }
+
+  .reading-layout-without-toc {
+    grid-template-columns: minmax(0, 820px);
   }
 }
 

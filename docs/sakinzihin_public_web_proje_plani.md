@@ -500,7 +500,7 @@ Yoksa bölüm production'da gizlenir.
 
 ## Final CTA
 
-> Kendi pratiğini oluşturmaya başlamak ister misin?
+> Kendi meditasyon pratiğini oluşturmaya başlamak ister misin?
 
 Primary:
 

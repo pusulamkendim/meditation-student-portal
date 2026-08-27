@@ -75,9 +75,15 @@ function minimalPdf(lines: string[]): Buffer {
   });
   const xrefOffset = Buffer.byteLength(body);
   body += `xref\r\n0 ${objects.length + 1}\r\n0000000000 65535 f\r\n`;
+  const detectedStreamOrigin = Buffer.byteLength('\r\n');
   body += offsets
     .slice(1)
-    .map((offset) => `${String(offset).padStart(10, '0')} 00000 n\r\n`)
+    // pdf-parse 1.x resolves this in-memory fixture relative to its detected
+    // stream origin, so xref entries must use that same origin.
+    .map(
+      (offset) =>
+        `${String(offset - detectedStreamOrigin).padStart(10, '0')} 00000 n\r\n`,
+    )
     .join('');
   body += `trailer\r\n<< /Size ${objects.length + 1} /Root 1 0 R >>\r\nstartxref\r\n${xrefOffset}\r\n%%EOF\r\n`;
   return Buffer.from(body);

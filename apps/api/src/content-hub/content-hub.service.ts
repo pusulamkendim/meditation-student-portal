@@ -10,6 +10,10 @@ import {
 
 import { PrismaService } from '../database/prisma.service.js';
 
+function publicImagePath(path: string, hash?: string | null) {
+  return hash ? `${path}?v=${encodeURIComponent(hash.slice(0, 16))}` : path;
+}
+
 @Injectable()
 export class ContentHubService {
   constructor(
@@ -56,6 +60,13 @@ export class ContentHubService {
         sectionCount: share.reading._count.sections,
         hasPdf: share.allowPdf && Boolean(share.reading.pdfStorageKey),
         allowIndexing: share.allowIndexing,
+        coverImageUrl: share.reading.coverImageStorageKey
+          ? publicImagePath(
+              `/v1/readings/public/${encodeURIComponent(share.slug)}/image`,
+              share.reading.coverImageHash,
+            )
+          : null,
+        coverImageAlt: share.reading.coverImageAlt ?? null,
         updatedAt: share.updatedAt.toISOString(),
       })),
       meditations: meditationShares.map((share) => ({
@@ -68,6 +79,13 @@ export class ContentHubService {
         defaultDurationMinutes: share.defaultDurationMinutes,
         allowDurationSelection: share.allowDurationSelection,
         allowIndexing: share.allowIndexing,
+        coverImageUrl: share.meditationType.coverImageStorageKey
+          ? publicImagePath(
+              `/v1/public/meditations/${encodeURIComponent(share.slug)}/image`,
+              share.meditationType.coverImageHash,
+            )
+          : null,
+        coverImageAlt: share.meditationType.coverImageAlt ?? null,
         updatedAt: share.updatedAt.toISOString(),
       })),
       generatedAt: now.toISOString(),

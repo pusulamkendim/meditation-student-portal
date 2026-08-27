@@ -48,6 +48,9 @@ type ReadingSummary = {
   version: number;
   updatedAt: string;
   pdfByteSize?: number | null;
+  coverImageMimeType?: string | null;
+  coverImageAlt?: string | null;
+  coverImageByteSize?: number | null;
   _count: { sections: number; assignments: number };
   assignmentCounts: { ASSIGNED: number; OPENED: number; COMPLETED: number };
   publicShare?: {
@@ -192,6 +195,7 @@ export default function ReadingsPage() {
   const [description, setDescription] = useState('');
   const [author, setAuthor] = useState('');
   const [estimatedMinutes, setEstimatedMinutes] = useState('20');
+  const [coverImageAlt, setCoverImageAlt] = useState('');
   const [activeSection, setActiveSection] = useState(0);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -208,6 +212,7 @@ export default function ReadingsPage() {
   const [error, setError] = useState<string>();
   const [notice, setNotice] = useState<Notice>();
   const uploadForm = useRef<HTMLFormElement>(null);
+  const coverInput = useRef<HTMLInputElement>(null);
 
   const loadReadings = useCallback(async (preferredId?: string) => {
     setError(undefined);
@@ -233,6 +238,7 @@ export default function ReadingsPage() {
       setDescription(result.description ?? '');
       setAuthor(result.author ?? '');
       setEstimatedMinutes(String(result.estimatedMinutes));
+      setCoverImageAlt(result.coverImageAlt ?? '');
       setActiveSection((current) => Math.min(current, Math.max(0, result.sections.length - 1)));
     } catch (reason) {
       setNotice({
@@ -322,6 +328,7 @@ export default function ReadingsPage() {
           description: description || null,
           author: author || null,
           estimatedMinutes: Number(estimatedMinutes),
+          coverImageAlt: coverImageAlt || null,
         }),
       });
       setNotice({ tone: 'success', text: 'Okuma bilgileri kaydedildi.' });
@@ -331,6 +338,53 @@ export default function ReadingsPage() {
       setNotice({
         tone: 'danger',
         text: reason instanceof Error ? reason.message : 'Değişiklikler kaydedilemedi.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function uploadCoverImage(file?: File) {
+    if (!detail || !file) return;
+    const body = new FormData();
+    body.set('coverImage', file);
+    body.set('expectedVersion', String(detail.version));
+    body.set('coverImageAlt', coverImageAlt);
+    setBusy(true);
+    try {
+      await request(`/v1/admin/readings/${detail.id}/cover-image`, {
+        method: 'POST',
+        headers: csrfHeaders(),
+        body,
+      });
+      await Promise.all([loadReadings(detail.id), loadDetail(detail.id)]);
+      setNotice({ tone: 'success', text: 'Okuma kapak görseli güncellendi.' });
+    } catch (reason) {
+      setNotice({
+        tone: 'danger',
+        text: reason instanceof Error ? reason.message : 'Kapak görseli yüklenemedi.',
+      });
+    } finally {
+      setBusy(false);
+      if (coverInput.current) coverInput.current.value = '';
+    }
+  }
+
+  async function removeCoverImage() {
+    if (!detail) return;
+    setBusy(true);
+    try {
+      await request(`/v1/admin/readings/${detail.id}/cover-image`, {
+        method: 'DELETE',
+        headers: csrfHeaders(true),
+        body: JSON.stringify({ expectedVersion: detail.version }),
+      });
+      await Promise.all([loadReadings(detail.id), loadDetail(detail.id)]);
+      setNotice({ tone: 'success', text: 'Özel kapak kaldırıldı; editorial görsel kullanılacak.' });
+    } catch (reason) {
+      setNotice({
+        tone: 'danger',
+        text: reason instanceof Error ? reason.message : 'Kapak görseli kaldırılamadı.',
       });
     } finally {
       setBusy(false);
@@ -726,6 +780,55 @@ export default function ReadingsPage() {
                       rows={2}
                     />
                   </label>
+                  <div className="admin-cover-image-field">
+                    <div className="admin-cover-image-preview">
+                      {detail.coverImageMimeType ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`${api}/v1/admin/readings/${detail.id}/cover-image?v=${detail.version}`}
+                          alt={coverImageAlt || detail.title}
+                        />
+                      ) : (
+                        <span>Editorial fallback kullanılacak</span>
+                      )}
+                    </div>
+                    <div className="admin-cover-image-controls">
+                      <TextField
+                        label="Kapak görseli alt metni"
+                        value={coverImageAlt}
+                        onChange={(event) => setCoverImageAlt(event.target.value)}
+                        maxLength={500}
+                      />
+                      <input
+                        ref={coverInput}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={(event) => void uploadCoverImage(event.currentTarget.files?.[0])}
+                      />
+                      <div className="admin-cover-image-actions">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          disabled={busy}
+                          onClick={() => coverInput.current?.click()}
+                        >
+                          <Upload aria-hidden="true" />
+                          {detail.coverImageMimeType ? 'Görseli değiştir' : 'Görsel yükle'}
+                        </Button>
+                        {detail.coverImageMimeType ? (
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={busy}
+                            onClick={() => void removeCoverImage()}
+                          >
+                            Görseli kaldır
+                          </Button>
+                        ) : null}
+                      </div>
+                      <small>JPEG, PNG veya WebP · en fazla 8 MiB</small>
+                    </div>
+                  </div>
                   <Button variant="secondary" onClick={() => void saveMetadata()} disabled={busy}>
                     <Save aria-hidden="true" /> Bilgileri kaydet
                   </Button>
@@ -860,6 +963,11 @@ export default function ReadingsPage() {
               <span>Kısa açıklama</span>
               <textarea name="description" rows={3} maxLength={2000} />
             </label>
+            <TextField
+              label="Kapak görseli alt metni (isteğe bağlı)"
+              name="coverImageAlt"
+              maxLength={500}
+            />
             <div className="reading-upload-grid">
               <label className="reading-file-input">
                 <FileText aria-hidden="true" />
@@ -876,6 +984,14 @@ export default function ReadingsPage() {
                   <small>Tek başına yüklenebilir · en fazla 25 MB</small>
                 </span>
                 <input name="pdf" type="file" accept=".pdf,application/pdf" />
+              </label>
+              <label className="reading-file-input">
+                <Upload aria-hidden="true" />
+                <span>
+                  <strong>Kapak görseli</strong>
+                  <small>JPEG, PNG veya WebP · en fazla 8 MiB · isteğe bağlı</small>
+                </span>
+                <input name="coverImage" type="file" accept="image/jpeg,image/png,image/webp" />
               </label>
             </div>
             <div className="reading-upload-grid reading-upload-options">
@@ -959,7 +1075,7 @@ export default function ReadingsPage() {
           title="Herkese açık paylaşım"
           description="Instagram ve diğer kanallarda paylaşılabilen anonim okuma bağlantısını yönetin."
           actions={
-            <>
+            <div className="reading-public-actions">
               {publicShare ? (
                 publicShare.status === 'ACTIVE' ? (
                   <Button
@@ -989,7 +1105,7 @@ export default function ReadingsPage() {
                 <Save aria-hidden="true" />
                 {publicShare ? 'Ayarları kaydet' : 'Bağlantı oluştur'}
               </Button>
-            </>
+            </div>
           }
         >
           <div className="reading-public-share">
