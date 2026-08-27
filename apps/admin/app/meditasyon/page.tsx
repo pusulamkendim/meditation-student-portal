@@ -338,7 +338,7 @@ export default function PracticePlayerPage({ publicSlug }: PracticePlayerPagePro
       </div>
 
       <header className="practice-player-brand">
-        <a href="/kesfet" aria-label="Sakin Zihin kütüphanesi">
+        <a href="https://sakinzihin.com" aria-label="Sakin Zihin kütüphanesi">
           <Flower2 aria-hidden="true" />
           SAKİN ZİHİN
         </a>

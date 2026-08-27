@@ -525,12 +525,7 @@ test('login surface stays readable without overflowing', async ({ page }) => {
   await expectNoHorizontalOverflow(page);
 });
 
-test('public content hub exposes both libraries without overflowing', async ({ page }) => {
-  await page.goto('/kesfet');
-  await expect(
-    page.getByRole('heading', { name: 'Meditasyon ve farkındalık kütüphanesi' }),
-  ).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Meditasyonlar' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Okumalar' })).toBeVisible();
-  await expectNoHorizontalOverflow(page);
+test('retired public content hub is no longer served by admin', async ({ page }) => {
+  const response = await page.goto('/kesfet');
+  expect(response?.status()).toBe(404);
 });
