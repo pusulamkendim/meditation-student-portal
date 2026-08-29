@@ -108,9 +108,47 @@ describe.runIf(process.env.RUN_FFMPEG_TESTS === 'true')('FFmpeg render integrati
 
       const readyCall = readyUpdate.mock.calls.find(
         ([value]) => value.data.status === 'READY',
-      )?.[0] as { data: { storageKey: string; actualDurationSeconds: number } } | undefined;
+      )?.[0] as
+        | {
+            data: {
+              storageKey: string;
+              contentType: string;
+              actualDurationSeconds: number;
+            };
+          }
+        | undefined;
       expect(readyCall?.data.actualDurationSeconds).toBeCloseTo(60, 0);
-      expect(await readFile(join(root, bucket, readyCall!.data.storageKey))).not.toHaveLength(0);
+      expect(readyCall?.data.contentType).toBe('audio/flac');
+      expect(readyCall?.data.storageKey).toMatch(/\.flac$/);
+      const renderedPath = join(root, bucket, readyCall!.data.storageKey);
+      expect(await readFile(renderedPath)).not.toHaveLength(0);
+      const probe = await execFileAsync('ffprobe', [
+        '-v',
+        'error',
+        '-select_streams',
+        'a:0',
+        '-show_entries',
+        'stream=codec_name,sample_rate,channels,channel_layout',
+        '-of',
+        'json',
+        renderedPath,
+      ]);
+      const stream = (
+        JSON.parse(probe.stdout) as {
+          streams: Array<{
+            codec_name: string;
+            sample_rate: string;
+            channels: number;
+            channel_layout: string;
+          }>;
+        }
+      ).streams[0];
+      expect(stream).toEqual({
+        codec_name: 'flac',
+        sample_rate: '48000',
+        channels: 2,
+        channel_layout: 'stereo',
+      });
     } finally {
       if (previousRoot === undefined) delete process.env.KNOWLEDGE_LOCAL_STORAGE_DIR;
       else process.env.KNOWLEDGE_LOCAL_STORAGE_DIR = previousRoot;

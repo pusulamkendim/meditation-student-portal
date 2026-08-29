@@ -10,7 +10,9 @@ import { MeditationRenderStatus, type PrismaClient } from '@meditation/database'
 import { WorkerObjectStorage } from './knowledge-storage.js';
 
 const execFileAsync = promisify(execFile);
-const OUTPUT_CONTENT_TYPE = 'audio/mp4';
+const OUTPUT_CONTENT_TYPE = 'audio/flac';
+const OUTPUT_SAMPLE_RATE = 48_000;
+const OUTPUT_CHANNEL_LAYOUT = 'stereo';
 
 export function calculateSilenceSeconds(
   durationMinutes: number,
@@ -50,15 +52,26 @@ async function renderAudio(input: {
   silenceSeconds: number;
 }) {
   const args = ['-nostdin', '-hide_banner', '-loglevel', 'error', '-y', '-i', input.openingPath];
-  args.push('-f', 'lavfi', '-t', input.silenceSeconds.toFixed(3), '-i', 'anullsrc=r=44100:cl=mono');
+  args.push(
+    '-f',
+    'lavfi',
+    '-t',
+    input.silenceSeconds.toFixed(3),
+    '-i',
+    `anullsrc=r=${OUTPUT_SAMPLE_RATE}:cl=${OUTPUT_CHANNEL_LAYOUT}`,
+  );
   if (input.closingPath) args.push('-i', input.closingPath);
   const inputs = input.closingPath
     ? ['[opening]', '[silence]', '[closing]']
     : ['[opening]', '[silence]'];
   const filters = [
-    '[0:a]aformat=sample_rates=44100:channel_layouts=mono[opening]',
-    '[1:a]aformat=sample_rates=44100:channel_layouts=mono[silence]',
-    ...(input.closingPath ? ['[2:a]aformat=sample_rates=44100:channel_layouts=mono[closing]'] : []),
+    `[0:a]aresample=${OUTPUT_SAMPLE_RATE},aformat=sample_fmts=s32:channel_layouts=${OUTPUT_CHANNEL_LAYOUT},asetpts=PTS-STARTPTS[opening]`,
+    `[1:a]aformat=sample_fmts=s32:sample_rates=${OUTPUT_SAMPLE_RATE}:channel_layouts=${OUTPUT_CHANNEL_LAYOUT},asetpts=PTS-STARTPTS[silence]`,
+    ...(input.closingPath
+      ? [
+          `[2:a]aresample=${OUTPUT_SAMPLE_RATE},aformat=sample_fmts=s32:channel_layouts=${OUTPUT_CHANNEL_LAYOUT},asetpts=PTS-STARTPTS[closing]`,
+        ]
+      : []),
     `${inputs.join('')}concat=n=${inputs.length}:v=0:a=1[out]`,
   ];
   args.push(
@@ -67,13 +80,17 @@ async function renderAudio(input: {
     '-map',
     '[out]',
     '-c:a',
-    'aac',
-    '-b:a',
-    '64k',
+    'flac',
+    '-compression_level',
+    '8',
+    '-sample_fmt',
+    's32',
+    '-ar',
+    String(OUTPUT_SAMPLE_RATE),
+    '-ac',
+    '2',
     '-threads',
     '1',
-    '-movflags',
-    '+faststart',
     input.outputPath,
   );
   await execFileAsync('ffmpeg', args, {
@@ -148,7 +165,7 @@ export class MeditationAudioRenderProcessor {
       const closingPath = render.closingAudio
         ? join(directory, `closing-${basename(render.closingAudio.filename)}`)
         : undefined;
-      const outputPath = join(directory, 'meditation.m4a');
+      const outputPath = join(directory, 'meditation.flac');
       await writeFile(
         openingPath,
         await this.storage.get(this.config.R2_PRIVATE_BUCKET, render.openingAudio.storageKey),
@@ -171,7 +188,7 @@ export class MeditationAudioRenderProcessor {
         throw new Error('RENDER_DURATION_MISMATCH');
       const body = await readFile(outputPath);
       const contentHash = createHash('sha256').update(body).digest('hex');
-      const storageKey = `meditations/renders/${render.meditationTypeId}/v${render.sourceVersion}/${render.durationMinutes}m-${render.id}.m4a`;
+      const storageKey = `meditations/renders/${render.meditationTypeId}/v${render.sourceVersion}/${render.durationMinutes}m-${render.id}.flac`;
       await this.storage.put(this.config.R2_PRIVATE_BUCKET, storageKey, body, OUTPUT_CONTENT_TYPE);
       await this.prisma.$transaction([
         this.prisma.meditationAudioAsset.update({

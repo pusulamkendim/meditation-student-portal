@@ -801,7 +801,7 @@ export class MeditationService {
     if (!render?.storageKey || !render.contentType)
       throw new NotFoundException('Hazırlanmış ses dosyası bulunamadı.');
     return {
-      filename: `${render.durationMinutes}-dakika.m4a`,
+      filename: `${render.durationMinutes}-dakika.${render.contentType === 'audio/flac' ? 'flac' : 'm4a'}`,
       contentType: render.contentType,
       buffer: await this.storage.get(this.config.R2_PRIVATE_BUCKET, render.storageKey),
     };
@@ -1020,7 +1020,7 @@ export class MeditationService {
     )
       throw new NotFoundException('Meditasyon sesi geçersiz veya süresi dolmuş.');
     return {
-      filename: `${render.durationMinutes}-dakika.m4a`,
+      filename: `${render.durationMinutes}-dakika.${render.contentType === 'audio/flac' ? 'flac' : 'm4a'}`,
       contentType: render.contentType,
       buffer: await this.storage.get(this.config.R2_PRIVATE_BUCKET, render.storageKey),
     };

@@ -4,16 +4,14 @@
  * Run this file inside the live API container so Prisma and encryption keys come
  * from the deployed application. Mutations are dry-run unless --apply is given.
  *
- * Example:
- *   API_CONTAINER=$(ssh hetzner "docker ps --filter 'name=pc393rw7valhdz3mo8n0q7zn' --format '{{.Names}}' | head -n 1")
- *   ssh hetzner "docker exec -i $API_CONTAINER node --input-type=module - student:get 3d73b717" \
+ * Coolify replaces the container on every deployment, so never hard-code the
+ * generated container suffix. Resolve the active API container by its stable
+ * Coolify label inside the SSH session:
+ *
+ *   ssh hetzner 'API_CONTAINER=$(docker ps --filter "label=coolify.name=pc393rw7valhdz3mo8n0q7zn" --format "{{.Names}}" | head -n 1); test -n "$API_CONTAINER" || { echo "Live API container not found." >&2; exit 1; }; docker exec -i "$API_CONTAINER" node --input-type=module - student:get 3d73b717' \
  *     < scripts/live-data-ops.mjs
- *   ssh hetzner "docker exec -i $API_CONTAINER node --input-type=module - student:set-name 3d73b717 'Necip TestUser' --apply" \
- *     < scripts/live-data-ops.mjs
- *   ssh hetzner "docker exec -i $API_CONTAINER node --input-type=module - student:message-analysis 8a9c4d10 --days=90" \
- *     < scripts/live-data-ops.mjs
- *   ssh hetzner "docker exec -i $API_CONTAINER node --input-type=module - student:renewal-analysis 7a8eb0e6" \
- *     < scripts/live-data-ops.mjs
+ *
+ * Replace `student:get 3d73b717` with any command shown in usage().
  */
 
 import { Buffer } from 'node:buffer';
