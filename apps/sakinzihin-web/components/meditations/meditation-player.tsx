@@ -2,7 +2,6 @@
 
 import {
   Flower2,
-  Headphones,
   LoaderCircle,
   MessageCircle,
   Pause,
@@ -350,17 +349,6 @@ export function MeditationPlayer({ slug, meta }: MeditationPlayerProps) {
         <div className="practice-player-grain" />
         <div className="practice-player-frame" />
       </div>
-
-      <header className="practice-player-brand">
-        <a href={siteConfig.siteUrl} aria-label="Sakin Zihin ana sayfa">
-          <Flower2 aria-hidden="true" />
-          SAKİN ZİHİN
-        </a>
-        <span>
-          <Headphones aria-hidden="true" /> MEDITASYON / {practice.durationMinutes} DK ·{' '}
-          {practice.guided ? 'REHBERLİ' : 'SESSİZ'}
-        </span>
-      </header>
 
       <div className="practice-player-stage">
         <div className="practice-player-heading">

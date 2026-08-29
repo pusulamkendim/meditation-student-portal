@@ -2357,11 +2357,10 @@ p {
   --meditation-ivory: #f7f3e9;
   --meditation-muted: #c8d0c7;
   --meditation-gold: #d5aa59;
-  --meditation-control-ink: #19372f;
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: 1fr;
   overflow: hidden;
   padding: max(38px, env(safe-area-inset-top)) max(46px, env(safe-area-inset-right))
     max(38px, env(safe-area-inset-bottom)) max(46px, env(safe-area-inset-left));
@@ -2415,39 +2414,6 @@ p {
   inset: 22px;
   border: 1px solid rgb(247 243 233 / 28%);
   border-radius: 30px;
-}
-
-.practice-player-brand {
-  position: relative;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  color: var(--meditation-ivory);
-  font-size: 0.74rem;
-  font-weight: 760;
-  letter-spacing: 0.08em;
-}
-
-.practice-player-brand > a,
-.practice-player-brand > span {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  color: inherit;
-  text-decoration: none;
-}
-
-.practice-player-brand svg {
-  width: 19px;
-  height: 19px;
-  color: var(--meditation-gold);
-}
-
-.practice-player-brand > span {
-  color: var(--meditation-muted);
-  font-size: 0.68rem;
 }
 
 .practice-player-stage {
@@ -2634,14 +2600,14 @@ p {
 .practice-player-primary {
   order: 1;
   width: 100%;
-  border: 1px solid var(--surface);
-  background: var(--surface);
-  color: var(--meditation-control-ink);
+  border: 1px solid var(--button-primary-bg);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   box-shadow: 0 12px 28px rgb(0 0 0 / 20%);
 }
 
 .practice-player-primary:hover {
-  background: #fffaf1;
+  background: var(--button-primary-hover);
 }
 
 .practice-player-secondary {
@@ -2710,8 +2676,8 @@ p {
   justify-content: center;
   gap: 8px;
   border-radius: 999px;
-  background: var(--surface);
-  color: var(--meditation-control-ink);
+  background: var(--button-primary-bg);
+  color: var(--button-primary-text);
   font-size: 0.88rem;
   font-weight: 750;
   text-decoration: none;
@@ -2759,14 +2725,6 @@ p {
   .practice-player-frame {
     inset: 12px;
     border-radius: 24px;
-  }
-
-  .practice-player-brand {
-    font-size: 0.67rem;
-  }
-
-  .practice-player-brand > span {
-    font-size: 0.6rem;
   }
 
   .practice-player-heading h1 {
