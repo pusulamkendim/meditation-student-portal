@@ -697,8 +697,26 @@ export default function DrawingsPage() {
       </section>
 
       {createOpen ? (
-        <Modal title="Yeni çizim" onClose={() => setCreateOpen(false)}>
-          <form className="modal-form" onSubmit={(event) => void createDrawing(event)}>
+        <Modal
+          title="Yeni çizim"
+          onClose={() => setCreateOpen(false)}
+          actions={
+            <>
+              <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>
+                Vazgeç
+              </Button>
+              <Button type="submit" form="create-drawing-form" loading={busy}>
+                <Plus size={16} aria-hidden="true" />
+                Oluştur
+              </Button>
+            </>
+          }
+        >
+          <form
+            id="create-drawing-form"
+            className="modal-form"
+            onSubmit={(event) => void createDrawing(event)}
+          >
             <TextField
               label="Çizim adı"
               name="title"
@@ -715,33 +733,16 @@ export default function DrawingsPage() {
                 placeholder="Bu çizimin kullanım amacını not edin"
               />
             </label>
-            <div className="modal-actions">
-              <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>
-                Vazgeç
-              </Button>
-              <Button type="submit" loading={busy}>
-                <Plus size={16} aria-hidden="true" />
-                Oluştur
-              </Button>
-            </div>
           </form>
         </Modal>
       ) : null}
 
       {deleteOpen ? (
-        <Modal title="Çizimi sil" onClose={() => setDeleteOpen(false)}>
-          <div className="modal-form">
-            {detail?.assignments.length ? (
-              <Alert tone="warning" title="Bu çizim öğrenciyle paylaşıldı">
-                Öğrenci erişim geçmişini korumak için çizimi kalıcı olarak silemezsiniz. Çizimi
-                arşivleyebilirsiniz.
-              </Alert>
-            ) : (
-              <Alert tone="warning" title="Bu işlem geri alınamaz">
-                “{detail?.title}” çizimi özel depolama ve kütüphaneden kalıcı olarak silinecek.
-              </Alert>
-            )}
-            <div className="modal-actions">
+        <Modal
+          title="Çizimi sil"
+          onClose={() => setDeleteOpen(false)}
+          actions={
+            <>
               <Button variant="ghost" onClick={() => setDeleteOpen(false)}>
                 Vazgeç
               </Button>
@@ -758,7 +759,20 @@ export default function DrawingsPage() {
                   Çizimi sil
                 </Button>
               )}
-            </div>
+            </>
+          }
+        >
+          <div className="modal-form">
+            {detail?.assignments.length ? (
+              <Alert tone="warning" title="Bu çizim öğrenciyle paylaşıldı">
+                Öğrenci erişim geçmişini korumak için çizimi kalıcı olarak silemezsiniz. Çizimi
+                arşivleyebilirsiniz.
+              </Alert>
+            ) : (
+              <Alert tone="warning" title="Bu işlem geri alınamaz">
+                “{detail?.title}” çizimi özel depolama ve kütüphaneden kalıcı olarak silinecek.
+              </Alert>
+            )}
           </div>
         </Modal>
       ) : null}
@@ -768,6 +782,21 @@ export default function DrawingsPage() {
           title="Öğrenciyle paylaş"
           description="Her öğrenciye kişisel, salt okunur bir çizim bağlantısı gönderilir."
           onClose={() => setShareOpen(false)}
+          actions={
+            <>
+              <Button variant="ghost" onClick={() => setShareOpen(false)}>
+                Vazgeç
+              </Button>
+              <Button
+                loading={busy}
+                disabled={selectedStudents.length === 0}
+                onClick={() => void shareDrawing()}
+              >
+                <Send size={16} aria-hidden="true" />
+                {selectedStudents.length} öğrenciye gönder
+              </Button>
+            </>
+          }
         >
           <div className="drawing-share-dialog">
             <label className="drawing-share-search">
@@ -842,20 +871,6 @@ export default function DrawingsPage() {
                 ))}
               </section>
             ) : null}
-
-            <div className="modal-actions">
-              <Button variant="ghost" onClick={() => setShareOpen(false)}>
-                Vazgeç
-              </Button>
-              <Button
-                loading={busy}
-                disabled={selectedStudents.length === 0}
-                onClick={() => void shareDrawing()}
-              >
-                <Send size={16} aria-hidden="true" />
-                {selectedStudents.length} öğrenciye gönder
-              </Button>
-            </div>
           </div>
         </Modal>
       ) : null}

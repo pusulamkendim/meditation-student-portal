@@ -338,6 +338,31 @@ test('shows the reading library and section preview in the admin portal', async 
   });
   expect(actionSpacing).toBeGreaterThanOrEqual(12);
 
+  if ((page.viewportSize()?.width ?? 1_000) <= 760) {
+    const dialog = page.getByRole('dialog', { name: 'Herkese açık paylaşım' });
+    const closeButton = dialog.getByRole('button', { name: 'Pencereyi kapat' });
+    const footer = dialog.locator('footer');
+    const body = dialog.locator('.ui-modal__body');
+    const initialLayout = await Promise.all([
+      closeButton.boundingBox(),
+      footer.boundingBox(),
+      body.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+      })),
+    ]);
+    expect(initialLayout[0]?.y ?? -1).toBeGreaterThanOrEqual(0);
+    expect(
+      (initialLayout[1]?.y ?? Infinity) + (initialLayout[1]?.height ?? Infinity),
+    ).toBeLessThanOrEqual(page.viewportSize()?.height ?? 0);
+    expect(initialLayout[2].scrollHeight).toBeGreaterThan(initialLayout[2].clientHeight);
+
+    const footerTop = initialLayout[1]?.y;
+    await body.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
+    await expect.poll(async () => (await footer.boundingBox())?.y).toBe(footerTop);
+    await expect(closeButton).toBeVisible();
+  }
+
   const dimensions = await page.evaluate(() => ({
     scrollWidth: document.documentElement.scrollWidth,
     clientWidth: document.documentElement.clientWidth,
