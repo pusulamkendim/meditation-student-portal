@@ -184,7 +184,7 @@ test('shows the reading library and section preview in the admin portal', async 
     _count: { sections: 5, assignments: 1 },
     assignmentCounts: { ASSIGNED: 1, OPENED: 0, COMPLETED: 0 },
   };
-  const detail = {
+  let detail = {
     ...summary,
     sourceFilename: 'aydinlanma-gecesi.md',
     sourceByteSize: 82_000,
@@ -206,6 +206,34 @@ test('shows the reading library and section preview in the admin portal', async 
   await page.route('**/v1/admin/readings/reading-1', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(detail) }),
   );
+  let contentUpdatePayload:
+    | {
+        expectedVersion: number;
+        sections: Array<{ id: string; title: string; contentMarkdown: string }>;
+      }
+    | undefined;
+  await page.route('**/v1/admin/readings/reading-1/content', async (route) => {
+    contentUpdatePayload = (await route.request().postDataJSON()) as typeof contentUpdatePayload;
+    detail = {
+      ...detail,
+      version: detail.version + 1,
+      sections: detail.sections.map((section) => {
+        const changed = contentUpdatePayload?.sections.find((item) => item.id === section.id);
+        if (!changed) return section;
+        return {
+          ...section,
+          title: changed.title,
+          contentMarkdown: changed.contentMarkdown,
+          wordCount: 7,
+        };
+      }),
+    };
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(detail),
+    });
+  });
   await page.route('**/v1/admin/readings', (route) =>
     route.fulfill({
       status: 200,
@@ -271,6 +299,23 @@ test('shows the reading library and section preview in the admin portal', async 
   await expect(page.getByText(reading.title).first()).toBeVisible();
   await expect(page.getByText('aydinlanma-gecesi.pdf')).toBeVisible();
   await expect(page.getByText('Bu bölümün okuma metni.').first()).toBeVisible();
+  await page.getByRole('button', { name: 'Metni düzenle' }).click();
+  await page.getByRole('textbox', { name: 'Bölüm başlığı' }).fill('Güncellenen bölüm');
+  await page
+    .getByRole('textbox', { name: 'Markdown içeriği' })
+    .fill('Yeni **Markdown** içeriği burada yer alıyor.');
+  await page.getByRole('button', { name: 'Önizle' }).click();
+  await expect(page.getByRole('heading', { name: 'Güncellenen bölüm' })).toBeVisible();
+  await expect(page.getByText('Yeni Markdown içeriği burada yer alıyor.')).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('reading-inline-edit.png') });
+  await page.getByRole('button', { name: 'Metni kaydet' }).click();
+  await expect(page.getByText('Okuma metni güncellendi.')).toBeVisible();
+  expect(contentUpdatePayload?.expectedVersion).toBe(2);
+  expect(contentUpdatePayload?.sections[0]).toEqual({
+    id: 'section-1',
+    title: 'Güncellenen bölüm',
+    contentMarkdown: 'Yeni **Markdown** içeriği burada yer alıyor.',
+  });
   await page.getByRole('button', { name: 'Herkese açık paylaş' }).click();
   await expect(page.getByRole('heading', { name: 'Herkese açık paylaşım' })).toBeVisible();
   await expect(page.getByRole('textbox', { name: 'Bağlantı adı' })).toHaveValue(

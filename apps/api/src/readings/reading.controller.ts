@@ -31,6 +31,23 @@ const updateSchema = z.object({
   status: z.nativeEnum(ReadingStatus).optional(),
   coverImageAlt: z.string().max(500).nullable().optional(),
 });
+const contentUpdateSchema = z.object({
+  expectedVersion: z.number().int().positive(),
+  sections: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        title: z.string().trim().min(1).max(240),
+        contentMarkdown: z
+          .string()
+          .trim()
+          .min(1)
+          .max(5 * 1024 * 1024),
+      }),
+    )
+    .min(1)
+    .max(20),
+});
 const coverImageRemoveSchema = z.object({ expectedVersion: z.number().int().positive() });
 const assignmentSchema = z.object({
   studentIds: z.array(z.string().uuid()).min(1).max(200),
@@ -192,6 +209,14 @@ export class AdminReadingController {
     const parsed = updateSchema.safeParse(body);
     if (!parsed.success) throw new BadRequestException('Geçersiz okuma güncellemesi.');
     return this.readings.update(id, parsed.data, request.admin!.id);
+  }
+
+  @Patch(':id/content')
+  @UseGuards(AdminCsrfGuard)
+  updateContent(@Param('id') id: string, @Body() body: unknown, @Req() request: FastifyRequest) {
+    const parsed = contentUpdateSchema.safeParse(body);
+    if (!parsed.success) throw new BadRequestException('Geçersiz okuma içeriği güncellemesi.');
+    return this.readings.updateContent(id, parsed.data, request.admin!.id);
   }
 
   @Delete(':id')

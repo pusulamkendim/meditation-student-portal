@@ -72,6 +72,12 @@ type ParsedSection = {
   wordCount: number;
 };
 
+type EditableReadingSection = {
+  id: string;
+  title: string;
+  contentMarkdown: string;
+};
+
 type MarkdownUnit = {
   title: string;
   body: string;
@@ -200,6 +206,23 @@ function toUnit(input: { title: string; parts: string[] }): MarkdownUnit {
 
 function countWords(value: string): number {
   return value.match(/[\p{Letter}\p{Number}]+(?:['’][\p{Letter}\p{Number}]+)*/gu)?.length ?? 0;
+}
+
+export function serializeReadingMarkdown(
+  title: string,
+  sections: Array<Pick<EditableReadingSection, 'title' | 'contentMarkdown'>>,
+): Buffer {
+  const markdown = [
+    `# ${normalizeTitle(title)}`,
+    ...sections.map(
+      (section) =>
+        `## ${normalizeSectionTitle(section.title)}\n\n${normalizeSectionContent(section.contentMarkdown)}`,
+    ),
+  ].join('\n\n');
+  const buffer = Buffer.from(`${markdown.trim()}\n`, 'utf8');
+  if (buffer.byteLength > MAX_MARKDOWN_BYTES)
+    throw new BadRequestException('Markdown dosyası 5 MiB sınırını aşıyor.');
+  return buffer;
 }
 
 function groupUnits(units: MarkdownUnit[], requestedGroups: number): MarkdownUnit[][] {
@@ -471,6 +494,102 @@ export class ReadingService {
       return tx.reading.findUniqueOrThrow({ where: { id } });
     });
     return changed;
+  }
+
+  async updateContent(
+    id: string,
+    input: { expectedVersion: number; sections: EditableReadingSection[] },
+    adminId: string,
+  ) {
+    const current = await this.prisma.reading.findUnique({
+      where: { id },
+      include: { sections: { orderBy: { position: 'asc' } } },
+    });
+    if (!current) throw new NotFoundException('Okuma bulunamadı.');
+    if (current.version !== input.expectedVersion)
+      throw new ConflictException(
+        'Okuma başka bir oturumda güncellendi. Sayfayı yenileyip tekrar deneyin.',
+      );
+    if (input.sections.length !== current.sections.length)
+      throw new BadRequestException('Bu ekrandan bölüm eklenemez veya kaldırılamaz.');
+
+    const inputById = new Map(input.sections.map((section) => [section.id, section]));
+    if (inputById.size !== input.sections.length)
+      throw new BadRequestException('Aynı bölüm birden fazla kez gönderilemez.');
+    const sections = current.sections.map((section) => {
+      const changed = inputById.get(section.id);
+      if (!changed) throw new BadRequestException('Okumaya ait tüm bölümler gönderilmelidir.');
+      const title = normalizeSectionTitle(changed.title);
+      const contentMarkdown = normalizeSectionContent(changed.contentMarkdown);
+      const wordCount = countWords(contentMarkdown);
+      if (wordCount === 0) throw new BadRequestException('Okuma bölümü boş bırakılamaz.');
+      return { ...section, title, contentMarkdown, wordCount };
+    });
+    if (inputById.size !== current.sections.length)
+      throw new BadRequestException('Başka bir okumaya ait bölüm gönderilemez.');
+
+    const source = serializeReadingMarkdown(current.title, sections);
+    const sourceHash = contentHash(source);
+    if (sourceHash === current.sourceHash) return this.detail(id);
+    const storageKey = `readings/${id}/source-${randomUUID()}.md`;
+    await this.storage.put(
+      this.config.R2_PRIVATE_BUCKET,
+      storageKey,
+      source,
+      'text/markdown; charset=utf-8',
+    );
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const claimed = await tx.reading.updateMany({
+          where: { id, version: input.expectedVersion },
+          data: {
+            sourceFilename: current.sourceFilename.replace(/\.(?:md|markdown)$/iu, '.md'),
+            sourceStorageKey: storageKey,
+            sourceHash,
+            sourceByteSize: source.byteLength,
+            updatedByAdminId: adminId,
+            version: { increment: 1 },
+          },
+        });
+        if (claimed.count !== 1)
+          throw new ConflictException(
+            'Okuma başka bir oturumda güncellendi. Sayfayı yenileyip tekrar deneyin.',
+          );
+        for (const section of sections) {
+          await tx.readingSection.update({
+            where: { id: section.id },
+            data: {
+              title: section.title,
+              contentMarkdown: section.contentMarkdown,
+              wordCount: section.wordCount,
+            },
+          });
+        }
+        await this.audit(tx, 'ADMIN', adminId, 'READING_CONTENT_UPDATED', id, {
+          previousSourceHash: current.sourceHash,
+          sourceHash,
+          changedSectionIds: sections
+            .filter((section, index) => {
+              const previous = current.sections[index]!;
+              return (
+                section.title !== previous.title ||
+                section.contentMarkdown !== previous.contentMarkdown
+              );
+            })
+            .map((section) => section.id),
+          previousWordCount: current.sections.reduce(
+            (total, section) => total + section.wordCount,
+            0,
+          ),
+          wordCount: sections.reduce((total, section) => total + section.wordCount, 0),
+        });
+      });
+    } catch (error) {
+      await this.removeStorageObject(storageKey, 'Yeni okuma kaynağı temizlenemedi');
+      throw error;
+    }
+    await this.removeStorageObject(current.sourceStorageKey, 'Eski okuma kaynağı silinemedi');
+    return this.detail(id);
   }
 
   async remove(id: string, adminId: string) {
@@ -1464,6 +1583,21 @@ function normalizeTitle(title: string): string {
   const normalized = title.trim();
   if (!normalized) throw new BadRequestException('Okuma başlığı gereklidir.');
   if (normalized.length > 200) throw new BadRequestException('Okuma başlığı çok uzun.');
+  return normalized;
+}
+
+function normalizeSectionTitle(title: string): string {
+  const normalized = title.trim();
+  if (!normalized) throw new BadRequestException('Bölüm başlığı gereklidir.');
+  if (normalized.length > 240) throw new BadRequestException('Bölüm başlığı çok uzun.');
+  return normalized;
+}
+
+function normalizeSectionContent(contentMarkdown: string): string {
+  const normalized = contentMarkdown.replace(/\r\n?/gu, '\n').trim();
+  if (!normalized) throw new BadRequestException('Okuma bölümü boş bırakılamaz.');
+  // Parse once on write so pathological Markdown does not first surface in the reader.
+  marked.lexer(normalized);
   return normalized;
 }
 

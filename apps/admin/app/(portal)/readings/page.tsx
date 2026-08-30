@@ -23,6 +23,7 @@ import {
   Globe2,
   Link2,
   PauseCircle,
+  Pencil,
   PlayCircle,
   RefreshCw,
   Save,
@@ -31,6 +32,7 @@ import {
   Trash2,
   Upload,
   Users,
+  X,
 } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -182,6 +184,10 @@ function localDateTime(value?: string | null) {
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
+function countWords(value: string) {
+  return value.match(/[\p{Letter}\p{Number}]+(?:['’][\p{Letter}\p{Number}]+)*/gu)?.length ?? 0;
+}
+
 export default function ReadingsPage() {
   const [readings, setReadings] = useState<ReadingSummary[]>();
   const [selectedId, setSelectedId] = useState<string>();
@@ -197,6 +203,9 @@ export default function ReadingsPage() {
   const [estimatedMinutes, setEstimatedMinutes] = useState('20');
   const [coverImageAlt, setCoverImageAlt] = useState('');
   const [activeSection, setActiveSection] = useState(0);
+  const [editingContent, setEditingContent] = useState(false);
+  const [contentPreview, setContentPreview] = useState(false);
+  const [contentDraft, setContentDraft] = useState<ReadingDetail['sections']>([]);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -240,6 +249,9 @@ export default function ReadingsPage() {
       setEstimatedMinutes(String(result.estimatedMinutes));
       setCoverImageAlt(result.coverImageAlt ?? '');
       setActiveSection((current) => Math.min(current, Math.max(0, result.sections.length - 1)));
+      setEditingContent(false);
+      setContentPreview(false);
+      setContentDraft(result.sections.map((section) => ({ ...section })));
     } catch (reason) {
       setNotice({
         tone: 'danger',
@@ -278,6 +290,96 @@ export default function ReadingsPage() {
           student.id.startsWith(term)),
     );
   }, [studentQuery, students]);
+
+  const contentChanged = useMemo(() => {
+    if (!detail || contentDraft.length !== detail.sections.length) return false;
+    return contentDraft.some((section, index) => {
+      const current = detail.sections[index];
+      return (
+        !current ||
+        section.id !== current.id ||
+        section.title !== current.title ||
+        section.contentMarkdown !== current.contentMarkdown
+      );
+    });
+  }, [contentDraft, detail]);
+
+  useEffect(() => {
+    if (!editingContent || !contentChanged) return;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [contentChanged, editingContent]);
+
+  function discardContentChanges() {
+    if (contentChanged && !window.confirm('Kaydedilmemiş metin değişiklikleri silinsin mi?'))
+      return false;
+    setEditingContent(false);
+    setContentPreview(false);
+    setContentDraft(detail?.sections.map((section) => ({ ...section })) ?? []);
+    return true;
+  }
+
+  function beginContentEdit() {
+    if (!detail) return;
+    setContentDraft(detail.sections.map((section) => ({ ...section })));
+    setContentPreview(false);
+    setEditingContent(true);
+  }
+
+  function updateDraftSection(
+    sectionId: string,
+    field: 'title' | 'contentMarkdown',
+    value: string,
+  ) {
+    setContentDraft((sections) =>
+      sections.map((section) =>
+        section.id === sectionId
+          ? {
+              ...section,
+              [field]: value,
+              ...(field === 'contentMarkdown' ? { wordCount: countWords(value) } : {}),
+            }
+          : section,
+      ),
+    );
+  }
+
+  async function saveContent() {
+    if (!detail || !contentChanged) return;
+    if (contentDraft.some((section) => !section.title.trim() || !section.contentMarkdown.trim())) {
+      setNotice({ tone: 'danger', text: 'Bölüm başlığı ve içeriği boş bırakılamaz.' });
+      return;
+    }
+    setBusy(true);
+    try {
+      const result = await request<ReadingDetail>(`/v1/admin/readings/${detail.id}/content`, {
+        method: 'PATCH',
+        headers: csrfHeaders(true),
+        body: JSON.stringify({
+          expectedVersion: detail.version,
+          sections: contentDraft.map(({ id, title: sectionTitle, contentMarkdown }) => ({
+            id,
+            title: sectionTitle,
+            contentMarkdown,
+          })),
+        }),
+      });
+      setDetail(result);
+      setContentDraft(result.sections.map((section) => ({ ...section })));
+      setEditingContent(false);
+      setContentPreview(false);
+      setNotice({ tone: 'success', text: 'Okuma metni güncellendi.' });
+      await loadReadings(result.id);
+    } catch (reason) {
+      setNotice({
+        tone: 'danger',
+        text: reason instanceof Error ? reason.message : 'Okuma metni kaydedilemedi.',
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function uploadReading(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -658,6 +760,7 @@ export default function ReadingsPage() {
                   key={reading.id}
                   className={selectedId === reading.id ? 'is-active' : undefined}
                   onClick={() => {
+                    if (reading.id !== selectedId && !discardContentChanges()) return;
                     setSelectedId(reading.id);
                     setActiveSection(0);
                   }}
@@ -719,11 +822,32 @@ export default function ReadingsPage() {
                     <h2>{detail.title}</h2>
                   </div>
                   <div className="reading-admin-actions">
-                    {detail.status === 'DRAFT' ? (
+                    {editingContent ? (
+                      <>
+                        <Button
+                          variant="secondary"
+                          onClick={() => void discardContentChanges()}
+                          disabled={busy}
+                        >
+                          <X aria-hidden="true" /> Vazgeç
+                        </Button>
+                        <Button
+                          onClick={() => void saveContent()}
+                          disabled={busy || !contentChanged}
+                        >
+                          <Save aria-hidden="true" /> {busy ? 'Kaydediliyor...' : 'Metni kaydet'}
+                        </Button>
+                      </>
+                    ) : (
+                      <Button variant="secondary" onClick={beginContentEdit} disabled={busy}>
+                        <Pencil aria-hidden="true" /> Metni düzenle
+                      </Button>
+                    )}
+                    {!editingContent && detail.status === 'DRAFT' ? (
                       <Button onClick={() => void changeStatus('PUBLISHED')} disabled={busy}>
                         <Check aria-hidden="true" /> Yayınla
                       </Button>
-                    ) : detail.status === 'PUBLISHED' ? (
+                    ) : !editingContent && detail.status === 'PUBLISHED' ? (
                       <>
                         <Button onClick={() => void openAssignment()} disabled={busy}>
                           <Send aria-hidden="true" /> Öğrenciye ata
@@ -737,7 +861,7 @@ export default function ReadingsPage() {
                         </Button>
                       </>
                     ) : null}
-                    {detail.status === 'PUBLISHED' || detail.publicShare ? (
+                    {!editingContent && (detail.status === 'PUBLISHED' || detail.publicShare) ? (
                       <Button
                         variant="secondary"
                         onClick={() => void openPublicShare()}
@@ -747,106 +871,119 @@ export default function ReadingsPage() {
                         {detail.publicShare ? 'Genel paylaşım' : 'Herkese açık paylaş'}
                       </Button>
                     ) : null}
-                    <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={busy}>
-                      <Trash2 aria-hidden="true" /> Sil
-                    </Button>
+                    {!editingContent ? (
+                      <Button variant="danger" onClick={() => setDeleteOpen(true)} disabled={busy}>
+                        <Trash2 aria-hidden="true" /> Sil
+                      </Button>
+                    ) : null}
                   </div>
                 </header>
 
-                <div className="reading-metadata">
-                  <TextField
-                    label="Başlık"
-                    value={title}
-                    onChange={(event) => setTitle(event.target.value)}
-                  />
-                  <TextField
-                    label="Yazar"
-                    value={author}
-                    onChange={(event) => setAuthor(event.target.value)}
-                  />
-                  <TextField
-                    label="Tahmini süre"
-                    type="number"
-                    min={1}
-                    max={600}
-                    value={estimatedMinutes}
-                    onChange={(event) => setEstimatedMinutes(event.target.value)}
-                  />
-                  <label className="ui-field reading-description-field">
-                    <span>Açıklama</span>
-                    <textarea
-                      value={description}
-                      onChange={(event) => setDescription(event.target.value)}
-                      rows={2}
-                    />
-                  </label>
-                  <div className="admin-cover-image-field">
-                    <div className="admin-cover-image-preview">
-                      {detail.coverImageMimeType ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={`${api}/v1/admin/readings/${detail.id}/cover-image?v=${detail.version}`}
-                          alt={coverImageAlt || detail.title}
-                        />
-                      ) : (
-                        <span>Editorial fallback kullanılacak</span>
-                      )}
-                    </div>
-                    <div className="admin-cover-image-controls">
+                {!editingContent ? (
+                  <>
+                    <div className="reading-metadata">
                       <TextField
-                        label="Kapak görseli alt metni"
-                        value={coverImageAlt}
-                        onChange={(event) => setCoverImageAlt(event.target.value)}
-                        maxLength={500}
+                        label="Başlık"
+                        value={title}
+                        onChange={(event) => setTitle(event.target.value)}
                       />
-                      <input
-                        ref={coverInput}
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        onChange={(event) => void uploadCoverImage(event.currentTarget.files?.[0])}
+                      <TextField
+                        label="Yazar"
+                        value={author}
+                        onChange={(event) => setAuthor(event.target.value)}
                       />
-                      <div className="admin-cover-image-actions">
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          disabled={busy}
-                          onClick={() => coverInput.current?.click()}
-                        >
-                          <Upload aria-hidden="true" />
-                          {detail.coverImageMimeType ? 'Görseli değiştir' : 'Görsel yükle'}
-                        </Button>
-                        {detail.coverImageMimeType ? (
-                          <Button
-                            type="button"
-                            variant="secondary"
-                            disabled={busy}
-                            onClick={() => void removeCoverImage()}
-                          >
-                            Görseli kaldır
-                          </Button>
-                        ) : null}
+                      <TextField
+                        label="Tahmini süre"
+                        type="number"
+                        min={1}
+                        max={600}
+                        value={estimatedMinutes}
+                        onChange={(event) => setEstimatedMinutes(event.target.value)}
+                      />
+                      <label className="ui-field reading-description-field">
+                        <span>Açıklama</span>
+                        <textarea
+                          value={description}
+                          onChange={(event) => setDescription(event.target.value)}
+                          rows={2}
+                        />
+                      </label>
+                      <div className="admin-cover-image-field">
+                        <div className="admin-cover-image-preview">
+                          {detail.coverImageMimeType ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={`${api}/v1/admin/readings/${detail.id}/cover-image?v=${detail.version}`}
+                              alt={coverImageAlt || detail.title}
+                            />
+                          ) : (
+                            <span>Editorial fallback kullanılacak</span>
+                          )}
+                        </div>
+                        <div className="admin-cover-image-controls">
+                          <TextField
+                            label="Kapak görseli alt metni"
+                            value={coverImageAlt}
+                            onChange={(event) => setCoverImageAlt(event.target.value)}
+                            maxLength={500}
+                          />
+                          <input
+                            ref={coverInput}
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            disabled={busy || editingContent}
+                            onChange={(event) =>
+                              void uploadCoverImage(event.currentTarget.files?.[0])
+                            }
+                          />
+                          <div className="admin-cover-image-actions">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={busy || editingContent}
+                              onClick={() => coverInput.current?.click()}
+                            >
+                              <Upload aria-hidden="true" />
+                              {detail.coverImageMimeType ? 'Görseli değiştir' : 'Görsel yükle'}
+                            </Button>
+                            {detail.coverImageMimeType ? (
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                disabled={busy || editingContent}
+                                onClick={() => void removeCoverImage()}
+                              >
+                                Görseli kaldır
+                              </Button>
+                            ) : null}
+                          </div>
+                          <small>JPEG, PNG veya WebP · en fazla 8 MiB</small>
+                        </div>
                       </div>
-                      <small>JPEG, PNG veya WebP · en fazla 8 MiB</small>
+                      <Button
+                        variant="secondary"
+                        onClick={() => void saveMetadata()}
+                        disabled={busy || editingContent}
+                      >
+                        <Save aria-hidden="true" /> Bilgileri kaydet
+                      </Button>
                     </div>
-                  </div>
-                  <Button variant="secondary" onClick={() => void saveMetadata()} disabled={busy}>
-                    <Save aria-hidden="true" /> Bilgileri kaydet
-                  </Button>
-                </div>
 
-                <div className="reading-source-strip">
-                  <span>
-                    <FileText aria-hidden="true" />
-                    {detail.sourceFilename} · {formatBytes(detail.sourceByteSize)}
-                  </span>
-                  <span>
-                    <Eye aria-hidden="true" />
-                    PDF:{' '}
-                    {detail.pdfFilename
-                      ? `${detail.pdfFilename} · ${formatBytes(detail.pdfByteSize)}`
-                      : 'eklenmedi'}
-                  </span>
-                </div>
+                    <div className="reading-source-strip">
+                      <span>
+                        <FileText aria-hidden="true" />
+                        {detail.sourceFilename} · {formatBytes(detail.sourceByteSize)}
+                      </span>
+                      <span>
+                        <Eye aria-hidden="true" />
+                        PDF:{' '}
+                        {detail.pdfFilename
+                          ? `${detail.pdfFilename} · ${formatBytes(detail.pdfByteSize)}`
+                          : 'eklenmedi'}
+                      </span>
+                    </div>
+                  </>
+                ) : null}
 
                 <div className="reading-preview">
                   <nav aria-label="Okuma bölümleri">
@@ -858,19 +995,90 @@ export default function ReadingsPage() {
                         onClick={() => setActiveSection(index)}
                       >
                         <span>{String(section.position).padStart(2, '0')}</span>
-                        <strong>{section.title}</strong>
-                        <small>{section.wordCount} kelime</small>
+                        <strong>
+                          {(editingContent ? contentDraft[index]?.title : section.title) ??
+                            section.title}
+                        </strong>
+                        <small>
+                          {(editingContent ? contentDraft[index]?.wordCount : section.wordCount) ??
+                            section.wordCount}{' '}
+                          kelime
+                        </small>
                       </button>
                     ))}
                   </nav>
                   <article className="reading-preview-content">
-                    <span className="eyebrow">
-                      Bölüm {detail.sections[activeSection]?.position}
-                    </span>
-                    <h3>{detail.sections[activeSection]?.title}</h3>
-                    <ReactMarkdown skipHtml disallowedElements={['img']}>
-                      {detail.sections[activeSection]?.contentMarkdown ?? ''}
-                    </ReactMarkdown>
+                    {editingContent ? (
+                      <>
+                        <div className="reading-content-edit-head">
+                          <span className="eyebrow">
+                            Bölüm {contentDraft[activeSection]?.position}
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setContentPreview((current) => !current)}
+                          >
+                            <Eye aria-hidden="true" />
+                            {contentPreview ? 'Düzenlemeye dön' : 'Önizle'}
+                          </Button>
+                        </div>
+                        {detail.pdfFilename ? (
+                          <Alert tone="info" title="PDF ayrı tutulur">
+                            Buradaki değişiklik web okumasını günceller; bağlı PDF dosyası değişmez.
+                          </Alert>
+                        ) : null}
+                        {contentPreview ? (
+                          <div className="reading-content-live-preview">
+                            <h3>{contentDraft[activeSection]?.title}</h3>
+                            <ReactMarkdown skipHtml disallowedElements={['img']}>
+                              {contentDraft[activeSection]?.contentMarkdown ?? ''}
+                            </ReactMarkdown>
+                          </div>
+                        ) : (
+                          <div className="reading-content-editor">
+                            <label className="ui-field">
+                              <span>Bölüm başlığı</span>
+                              <input
+                                value={contentDraft[activeSection]?.title ?? ''}
+                                maxLength={240}
+                                onChange={(event) => {
+                                  const section = contentDraft[activeSection];
+                                  if (section)
+                                    updateDraftSection(section.id, 'title', event.target.value);
+                                }}
+                              />
+                            </label>
+                            <label className="ui-field">
+                              <span>Markdown içeriği</span>
+                              <textarea
+                                value={contentDraft[activeSection]?.contentMarkdown ?? ''}
+                                spellCheck
+                                onChange={(event) => {
+                                  const section = contentDraft[activeSection];
+                                  if (section)
+                                    updateDraftSection(
+                                      section.id,
+                                      'contentMarkdown',
+                                      event.target.value,
+                                    );
+                                }}
+                              />
+                            </label>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <span className="eyebrow">
+                          Bölüm {detail.sections[activeSection]?.position}
+                        </span>
+                        <h3>{detail.sections[activeSection]?.title}</h3>
+                        <ReactMarkdown skipHtml disallowedElements={['img']}>
+                          {detail.sections[activeSection]?.contentMarkdown ?? ''}
+                        </ReactMarkdown>
+                      </>
+                    )}
                   </article>
                 </div>
 

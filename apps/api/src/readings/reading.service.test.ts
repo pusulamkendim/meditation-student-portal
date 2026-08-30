@@ -1,7 +1,12 @@
-import { BadRequestException } from '@nestjs/common';
-import { describe, expect, it } from 'vitest';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
 
-import { parseReadingMarkdown, plainTextToReadingMarkdown } from './reading.service.js';
+import {
+  parseReadingMarkdown,
+  plainTextToReadingMarkdown,
+  ReadingService,
+  serializeReadingMarkdown,
+} from './reading.service.js';
 
 const sample = `# Gecenin İçinden Doğan Sabah
 
@@ -102,5 +107,189 @@ describe('reading Markdown parser', () => {
     ['oversized content', Buffer.alloc(5 * 1024 * 1024 + 1)],
   ])('rejects %s', (_name, buffer) => {
     expect(() => parseReadingMarkdown(buffer)).toThrow(BadRequestException);
+  });
+
+  it('serializes edited sections back to canonical Markdown', () => {
+    const result = serializeReadingMarkdown('Başlangıç', [
+      { title: 'İlk adım', contentMarkdown: 'Nefesi **olduğu gibi** gözlemle.' },
+      { title: 'Dönüş', contentMarkdown: 'Dikkat dağıldığında yeniden dön.' },
+    ]).toString('utf8');
+
+    expect(result).toBe(
+      '# Başlangıç\n\n## İlk adım\n\nNefesi **olduğu gibi** gözlemle.\n\n## Dönüş\n\nDikkat dağıldığında yeniden dön.\n',
+    );
+  });
+});
+
+describe('reading content updates', () => {
+  it('replaces the stored source and sections without changing the reading identity', async () => {
+    const sections = [
+      {
+        id: '10000000-0000-4000-8000-000000000001',
+        readingId: '20000000-0000-4000-8000-000000000001',
+        position: 1,
+        title: 'Eski başlık',
+        contentMarkdown: 'Eski içerik.',
+        wordCount: 2,
+      },
+    ];
+    const current = {
+      id: '20000000-0000-4000-8000-000000000001',
+      title: 'Meditasyona Giriş',
+      version: 3,
+      sourceFilename: 'meditasyona-giris.md',
+      sourceStorageKey: 'readings/old.md',
+      sourceHash: 'old-hash',
+      sourceByteSize: 12,
+      sections,
+    };
+    const updatedDetail = {
+      ...current,
+      version: 4,
+      sections: [
+        {
+          ...sections[0],
+          title: 'Yeni başlık',
+          contentMarkdown: 'Yeni ve daha açık içerik.',
+          wordCount: 5,
+        },
+      ],
+      assignments: [],
+      publicShare: null,
+    };
+    const tx = {
+      reading: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
+      readingSection: { update: vi.fn().mockResolvedValue({}) },
+      auditLog: { create: vi.fn().mockResolvedValue({}) },
+    };
+    const prisma = {
+      reading: {
+        findUnique: vi.fn().mockResolvedValueOnce(current).mockResolvedValueOnce(updatedDetail),
+      },
+      $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const storage = {
+      put: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
+    const key = Buffer.alloc(32, 7).toString('base64');
+    const service = new ReadingService(
+      prisma as never,
+      {
+        DATA_ENCRYPTION_KEYS_JSON: JSON.stringify({ 'test-key': key }),
+        ACTIVE_DATA_KEY_ID: 'test-key',
+        LOOKUP_HMAC_KEY: key,
+        R2_PRIVATE_BUCKET: 'private',
+      } as never,
+      storage as never,
+      {} as never,
+      { now: () => new Date('2026-08-30T12:00:00.000Z') } as never,
+    );
+
+    const result = await service.updateContent(
+      current.id,
+      {
+        expectedVersion: 3,
+        sections: [
+          {
+            id: sections[0]!.id,
+            title: 'Yeni başlık',
+            contentMarkdown: 'Yeni ve daha açık içerik.',
+          },
+        ],
+      },
+      '30000000-0000-4000-8000-000000000001',
+    );
+
+    expect(result.version).toBe(4);
+    expect(storage.put).toHaveBeenCalledWith(
+      'private',
+      expect.stringMatching(/^readings\/.+\/source-.+\.md$/u),
+      expect.any(Buffer),
+      'text/markdown; charset=utf-8',
+    );
+    expect(tx.readingSection.update).toHaveBeenCalledWith({
+      where: { id: sections[0]!.id },
+      data: {
+        title: 'Yeni başlık',
+        contentMarkdown: 'Yeni ve daha açık içerik.',
+        wordCount: 5,
+      },
+    });
+    expect(tx.auditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: 'READING_CONTENT_UPDATED' }),
+      }),
+    );
+    expect(storage.remove).toHaveBeenCalledWith('private', 'readings/old.md');
+  });
+
+  it('removes the replacement source when an optimistic-lock conflict aborts the update', async () => {
+    const section = {
+      id: '10000000-0000-4000-8000-000000000001',
+      readingId: '20000000-0000-4000-8000-000000000001',
+      position: 1,
+      title: 'Eski başlık',
+      contentMarkdown: 'Eski içerik.',
+      wordCount: 2,
+    };
+    const current = {
+      id: section.readingId,
+      title: 'Meditasyona Giriş',
+      version: 3,
+      sourceFilename: 'meditasyona-giris.md',
+      sourceStorageKey: 'readings/old.md',
+      sourceHash: 'old-hash',
+      sourceByteSize: 12,
+      sections: [section],
+    };
+    const tx = {
+      reading: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    };
+    const prisma = {
+      reading: { findUnique: vi.fn().mockResolvedValue(current) },
+      $transaction: vi.fn((callback: (client: typeof tx) => unknown) => callback(tx)),
+    };
+    const storage = {
+      put: vi.fn().mockResolvedValue(undefined),
+      remove: vi.fn().mockResolvedValue(undefined),
+    };
+    const key = Buffer.alloc(32, 7).toString('base64');
+    const service = new ReadingService(
+      prisma as never,
+      {
+        DATA_ENCRYPTION_KEYS_JSON: JSON.stringify({ 'test-key': key }),
+        ACTIVE_DATA_KEY_ID: 'test-key',
+        LOOKUP_HMAC_KEY: key,
+        R2_PRIVATE_BUCKET: 'private',
+      } as never,
+      storage as never,
+      {} as never,
+      { now: () => new Date('2026-08-30T12:00:00.000Z') } as never,
+    );
+
+    await expect(
+      service.updateContent(
+        current.id,
+        {
+          expectedVersion: 3,
+          sections: [
+            {
+              id: section.id,
+              title: 'Yeni başlık',
+              contentMarkdown: 'Yeni içerik.',
+            },
+          ],
+        },
+        '30000000-0000-4000-8000-000000000001',
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    expect(storage.put).toHaveBeenCalledOnce();
+    expect(storage.remove).toHaveBeenCalledWith(
+      'private',
+      expect.stringMatching(/^readings\/.+\/source-.+\.md$/u),
+    );
+    expect(storage.remove).not.toHaveBeenCalledWith('private', 'readings/old.md');
   });
 });
