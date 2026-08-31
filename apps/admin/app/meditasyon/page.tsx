@@ -462,7 +462,7 @@ export default function PracticePlayerPage({ publicSlug }: PracticePlayerPagePro
         <audio
           ref={bellRef}
           data-testid="end-bell"
-          src="/meditation/end-bell.m4a"
+          src="/meditation/end-gong-three-strikes-v2.m4a"
           preload="auto"
           playsInline
         />

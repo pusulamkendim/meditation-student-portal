@@ -81,7 +81,7 @@ test('does not expose a short access code in the request URL', async ({ page }) 
   expect(page.url()).toContain(`#${accessCode}`);
 });
 
-test('rings the end bell once when the practice audio finishes', async ({ page }) => {
+test('plays the amplified three-strike gong when the practice audio finishes', async ({ page }) => {
   await page.addInitScript(() => {
     HTMLMediaElement.prototype.play = function () {
       this.dataset.playCount = String(Number(this.dataset.playCount ?? 0) + 1);
@@ -116,9 +116,14 @@ test('rings the end bell once when the practice audio finishes', async ({ page }
       page.getByTestId('end-bell').evaluate((element) => ({
         playCount: Number((element as HTMLAudioElement).dataset.playCount ?? 0),
         muted: (element as HTMLAudioElement).dataset.lastPlayMuted,
+        source: new URL((element as HTMLAudioElement).src).pathname,
       })),
     )
-    .toEqual({ playCount: 2, muted: 'false' });
+    .toEqual({
+      playCount: 2,
+      muted: 'false',
+      source: '/meditation/end-gong-three-strikes-v2.m4a',
+    });
 });
 
 test('selects a duration and records public meditation start and completion', async ({
