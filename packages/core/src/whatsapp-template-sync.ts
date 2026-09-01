@@ -8,6 +8,7 @@ const GRAPH_ORIGIN = 'https://graph.facebook.com';
 const placeholderPattern = /{{\s*([A-Za-z][A-Za-z0-9_]*)\s*}}/g;
 
 const marketingEvents = new Set(['CHANNEL_LINK_CONFIRMED', 'DRAWING_SHARED', 'READING_ASSIGNED']);
+const zeroDowntimeTemplateEvents = new Set(['PRACTICE_REMINDER', 'PRACTICE_CHECKIN']);
 const metaBodyFooter =
   'Bu mesaj, planlanan programınla ilgili bilgi vermek amacıyla gönderilmiştir.';
 
@@ -138,7 +139,7 @@ export interface WhatsAppTemplateSyncEntry {
   variantId: string;
   eventKey: string;
   templateName: string;
-  action: 'would-submit' | 'submitted' | 'synchronized' | 'failed';
+  action: 'would-submit' | 'submitted' | 'synchronized' | 'retained-approved' | 'failed';
   status?: WhatsAppTemplateStatus;
   error?: string;
 }
@@ -277,16 +278,61 @@ function remoteComponentsMatch(
   const desiredBody = desiredComponents.find((component) => component.type === 'BODY');
   if (!remoteBody || !desiredBody || remoteBody.text !== desiredBody.text) return false;
 
-  const remoteButtons = remoteComponents.find((component) => component.type === 'BUTTONS');
-  const desiredButtons = desiredComponents.find((component) => component.type === 'BUTTONS');
-  const normalizedRemoteButtons = Array.isArray(remoteButtons?.buttons)
-    ? remoteButtons.buttons.map((button) => {
+  return templateButtonsMatch(remoteComponents, desiredComponents);
+}
+
+function templateButtons(
+  components: readonly (Record<string, unknown> | MetaTemplateComponent)[] | undefined,
+): Array<{ type: unknown; text: unknown }> {
+  const buttons = components?.find(
+    (component) => (component as Record<string, unknown>).type === 'BUTTONS',
+  ) as Record<string, unknown> | undefined;
+  return Array.isArray(buttons?.buttons)
+    ? buttons.buttons.map((button) => {
         const value = button as Record<string, unknown>;
         return { type: value.type, text: value.text };
       })
     : [];
-  const normalizedDesiredButtons = desiredButtons?.buttons ?? [];
-  return JSON.stringify(normalizedRemoteButtons) === JSON.stringify(normalizedDesiredButtons);
+}
+
+function templateButtonsMatch(
+  remoteComponents: MetaTemplate['components'],
+  desiredComponents: readonly MetaTemplateComponent[],
+): boolean {
+  return (
+    JSON.stringify(templateButtons(remoteComponents)) ===
+    JSON.stringify(templateButtons(desiredComponents))
+  );
+}
+
+function bodyPlaceholderSequence(
+  components: readonly (Record<string, unknown> | MetaTemplateComponent)[] | undefined,
+): string[] {
+  const body = components?.find(
+    (component) => (component as Record<string, unknown>).type === 'BODY',
+  ) as Record<string, unknown> | undefined;
+  if (typeof body?.text !== 'string') return [];
+  return [...body.text.matchAll(/{{\s*(\d+)\s*}}/g)].map((match) => match[1]!);
+}
+
+function templateBelongsToEvent(templateName: string, eventKey: string): boolean {
+  return templateName.startsWith(`${templateNameSegment(eventKey)}_`);
+}
+
+function canRetainApprovedFallback(
+  eventKey: string,
+  remoteTemplate: MetaTemplate,
+  definition: WhatsAppTemplateDefinition,
+): boolean {
+  if (!zeroDowntimeTemplateEvents.has(eventKey)) return false;
+  if (normalizedStatus(remoteTemplate.status) !== 'APPROVED') return false;
+  if (providerLocale(remoteTemplate.language) !== definition.providerLocale) return false;
+  if (!templateBelongsToEvent(remoteTemplate.name, eventKey)) return false;
+  return (
+    JSON.stringify(bodyPlaceholderSequence(remoteTemplate.components)) ===
+      JSON.stringify(bodyPlaceholderSequence(definition.components)) &&
+    templateButtonsMatch(remoteTemplate.components, definition.components)
+  );
 }
 
 function remoteKey(name: string, language: string): string {
@@ -415,10 +461,18 @@ export async function syncWhatsAppTemplates(
             remoteKey(variant.binding.templateName, providerLocale(variant.binding.providerLocale)),
           )
         : undefined;
+      const exactRemoteTemplates = remoteTemplates.filter(
+        (template) =>
+          templateBelongsToEvent(template.name, variant.eventKey) &&
+          providerLocale(template.language) === definition.providerLocale &&
+          remoteComponentsMatch(template.components, definition.components),
+      );
       let remoteTemplate =
         boundRemote && remoteComponentsMatch(boundRemote.components, definition.components)
           ? boundRemote
-          : remoteByName.get(remoteKey(definition.templateName, definition.providerLocale));
+          : (exactRemoteTemplates.find(
+              (template) => normalizedStatus(template.status) === 'APPROVED',
+            ) ?? exactRemoteTemplates[0]);
       let action: WhatsAppTemplateSyncEntry['action'] = 'synchronized';
 
       if (!remoteTemplate) {
@@ -463,7 +517,17 @@ export async function syncWhatsAppTemplates(
         result.submitted += 1;
       }
 
-      const status = normalizedStatus(remoteTemplate.status);
+      const approvedFallback = [boundRemote, ...remoteTemplates].find(
+        (template): template is MetaTemplate =>
+          Boolean(template) && canRetainApprovedFallback(variant.eventKey, template!, definition),
+      );
+      let activeTemplate = remoteTemplate;
+      let status = normalizedStatus(remoteTemplate.status);
+      if (status !== 'APPROVED' && approvedFallback) {
+        activeTemplate = approvedFallback;
+        status = 'APPROVED';
+        action = 'retained-approved';
+      }
       if (status === 'APPROVED') result.approved += 1;
       else if (status === 'REJECTED') result.rejected += 1;
       else if (status === 'PAUSED') result.paused += 1;
@@ -472,21 +536,21 @@ export async function syncWhatsAppTemplates(
       if (apply) {
         await store.upsertWhatsAppTemplateBinding({
           variantId: variant.variantId,
-          templateName: remoteTemplate.name,
+          templateName: activeTemplate.name,
           providerLocale: definition.providerLocale,
           category:
-            typeof remoteTemplate.category === 'string'
-              ? remoteTemplate.category
+            typeof activeTemplate.category === 'string'
+              ? activeTemplate.category
               : definition.category,
           status,
-          providerVersion: remoteTemplate.id,
+          providerVersion: activeTemplate.id,
           contentFingerprint: definition.contentFingerprint,
         });
       }
       result.entries.push({
         variantId: variant.variantId,
         eventKey: variant.eventKey,
-        templateName: remoteTemplate.name,
+        templateName: activeTemplate.name,
         action,
         status,
       });

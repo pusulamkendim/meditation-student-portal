@@ -209,6 +209,156 @@ describe('WhatsApp template synchronization', () => {
     });
   });
 
+  it('retains a compatible approved practice template while the exact candidate is pending', async () => {
+    const content = defaultRegistrationMessages.find(
+      (message) => message.eventKey === 'PRACTICE_REMINDER',
+    )!.content;
+    const definition = buildWhatsAppTemplateDefinition('PRACTICE_REMINDER', content, 'tr-TR');
+    const store = storeFor([
+      {
+        variantId: 'practice-reminder-variant',
+        eventKey: 'PRACTICE_REMINDER',
+        locale: 'tr-TR',
+        content,
+        binding: {
+          templateName: definition.templateName,
+          providerLocale: 'tr',
+          status: 'PENDING',
+          contentFingerprint: definition.contentFingerprint,
+        },
+      },
+    ]);
+    const approvedLegacyTemplate = {
+      id: 'meta-approved',
+      name: 'practice_reminder_v2_tr',
+      language: 'tr',
+      category: 'UTILITY',
+      status: 'APPROVED',
+      components: [
+        {
+          type: 'BODY',
+          text: 'Merhaba{{1}}, {{2}} saatindeki {{3}} pratiğine 10 dakika kaldı. Hazır olduğunda pratiğini buradan başlatabilirsin: {{4}} Bağlantı 24 saat boyunca kullanılabilir.',
+        },
+      ],
+    };
+    const pendingCandidate = {
+      id: 'meta-pending',
+      name: definition.templateName,
+      language: 'tr',
+      category: 'UTILITY',
+      status: 'PENDING',
+      components: definition.components,
+    };
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ data: [approvedLegacyTemplate, pendingCandidate] }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          data: [approvedLegacyTemplate, { ...pendingCandidate, status: 'APPROVED' }],
+        }),
+      );
+
+    const result = await syncWhatsAppTemplates(store, {
+      accessToken: 'token',
+      businessAccountId: 'waba-1',
+      fetchImpl,
+    });
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ scanned: 1, submitted: 0, approved: 1, pending: 0, failed: 0 });
+    expect(result.entries[0]).toMatchObject({
+      action: 'retained-approved',
+      templateName: 'practice_reminder_v2_tr',
+      status: 'APPROVED',
+    });
+    expect(store.bindings[0]).toMatchObject({
+      templateName: 'practice_reminder_v2_tr',
+      status: 'APPROVED',
+      providerVersion: 'meta-approved',
+      contentFingerprint: definition.contentFingerprint,
+    });
+    expect(
+      bindingMatchesWhatsAppTemplate(store.bindings[0], 'PRACTICE_REMINDER', content, 'tr-TR'),
+    ).toBe(true);
+
+    const promoted = await syncWhatsAppTemplates(store, {
+      accessToken: 'token',
+      businessAccountId: 'waba-1',
+      fetchImpl,
+    });
+
+    expect(promoted.entries[0]).toMatchObject({
+      action: 'synchronized',
+      templateName: definition.templateName,
+      status: 'APPROVED',
+    });
+    expect(store.bindings[1]).toMatchObject({
+      templateName: definition.templateName,
+      status: 'APPROVED',
+      providerVersion: 'meta-pending',
+      contentFingerprint: definition.contentFingerprint,
+    });
+  });
+
+  it('does not retain a critical template when its parameter contract is incompatible', async () => {
+    const content = 'Pratiğini buradan başlatabilirsin: {{practiceUrl}}';
+    const definition = buildWhatsAppTemplateDefinition('PRACTICE_REMINDER', content, 'tr-TR');
+    const store = storeFor([
+      {
+        variantId: 'practice-reminder-variant',
+        eventKey: 'PRACTICE_REMINDER',
+        locale: 'tr-TR',
+        content,
+        binding: {
+          templateName: definition.templateName,
+          providerLocale: 'tr',
+          status: 'PENDING',
+          contentFingerprint: definition.contentFingerprint,
+        },
+      },
+    ]);
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: [
+          {
+            id: 'meta-approved',
+            name: 'practice_reminder_v2_tr',
+            language: 'tr',
+            category: 'UTILITY',
+            status: 'APPROVED',
+            components: [
+              {
+                type: 'BODY',
+                text: 'Merhaba{{1}}, {{2}} saatindeki {{3}} pratiğine 10 dakika kaldı: {{4}}',
+              },
+            ],
+          },
+          {
+            id: 'meta-pending',
+            name: definition.templateName,
+            language: 'tr',
+            category: 'UTILITY',
+            status: 'PENDING',
+            components: definition.components,
+          },
+        ],
+      }),
+    );
+
+    const result = await syncWhatsAppTemplates(store, {
+      accessToken: 'token',
+      businessAccountId: 'waba-1',
+      fetchImpl,
+    });
+
+    expect(result).toMatchObject({ scanned: 1, approved: 0, pending: 1, failed: 0 });
+    expect(store.bindings[0]).toMatchObject({
+      templateName: definition.templateName,
+      status: 'PENDING',
+      providerVersion: 'meta-pending',
+    });
+  });
+
   it('automatically submits a newly published message that has no hard-coded target', async () => {
     const store = storeFor([
       {
