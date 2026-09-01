@@ -2,6 +2,7 @@ import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import {
   assertNoPublishedVariantConflict,
+  buildWhatsAppTemplateDefinition,
   canonicalizeLocale,
   defaultRegistrationMessages,
   getSystemEvent,
@@ -261,7 +262,7 @@ export class MessageCatalogService implements OnModuleInit {
     return this.publish(versionId, sessionId);
   }
 
-  upsertProviderBinding(
+  async upsertProviderBinding(
     variantId: string,
     input: {
       templateName: string;
@@ -271,12 +272,41 @@ export class MessageCatalogService implements OnModuleInit {
       providerVersion?: string;
     },
   ) {
+    const variant = await this.prisma.standardMessageVariant.findUniqueOrThrow({
+      where: { id: variantId },
+      select: {
+        locale: true,
+        standardMessage: { select: { eventKey: true } },
+        versions: {
+          where: {
+            status: StandardMessageVersionStatus.PUBLISHED,
+            effectiveAt: { lte: this.clock.now() },
+          },
+          orderBy: { version: 'desc' },
+          take: 1,
+          select: { content: true },
+        },
+      },
+    });
+    const version = variant.versions[0];
+    if (!version) throw new Error('Published message version is required for template binding.');
+    const definition = buildWhatsAppTemplateDefinition(
+      variant.standardMessage.eventKey,
+      version.content,
+      variant.locale,
+    );
     return this.prisma.providerTemplateBinding.upsert({
       where: { variantId },
-      create: { variantId, ...input, providerLocale: canonicalizeLocale(input.providerLocale) },
+      create: {
+        variantId,
+        ...input,
+        providerLocale: canonicalizeLocale(input.providerLocale),
+        contentFingerprint: definition.contentFingerprint,
+      },
       update: {
         ...input,
         providerLocale: canonicalizeLocale(input.providerLocale),
+        contentFingerprint: definition.contentFingerprint,
         lastSyncedAt: this.clock.now(),
       },
     });

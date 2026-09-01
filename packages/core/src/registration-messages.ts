@@ -168,7 +168,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'MEETING_REMINDER_1H',
     content:
-      'Merhaba{{studentDisplayName}}, görüşmemize 1 saat kaldı. Görüşme saati: {{startsAtText}}\n\nHazır olduğunda şu Google Meet bağlantısından katılabilirsin:\n{{meetUrl}}\n\nGörüşmede buluşmak üzere.',
+      'Merhaba{{studentDisplayName}}, görüşmemize 1 saat kaldı.\n\nSon 7 gündeki pratik özetin:\n• Tamamlanan pratik: {{weeklyCompletedPracticeCountText}} / {{weeklyPlannedPracticeCountText}}\n• Tamamlanan meditasyon süresi: {{weeklyCompletedMinutesText}} dakika\n• Refleksiyon sayısı: {{weeklyReflectionCountText}}\n\nŞimdiye kadarki toplamın:\n• Tamamlanan pratik: {{totalCompletedPracticeCountText}}\n• Tamamlanan meditasyon süresi: {{totalCompletedMinutesText}} dakika\n\nGörüşme saati: {{startsAtText}}\n\nHazır olduğunda şu Google Meet bağlantısından katılabilirsin:\n{{meetUrl}}\n\nGörüşmede buluşmak üzere.',
   },
   {
     eventKey: 'MEETING_RESCHEDULED',

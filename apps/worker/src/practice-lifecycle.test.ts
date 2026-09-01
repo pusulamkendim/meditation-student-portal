@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { FakeClock, FieldEncryption } from '@meditation/core';
+import { buildWhatsAppTemplateDefinition, FakeClock, FieldEncryption } from '@meditation/core';
 import { PracticeSessionStatus, type PrismaClient } from '@meditation/database';
 import { describe, expect, it, vi } from 'vitest';
 import { createPracticeLifecycleIntent, processPracticeLifecycle } from './practice-lifecycle.js';
@@ -77,6 +77,11 @@ function fixture() {
               status: 'APPROVED',
               templateName: 'practice_reminder',
               providerLocale: 'tr',
+              contentFingerprint: buildWhatsAppTemplateDefinition(
+                'PRACTICE_REMINDER',
+                'Merhaba{{studentDisplayName}}, {{startsAtText}} {{durationText}}',
+                'tr-TR',
+              ).contentFingerprint,
             },
           },
         },
@@ -176,6 +181,11 @@ describe('practice lifecycle', () => {
             status: 'APPROVED',
             templateName: 'practice_checkin',
             providerLocale: 'tr',
+            contentFingerprint: buildWhatsAppTemplateDefinition(
+              'PRACTICE_CHECKIN',
+              'Pratiğin nasıl geçti? Planlanan süre {{durationText}}.',
+              'tr-TR',
+            ).contentFingerprint,
           },
         },
       },

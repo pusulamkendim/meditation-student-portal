@@ -4,8 +4,9 @@ Meditasyon öğrencilerinin WhatsApp ve Telegram üzerinden kaydolmasını, öde
 üyelik süreçlerinin yönetilmesini, günlük pratiklerin takip edilmesini ve haftalık
 görüşmelerin planlanmasını tek yerde toplayan öğrenci operasyon platformu.
 
-Proje; yönetim paneli ve öğrenciye açılan içerik deneyimleri, NestJS API'si ve
-PostgreSQL tabanlı arka plan işleyicisinden oluşan bir TypeScript monorepo'sudur.
+Proje; yönetim paneli, ayrı Sakin Zihin public sitesi, öğrenciye açılan içerik
+deneyimleri, NestJS API'si ve PostgreSQL tabanlı arka plan işleyicisinden oluşan
+bir TypeScript monorepo'sudur.
 
 ## Özellikler
 
@@ -18,6 +19,7 @@ PostgreSQL tabanlı arka plan işleyicisinden oluşan bir TypeScript monorepo'su
 - **Meditasyon kütüphanesi:** Meditasyon türleri, kaynak sesler, farklı sürelerde
   ses üretimi, öğrenciye özel erişim ve paylaşılabilir herkese açık oynatıcılar.
 - **Görüşmeler:** Haftalık seri planlama, Google Calendar/Meet senkronizasyonu,
+  görüşmeden 1 saat önce haftalık ve toplam pratik metriklerini içeren
   hatırlatmalar, koç notları ve onaylanan haftalık özetler.
 - **Mesajlaşma ve operasyon:** WhatsApp/Telegram webhook'ları, konuşma gelen
   kutusu, admin yanıtları, insan desteğine aktarım, teslimat takibi ve bildirimler.
@@ -34,7 +36,8 @@ PostgreSQL tabanlı arka plan işleyicisinden oluşan bir TypeScript monorepo'su
 ```mermaid
 flowchart LR
   Channels[WhatsApp / Telegram] --> API[NestJS + Fastify API]
-  Web[Next.js admin ve öğrenci sayfaları] --> API
+  Admin[Next.js admin portalı] --> API
+  Public[Next.js Sakin Zihin sitesi] --> API
   API --> DB[(PostgreSQL + pgvector)]
   API --> Outbox[Transactional outbox]
   Outbox --> Worker[pg-boss worker]
@@ -46,13 +49,14 @@ flowchart LR
   Worker --> Storage
 ```
 
-Çalışan üç ana süreç vardır:
+Çalışan dört ana uygulama süreci vardır:
 
-| Süreç         | Sorumluluk                                                              | Yerel adres             |
-| ------------- | ----------------------------------------------------------------------- | ----------------------- |
-| `apps/admin`  | Admin portalı, okuma/çizim sayfaları ve meditasyon oynatıcıları         | `http://localhost:3001` |
-| `apps/api`    | REST API, auth, webhook kabulü ve domain servisleri                     | `http://localhost:3000` |
-| `apps/worker` | Outbox aktarımı, mesaj gönderimi, zamanlanmış işler, RAG ve ses üretimi | Arka plan süreci        |
+| Süreç                 | Sorumluluk                                                              | Yerel adres             |
+| --------------------- | ----------------------------------------------------------------------- | ----------------------- |
+| `apps/admin`          | Admin portalı ve yönetilen öğrenci/içerik ekranları                     | `http://localhost:3001` |
+| `apps/sakinzihin-web` | Public Sakin Zihin sitesi, meditasyon ve okuma deneyimleri              | `http://localhost:3002` |
+| `apps/api`            | REST API, auth, webhook kabulü ve domain servisleri                     | `http://localhost:3000` |
+| `apps/worker`         | Outbox aktarımı, mesaj gönderimi, zamanlanmış işler, RAG ve ses üretimi | Arka plan süreci        |
 
 Worker kuyruğu pg-boss ile PostgreSQL üzerinde çalışır. Böylece domain değişikliği
 ile kuyruğa aktarılacak olay aynı transaction sınırı içinde tutulur.
@@ -71,12 +75,13 @@ ile kuyruğa aktarılacak olay aynı transaction sınırı içinde tutulur.
 
 | Yol                                                | İçerik                                                             |
 | -------------------------------------------------- | ------------------------------------------------------------------ |
-| [`apps/admin`](apps/admin)                         | Admin portalı ve öğrenciye açık web deneyimleri                    |
+| [`apps/admin`](apps/admin)                         | Admin portalı ve yönetilen öğrenci/içerik ekranları                |
+| [`apps/sakinzihin-web`](apps/sakinzihin-web)       | Public Sakin Zihin sitesi ve public içerik deneyimleri             |
 | [`apps/api`](apps/api)                             | NestJS/Fastify API ve domain modülleri                             |
 | [`apps/worker`](apps/worker)                       | Kuyruk tüketicileri ve zamanlanmış işler                           |
 | [`packages/core`](packages/core)                   | Domain kuralları, provider sözleşmeleri ve güvenlik primitive'leri |
 | [`packages/database`](packages/database)           | Prisma şeması, migration'lar ve repository altyapısı               |
-| [`packages/ui`](packages/ui)                       | Paylaşılan React bileşenleri ve stiller                            |
+| [`packages/ui`](packages/ui)                       | Admin tarafında kullanılan paylaşılan React bileşenleri ve stiller |
 | [`packages/design-tokens`](packages/design-tokens) | Renk, tipografi ve ölçü token'ları                                 |
 | [`packages/prompts`](packages/prompts)             | Git ile sürümlenen LLM prompt'ları                                 |
 | [`packages/testing`](packages/testing)             | Fake clock ve kanal test yardımcıları                              |
@@ -139,7 +144,7 @@ pnpm seed:demo
 
 ### 3. Uygulamayı çalıştırın
 
-Üç ayrı terminalde:
+Dört ayrı terminalde:
 
 ```bash
 pnpm dev:api
@@ -153,19 +158,25 @@ pnpm dev:worker
 pnpm dev:admin
 ```
 
-Ardından `http://localhost:3001/login` adresinden bootstrap sırasında belirlenen
-e-posta, parola ve TOTP koduyla giriş yapın.
+```bash
+pnpm --filter @meditation/sakinzihin-web dev
+```
 
-| Adres                                | Açıklama                                      |
-| ------------------------------------ | --------------------------------------------- |
-| `http://localhost:3001`              | Admin portalı                                 |
-| `http://localhost:3000/health/live`  | API process canlılık kontrolü                 |
-| `http://localhost:3000/health/ready` | Yapılandırma + veritabanı hazır olma kontrolü |
-| `/m#<erişim-kodu>`                   | Öğrenciye atanmış pratik oynatıcı             |
-| `/meditasyon/<slug>`                 | Herkese açık meditasyon sayfası               |
-| `/read#<token>`                      | Öğrenciye atanmış okuma                       |
-| `/oku/<slug>`                        | Herkese açık okuma                            |
-| `/drawing#<token>`                   | Öğrenciye atanmış salt okunur çizim           |
+Admin portalına `http://localhost:3001/login` adresinden, public siteye ise
+`http://localhost:3002` adresinden erişebilirsiniz. Admin girişinde bootstrap
+sırasında belirlenen e-posta, parola ve TOTP kodu kullanılır.
+
+| Adres                                     | Açıklama                                      |
+| ----------------------------------------- | --------------------------------------------- |
+| `http://localhost:3001`                   | Admin portalı                                 |
+| `http://localhost:3002`                   | Public Sakin Zihin sitesi                     |
+| `http://localhost:3000/health/live`       | API process canlılık kontrolü                 |
+| `http://localhost:3000/health/ready`      | Yapılandırma + veritabanı hazır olma kontrolü |
+| `http://localhost:3002/m#<erişim-kodu>`   | Öğrenciye atanmış pratik oynatıcı             |
+| `http://localhost:3002/meditasyon/<slug>` | Herkese açık meditasyon sayfası               |
+| `http://localhost:3002/read#<token>`      | Öğrenciye atanmış okuma                       |
+| `http://localhost:3002/oku/<slug>`        | Herkese açık okuma                            |
+| `http://localhost:3002/drawing#<token>`   | Öğrenciye atanmış salt okunur çizim           |
 
 ## Yapılandırma ve entegrasyonlar
 
@@ -173,18 +184,18 @@ Temel geliştirme ortamı için gerekli kriptografik değerler `setup:local`
 tarafından hazırlanır. Harici özellikler aşağıdaki değişkenler sağlandığında
 etkinleştirilebilir:
 
-| Alan                 | Başlıca değişkenler                                                                                 |
-| -------------------- | --------------------------------------------------------------------------------------------------- |
-| Admin/API            | `ADMIN_ORIGIN`, `NEXT_PUBLIC_API_URL`, `ADMIN_SESSION_HMAC_KEY`                                     |
-| Veri güvenliği       | `DATA_ENCRYPTION_KEYS_JSON`, `ACTIVE_DATA_KEY_ID`, `LOOKUP_HMAC_KEY`                                |
-| WhatsApp             | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` |
-| Telegram             | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ACCOUNT_ID`                              |
-| Ödeme ve iç komutlar | `PAYMENT_IBAN`, `PAYMENT_ACCOUNT_HOLDER`, `INTERNAL_COMMAND_SECRET`                                 |
-| Google Calendar      | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`                 |
-| LLM                  | `GEMINI_API_KEY`                                                                                    |
-| Nesne depolama       | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, bucket adları                            |
-| Dosya tarama         | `CLAMAV_HOST`, `CLAMAV_PORT`                                                                        |
-| Gönderim güvenliği   | `ALLOWED_RECIPIENTS`                                                                                |
+| Alan                 | Başlıca değişkenler                                                                                                                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Admin/API            | `ADMIN_ORIGIN`, `NEXT_PUBLIC_API_URL`, `ADMIN_SESSION_HMAC_KEY`                                                                     |
+| Veri güvenliği       | `DATA_ENCRYPTION_KEYS_JSON`, `ACTIVE_DATA_KEY_ID`, `LOOKUP_HMAC_KEY`                                                                |
+| WhatsApp             | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_BUSINESS_ACCOUNT_ID` |
+| Telegram             | `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_ACCOUNT_ID`                                                              |
+| Ödeme ve iç komutlar | `PAYMENT_IBAN`, `PAYMENT_ACCOUNT_HOLDER`, `INTERNAL_COMMAND_SECRET`                                                                 |
+| Google Calendar      | `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REDIRECT_URI`                                                 |
+| LLM                  | `GEMINI_API_KEY`                                                                                                                    |
+| Nesne depolama       | `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, bucket adları                                                            |
+| Dosya tarama         | `CLAMAV_HOST`, `CLAMAV_PORT`                                                                                                        |
+| Gönderim güvenliği   | `ALLOWED_RECIPIENTS`                                                                                                                |
 
 Google OAuth redirect URI'si yerelde
 `http://localhost:3000/v1/admin/google-calendar/oauth/callback` olmalıdır.
@@ -198,6 +209,31 @@ kalır. Prompt dosyaları değiştiğinde tekrar şu komutu çalıştırın:
 pnpm build
 pnpm --filter @meditation/api sync-prompts
 ```
+
+Worker, `WHATSAPP_BUSINESS_ACCOUNT_ID` ve `WHATSAPP_ACCESS_TOKEN` tanımlıysa
+yayımlanmış tüm WhatsApp mesajlarını açılışta ve ardından 15 dakikada bir Meta
+şablonlarıyla eşitler. Yeni mesajlar otomatik oluşturulur; içerik veya hızlı yanıt
+butonları değiştiğinde içerik parmak izine sahip yeni bir şablon sürümü gönderilir.
+Yalnızca Meta tarafından onaylanan ve güncel içerikle eşleşen şablonlar mesaj
+gönderiminde kullanılır. Senkronizasyonu elle tetiklemek için:
+
+```bash
+pnpm sync:whatsapp-templates
+```
+
+### Sakin Zihin arama ve ziyaretçi ölçümü
+
+Google Search Console için `sakinzihin.com` bir **Domain property** olarak
+eklenir ve Google'ın verdiği `google-site-verification=...` TXT kaydı Cloudflare
+DNS'te tutulur. Doğrulamadan sonra `https://sakinzihin.com/sitemap.xml` Search
+Console'a gönderilir. TXT kaydı, sahiplik doğrulamasının devam etmesi için
+silinmemelidir.
+
+Cloudflare Web Analytics, Cloudflare dashboard üzerinden `sakinzihin.com` için
+automatic setup ile etkinleştirilir. Analytics beacon'ı Cloudflare tarafından
+proxy katmanında otomatik olarak enjekte edilir; uygulamada manuel token,
+environment variable veya JavaScript snippet'i tutulmaz. Okuma ve meditasyon
+başlangıç/tamamlama gibi ürün olayları mevcut public API analytics akışında kalır.
 
 `staging` ve `production` ortamlarında eksik zorunlu secret'lar uygulamanın
 başlamasını engeller. Güncel sözleşmenin kaynakları [`.env.example`](.env.example)
@@ -224,11 +260,11 @@ test içinde izole eder.
 
 ## Dağıtım
 
-[`Dockerfile`](Dockerfile) üç ayrı target üretir: `api`, `admin` ve `worker`.
-Production API container'ı açılışta `prisma migrate deploy` ve prompt
-senkronizasyonunu çalıştırır; worker imajı meditasyon sesleri için ffmpeg içerir.
-Admin imajı oluşturulurken public API adresi `NEXT_PUBLIC_API_URL` build argümanı
-olarak verilmelidir.
+[`Dockerfile`](Dockerfile) dört ayrı target üretir: `api`, `admin`,
+`sakinzihin-web` ve `worker`. Production API container'ı açılışta
+`prisma migrate deploy` ve prompt senkronizasyonunu çalıştırır; worker imajı
+meditasyon sesleri için ffmpeg içerir. Admin ve public imajları oluşturulurken
+public API adresi `NEXT_PUBLIC_API_URL` build argümanı olarak verilmelidir.
 
 Rutin production deployları GitHub push webhook'undan otomatik başlamaz. Aynı
 commit'in bir kez webhook, bir kez API ile build edilmesini önlemek için deploy
@@ -238,12 +274,14 @@ kendi target cache'ini sonraki deploymentında yeniden kullanır:
 ```bash
 pnpm deploy:coolify api
 pnpm deploy:coolify api worker
+pnpm deploy:coolify sakinzihin-web
 pnpm deploy:coolify all
 ```
 
 Hedef seçimi:
 
 - Yalnızca admin/UI değişikliği: `admin`
+- Yalnızca public site değişikliği: `sakinzihin-web`
 - Yalnızca API değişikliği: `api`
 - Yalnızca queue/worker değişikliği: `worker`
 - `packages/core` veya `packages/database`: `api worker`

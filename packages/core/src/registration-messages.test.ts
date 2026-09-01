@@ -37,6 +37,20 @@ describe('default registration messages', () => {
     expect(meetingReminder?.content).not.toMatch(/\b(?:bugün|yarın)\b/iu);
   });
 
+  it('includes weekly and lifetime practice totals in the one-hour meeting reminder', () => {
+    const meetingReminder = defaultRegistrationMessages.find(
+      (message) => message.eventKey === 'MEETING_REMINDER_1H',
+    );
+
+    expect(meetingReminder?.content).toContain(
+      '{{weeklyCompletedPracticeCountText}} / {{weeklyPlannedPracticeCountText}}',
+    );
+    expect(meetingReminder?.content).toContain('{{weeklyCompletedMinutesText}} dakika');
+    expect(meetingReminder?.content).toContain('{{weeklyReflectionCountText}}');
+    expect(meetingReminder?.content).toContain('{{totalCompletedPracticeCountText}}');
+    expect(meetingReminder?.content).toContain('{{totalCompletedMinutesText}} dakika');
+  });
+
   it('combines practice completion acknowledgement and reflection request', () => {
     const reflectionRequest = defaultRegistrationMessages.find(
       (message) => message.eventKey === 'PRACTICE_REFLECTION_REQUEST',

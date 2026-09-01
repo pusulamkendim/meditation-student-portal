@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, Inject, Injectable } from '@nestjs/common';
 import {
+  bindingMatchesWhatsAppTemplate,
   CLOCK_TOKEN,
   FieldEncryption,
   LookupHmac,
@@ -14,7 +15,6 @@ import {
   ChannelType,
   MessageIntentStatus,
   NotificationChannel,
-  ProviderTemplateStatus,
   StandardMessageVersionStatus,
   type Prisma,
 } from '@meditation/database';
@@ -456,6 +456,17 @@ export class ChannelLinkService {
     const rendered = variant
       ? renderMessageTemplate('CHANNEL_LINK_CONFIRMED', variant.content, variables)
       : 'WhatsApp numaran doğrulandı. Bundan sonraki pratik hatırlatmalarını ve diğer mesajlarını bu numaradan alacaksın.';
+    const binding = variant?.variant.providerBinding;
+    const approvedBinding =
+      variant &&
+      bindingMatchesWhatsAppTemplate(
+        binding,
+        'CHANNEL_LINK_CONFIRMED',
+        variant.content,
+        variant.variant.locale,
+      )
+        ? binding
+        : undefined;
     const occurrence = await tx.systemEventOccurrence.create({
       data: {
         eventKey: 'CHANNEL_LINK_CONFIRMED',
@@ -482,20 +493,13 @@ export class ChannelLinkService {
           rendered,
           reactive: true,
           locale: variant?.variant.locale ?? input.student.preferredLocale,
-          providerTemplateName:
-            variant?.variant.providerBinding?.status === ProviderTemplateStatus.APPROVED
-              ? variant.variant.providerBinding.templateName
-              : undefined,
-          providerTemplateLocale:
-            variant?.variant.providerBinding?.status === ProviderTemplateStatus.APPROVED
-              ? variant.variant.providerBinding.providerLocale
-              : undefined,
-          providerTemplateParameters:
-            variant?.variant.providerBinding?.status === ProviderTemplateStatus.APPROVED
-              ? (variant.placeholders as string[]).map((key) =>
-                  String(variables[key as keyof typeof variables] ?? ''),
-                )
-              : undefined,
+          providerTemplateName: approvedBinding?.templateName,
+          providerTemplateLocale: approvedBinding?.providerLocale,
+          providerTemplateParameters: approvedBinding
+            ? (variant?.placeholders as string[]).map((key) =>
+                String(variables[key as keyof typeof variables] ?? ''),
+              )
+            : undefined,
         },
       },
     });

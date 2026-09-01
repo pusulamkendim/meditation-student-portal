@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { Clock } from '@meditation/core';
+import { buildWhatsAppTemplateDefinition, type Clock } from '@meditation/core';
 import type { PrismaService } from '../database/prisma.service.js';
 
 import { SystemMessageOrchestrator } from './system-message-orchestrator.js';
@@ -25,6 +25,11 @@ describe('SystemMessageOrchestrator', () => {
             status: 'APPROVED',
             templateName: 'practice_plan_updated_tr',
             providerLocale: 'tr',
+            contentFingerprint: buildWhatsAppTemplateDefinition(
+              'PRACTICE_PLAN_UPDATED',
+              'Pratik programını güncelledim: {{scheduleSummary}}. Bundan sonraki hatırlatmalarını yeni programa göre göndereceğim.',
+              'tr-TR',
+            ).contentFingerprint,
           },
         },
       },

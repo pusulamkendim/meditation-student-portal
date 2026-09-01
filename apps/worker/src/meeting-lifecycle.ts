@@ -1,4 +1,5 @@
 import {
+  bindingMatchesWhatsAppTemplate,
   FieldEncryption,
   renderMessageTemplate,
   resolveMessageVariant,
@@ -10,11 +11,15 @@ import {
   ConferenceStatus,
   MessageIntentStatus,
   PrismaClient,
-  ProviderTemplateStatus,
   StandardMessageVersionStatus,
   SubscriptionStatus,
   type Prisma,
 } from '@meditation/database';
+
+import {
+  calculateMeetingPracticeStats,
+  meetingPracticeStatsVariables,
+} from './meeting-practice-stats.js';
 
 type ReminderEvent = 'MEETING_REMINDER_24H' | 'MEETING_REMINDER_1H';
 type MeetingLifecycleConfig = Pick<
@@ -100,6 +105,12 @@ export async function createMeetingIntent(
       },
     );
     if (!variant) return false;
+    const practiceVariables =
+      eventKey === 'MEETING_REMINDER_1H'
+        ? meetingPracticeStatsVariables(
+            await calculateMeetingPracticeStats(tx, meeting.meetingSeries.studentId, now),
+          )
+        : {};
     const variables: Record<string, string> = {
       startsAtText: new Intl.DateTimeFormat('tr-TR', {
         timeZone: meeting.meetingSeries.timezone,
@@ -110,11 +121,18 @@ export async function createMeetingIntent(
       ...(studentDisplayName
         ? { studentDisplayName: ` ${studentDisplayName.trim().split(/\s+/)[0]}` }
         : {}),
+      ...practiceVariables,
     };
     const rendered = renderMessageTemplate(eventKey as SystemEventKey, variant.content, variables);
     const binding = variant.variant.providerBinding;
-    const approvedBinding =
-      binding?.status === ProviderTemplateStatus.APPROVED ? binding : undefined;
+    const approvedBinding = bindingMatchesWhatsAppTemplate(
+      binding,
+      eventKey,
+      variant.content,
+      variant.variant.locale,
+    )
+      ? binding
+      : undefined;
     const occurrence = await tx.systemEventOccurrence.upsert({
       where: { idempotencyKey },
       create: {

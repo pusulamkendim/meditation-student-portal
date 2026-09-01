@@ -19,6 +19,7 @@ export * from './system-events.js';
 export * from './totp.js';
 export * from './webhook-security.js';
 export * from './whatsapp-normalizer.js';
+export * from './whatsapp-template-sync.js';
 export * from './telegram-normalizer.js';
 export * from './llm.js';
 export * from './student-context.js';

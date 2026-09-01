@@ -68,6 +68,12 @@ export const applicationConfigSchema = z
     WHATSAPP_APP_SECRET: optionalSecret,
     WHATSAPP_ACCESS_TOKEN: optionalConfigValue,
     WHATSAPP_PHONE_NUMBER_ID: optionalConfigValue,
+    WHATSAPP_BUSINESS_ACCOUNT_ID: optionalConfigValue,
+    WHATSAPP_WABA_ID: optionalConfigValue,
+    WHATSAPP_GRAPH_VERSION: z
+      .string()
+      .regex(/^v\d+\.\d+$/)
+      .default('v23.0'),
     TELEGRAM_BOT_TOKEN: optionalConfigValue,
     TELEGRAM_WEBHOOK_SECRET: optionalSecret,
     TELEGRAM_ACCOUNT_ID: z.string().default('default'),

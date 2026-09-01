@@ -1,5 +1,6 @@
-import { loadApplicationConfig, SystemClock } from '@meditation/core';
+import { loadApplicationConfig, syncWhatsAppTemplates, SystemClock } from '@meditation/core';
 import {
+  createPrismaWhatsAppTemplateStore,
   PrismaClient,
   syncDefaultRegistrationMessages,
   syncSystemEventRegistry,
@@ -61,6 +62,54 @@ async function bootstrap(): Promise<void> {
   await syncSystemEventRegistry(prisma);
   await syncDefaultRegistrationMessages(prisma);
   await boss.start();
+  const whatsappAccessToken = config.WHATSAPP_ACCESS_TOKEN;
+  const whatsappBusinessAccountId = config.WHATSAPP_BUSINESS_ACCOUNT_ID ?? config.WHATSAPP_WABA_ID;
+  if (whatsappAccessToken && whatsappBusinessAccountId) {
+    const synchronizeWhatsAppTemplates = async (): Promise<void> => {
+      const result = await syncWhatsAppTemplates(createPrismaWhatsAppTemplateStore(prisma), {
+        accessToken: whatsappAccessToken,
+        businessAccountId: whatsappBusinessAccountId,
+        graphVersion: config.WHATSAPP_GRAPH_VERSION,
+      });
+      const summary = {
+        scanned: result.scanned,
+        submitted: result.submitted,
+        approved: result.approved,
+        pending: result.pending,
+        rejected: result.rejected,
+        paused: result.paused,
+        failed: result.failed,
+      };
+      if (result.failed) {
+        logger.warn(
+          {
+            ...summary,
+            failures: result.entries
+              .filter((entry) => entry.action === 'failed')
+              .map((entry) => ({ eventKey: entry.eventKey, error: entry.error })),
+          },
+          'WhatsApp template synchronization completed with failures',
+        );
+      } else {
+        logger.info(summary, 'WhatsApp templates synchronized');
+      }
+    };
+    await synchronizeWhatsAppTemplates().catch((error: unknown) =>
+      logger.error(
+        { errorCode: error instanceof Error ? error.name : 'UnknownError' },
+        'WhatsApp template synchronization failed',
+      ),
+    );
+    await boss.createQueue('whatsapp.template-sync');
+    await boss.work('whatsapp.template-sync', async () => {
+      await synchronizeWhatsAppTemplates();
+    });
+    await boss.schedule('whatsapp.template-sync', '*/15 * * * *', {});
+  } else {
+    logger.warn(
+      'WhatsApp template synchronization is disabled because business account credentials are unavailable',
+    );
+  }
   const recoveredMeditationRenders = await meditationAudioRender.recoverInterrupted(
     systemClock.now(),
   );

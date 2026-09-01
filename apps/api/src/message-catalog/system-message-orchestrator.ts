@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
+  bindingMatchesWhatsAppTemplate,
   CLOCK_TOKEN,
   getSystemEvent,
   renderMessageTemplate,
@@ -11,7 +12,6 @@ import {
 import {
   MessageIntentStatus,
   NotificationChannel,
-  ProviderTemplateStatus,
   StandardMessageVersionStatus,
   type Prisma,
 } from '@meditation/database';
@@ -81,6 +81,15 @@ export class SystemMessageOrchestrator {
       const variant = await this.resolveVariant(transaction, command, now, channel);
       if (!variant) throw new Error(`No published message variant for ${command.eventKey}`);
       const rendered = renderMessageTemplate(command.eventKey, variant.content, command.variables);
+      const binding = variant.variant.providerBinding;
+      const approvedBinding = bindingMatchesWhatsAppTemplate(
+        binding,
+        command.eventKey,
+        variant.content,
+        variant.variant.locale,
+      )
+        ? binding
+        : undefined;
       const student = await transaction.student.findUniqueOrThrow({
         where: { id: command.studentId },
       });
@@ -109,20 +118,13 @@ export class SystemMessageOrchestrator {
             standardMessageVersionId: variant.id,
             rendered,
             locale: variant.variant.locale,
-            providerTemplateName:
-              variant.variant.providerBinding?.status === ProviderTemplateStatus.APPROVED
-                ? variant.variant.providerBinding.templateName
-                : undefined,
-            providerTemplateLocale:
-              variant.variant.providerBinding?.status === ProviderTemplateStatus.APPROVED
-                ? variant.variant.providerBinding.providerLocale
-                : undefined,
-            providerTemplateParameters:
-              variant.variant.providerBinding?.status === ProviderTemplateStatus.APPROVED
-                ? (variant.placeholders as string[]).map((key) =>
-                    String(command.variables[key] ?? ''),
-                  )
-                : undefined,
+            providerTemplateName: approvedBinding?.templateName,
+            providerTemplateLocale: approvedBinding?.providerLocale,
+            providerTemplateParameters: approvedBinding
+              ? (variant.placeholders as string[]).map((key) =>
+                  String(command.variables[key] ?? ''),
+                )
+              : undefined,
           },
         },
       });

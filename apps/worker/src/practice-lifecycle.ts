@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import {
+  bindingMatchesWhatsAppTemplate,
   FieldEncryption,
   endOfLocalServiceDate,
   createPracticeResponsePayload,
@@ -16,7 +17,6 @@ import {
   PracticePlanStatus,
   PracticeSessionStatus,
   PrismaClient,
-  ProviderTemplateStatus,
   StandardMessageVersionStatus,
   SubscriptionStatus,
 } from '@meditation/database';
@@ -178,8 +178,14 @@ export async function createPracticeLifecycleIntent(
       },
     });
     const binding = variant.variant.providerBinding;
-    const approvedBinding =
-      binding?.status === ProviderTemplateStatus.APPROVED ? binding : undefined;
+    const approvedBinding = bindingMatchesWhatsAppTemplate(
+      binding,
+      eventKey,
+      variant.content,
+      variant.variant.locale,
+    )
+      ? binding
+      : undefined;
     const intent = await tx.messageIntent.create({
       data: {
         studentId: session.studentId,

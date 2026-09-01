@@ -1,4 +1,5 @@
 import {
+  bindingMatchesWhatsAppTemplate,
   FieldEncryption,
   renderMessageTemplate,
   resolveMessageVariant,
@@ -9,7 +10,6 @@ import {
   MessageIntentStatus,
   PracticePlanStatus,
   PrismaClient,
-  ProviderTemplateStatus,
   StandardMessageVersionStatus,
   StudentStatus,
   SubscriptionStatus,
@@ -169,8 +169,14 @@ export async function createSubscriptionRenewalReminder(
       },
     });
     const binding = variant.variant.providerBinding;
-    const approvedBinding =
-      binding?.status === ProviderTemplateStatus.APPROVED ? binding : undefined;
+    const approvedBinding = bindingMatchesWhatsAppTemplate(
+      binding,
+      'SUBSCRIPTION_RENEWAL_REMINDER',
+      variant.content,
+      variant.variant.locale,
+    )
+      ? binding
+      : undefined;
     const intent = await tx.messageIntent.create({
       data: {
         studentId: subscription.studentId,
