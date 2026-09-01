@@ -420,6 +420,81 @@ describe('WhatsApp template synchronization', () => {
     });
   });
 
+  it('keeps an approved historical meeting version active until a new parameter contract is approved', async () => {
+    const content = defaultRegistrationMessages.find(
+      (message) => message.eventKey === 'MEETING_REMINDER_1H',
+    )!.content;
+    const historicalContent =
+      'Merhaba{{studentDisplayName}}, görüşmemize 1 saat kaldı. Görüşme saati: {{startsAtText}}\n\nHazır olduğunda şu Google Meet bağlantısından katılabilirsin:\n{{meetUrl}}\n\nGörüşmede buluşmak üzere.';
+    const definition = buildWhatsAppTemplateDefinition('MEETING_REMINDER_1H', content, 'tr-TR');
+    const historicalDefinition = buildWhatsAppTemplateDefinition(
+      'MEETING_REMINDER_1H',
+      historicalContent,
+      'tr-TR',
+    );
+    const store = storeFor([
+      {
+        variantId: 'meeting-reminder-variant',
+        eventKey: 'MEETING_REMINDER_1H',
+        locale: 'tr-TR',
+        content,
+        candidateVersionId: 'meeting-v3',
+        candidateStatus: 'PUBLISHED',
+        versions: [
+          { versionId: 'meeting-v3', content, status: 'PUBLISHED' },
+          { versionId: 'meeting-v2', content: historicalContent, status: 'ARCHIVED' },
+        ],
+        binding: {
+          templateName: definition.templateName,
+          providerLocale: 'tr',
+          status: 'PENDING',
+          contentFingerprint: definition.contentFingerprint,
+        },
+      },
+    ]);
+    const approvedHistorical = {
+      id: 'meta-approved-historical',
+      name: 'meeting_reminder_1h_tr',
+      language: 'tr',
+      category: 'UTILITY',
+      status: 'APPROVED',
+      components: historicalDefinition.components,
+    };
+    const pendingCandidate = {
+      id: 'meta-pending-candidate',
+      name: definition.templateName,
+      language: 'tr',
+      category: 'UTILITY',
+      status: 'PENDING',
+      components: definition.components,
+    };
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: [approvedHistorical, pendingCandidate],
+      }),
+    );
+
+    const result = await syncWhatsAppTemplates(store, {
+      accessToken: 'token',
+      businessAccountId: 'waba-1',
+      fetchImpl,
+    });
+
+    expect(result).toMatchObject({ scanned: 1, approved: 1, pending: 0, failed: 0 });
+    expect(result.entries[0]).toMatchObject({
+      action: 'retained-approved',
+      templateName: 'meeting_reminder_1h_tr',
+      status: 'APPROVED',
+    });
+    expect(store.bindings[0]).toMatchObject({
+      templateName: 'meeting_reminder_1h_tr',
+      status: 'APPROVED',
+      contentFingerprint: historicalDefinition.contentFingerprint,
+      candidateVersionId: 'meeting-v3',
+      activeVersionId: 'meeting-v2',
+    });
+  });
+
   it('automatically submits a newly published message that has no hard-coded target', async () => {
     const store = storeFor([
       {
@@ -454,6 +529,9 @@ describe('WhatsApp template synchronization', () => {
         eventKey: 'BRAND_NEW_MESSAGE',
         locale: 'tr-TR',
         content,
+        candidateVersionId: 'message-v2',
+        candidateStatus: 'DRAFT',
+        versions: [{ versionId: 'message-v2', content, status: 'DRAFT' }],
         binding: {
           templateName: definition.templateName,
           providerLocale: 'tr',
@@ -485,6 +563,10 @@ describe('WhatsApp template synchronization', () => {
 
     expect(result.approved).toBe(1);
     expect(store.bindings[0]?.status).toBe('APPROVED');
+    expect(store.bindings[0]).toMatchObject({
+      candidateVersionId: 'message-v2',
+      activeVersionId: 'message-v2',
+    });
     expect(
       bindingMatchesWhatsAppTemplate(store.bindings[0], 'BRAND_NEW_MESSAGE', content, 'tr-TR'),
     ).toBe(true);

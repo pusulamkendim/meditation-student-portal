@@ -1,5 +1,7 @@
 import {
+  bindingMatchesWhatsAppTemplate,
   defaultRegistrationMessages,
+  requiresZeroDowntimeWhatsAppTemplate,
   systemEventRegistry,
   validateMessageTemplate,
 } from '@meditation/core';
@@ -70,6 +72,7 @@ export async function syncDefaultRegistrationMessages(database: DatabaseClient):
             requiresStudentName: false,
             priority: -100,
           },
+          include: { providerBinding: true },
         });
         if (!variant) {
           variant = await transaction.standardMessageVariant.create({
@@ -79,6 +82,7 @@ export async function syncDefaultRegistrationMessages(database: DatabaseClient):
               locale: 'tr-TR',
               priority: -100,
             },
+            include: { providerBinding: true },
           });
         }
         const existing = await transaction.standardMessageVersion.findFirst({
@@ -89,20 +93,40 @@ export async function syncDefaultRegistrationMessages(database: DatabaseClient):
             where: { variantId: variant.id },
             _max: { version: true },
           });
-          await transaction.standardMessageVersion.updateMany({
-            where: { variantId: variant.id, status: 'PUBLISHED' },
-            data: { status: 'ARCHIVED', archivedAt: now },
+          const currentPublished = await transaction.standardMessageVersion.findFirst({
+            where: {
+              variantId: variant.id,
+              status: 'PUBLISHED',
+              effectiveAt: { lte: now },
+            },
+            orderBy: { version: 'desc' },
           });
+          const stageUntilWhatsAppApproval =
+            channel === 'WHATSAPP' &&
+            requiresZeroDowntimeWhatsAppTemplate(definition.eventKey) &&
+            currentPublished !== null &&
+            bindingMatchesWhatsAppTemplate(
+              variant.providerBinding,
+              definition.eventKey,
+              currentPublished.content,
+              variant.locale,
+            );
+          if (!stageUntilWhatsAppApproval) {
+            await transaction.standardMessageVersion.updateMany({
+              where: { variantId: variant.id, status: 'PUBLISHED' },
+              data: { status: 'ARCHIVED', archivedAt: now },
+            });
+          }
           await transaction.standardMessageVersion.create({
             data: {
               variantId: variant.id,
               version: (latest._max.version ?? 0) + 1,
               content: definition.content,
               placeholders: validateMessageTemplate(definition.eventKey, definition.content),
-              status: 'PUBLISHED',
+              status: stageUntilWhatsAppApproval ? 'DRAFT' : 'PUBLISHED',
               expertApproved: true,
-              effectiveAt: now,
-              publishedAt: now,
+              effectiveAt: stageUntilWhatsAppApproval ? null : now,
+              publishedAt: stageUntilWhatsAppApproval ? null : now,
             },
           });
         }

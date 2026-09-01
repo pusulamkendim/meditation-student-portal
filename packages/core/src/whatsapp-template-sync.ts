@@ -83,6 +83,13 @@ export interface PublishedWhatsAppMessageVariant {
   eventKey: string;
   locale: string;
   content: string;
+  candidateVersionId?: string;
+  candidateStatus?: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  versions?: readonly {
+    versionId: string;
+    content: string;
+    status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  }[];
   binding?: WhatsAppTemplateBindingSnapshot | null;
 }
 
@@ -94,6 +101,8 @@ export interface WhatsAppTemplateBindingInput {
   status: WhatsAppTemplateStatus;
   providerVersion?: string;
   contentFingerprint: string;
+  candidateVersionId?: string;
+  activeVersionId?: string;
 }
 
 export interface WhatsAppTemplateSyncStore {
@@ -274,6 +283,10 @@ export function bindingMatchesWhatsAppTemplate(
   );
 }
 
+export function requiresZeroDowntimeWhatsAppTemplate(eventKey: string): boolean {
+  return zeroDowntimeTemplateEvents.has(eventKey);
+}
+
 function normalizedStatus(status: string | undefined): WhatsAppTemplateStatus {
   if (status === 'APPROVED' || status === 'REJECTED' || status === 'PAUSED' || status === 'DRAFT') {
     return status;
@@ -327,6 +340,17 @@ function bodyPlaceholderSequence(
   return [...body.text.matchAll(/{{\s*(\d+)\s*}}/g)].map((match) => match[1]!);
 }
 
+function bodyVariableContexts(
+  components: readonly (Record<string, unknown> | MetaTemplateComponent)[] | undefined,
+): string[] {
+  const body = components?.find(
+    (component) => (component as Record<string, unknown>).type === 'BODY',
+  ) as Record<string, unknown> | undefined;
+  if (typeof body?.text !== 'string') return [];
+  const segments = body.text.split(/{{\s*\d+\s*}}/g);
+  return segments.slice(0, -1).map((segment) => segment.replace(/\s+/g, ' ').trim());
+}
+
 function templateBelongsToEvent(templateName: string, eventKey: string): boolean {
   return templateName.startsWith(`${templateNameSegment(eventKey)}_`);
 }
@@ -343,6 +367,8 @@ function canRetainApprovedFallback(
   return (
     JSON.stringify(bodyPlaceholderSequence(remoteTemplate.components)) ===
       JSON.stringify(bodyPlaceholderSequence(definition.components)) &&
+    JSON.stringify(bodyVariableContexts(remoteTemplate.components)) ===
+      JSON.stringify(bodyVariableContexts(definition.components)) &&
     templateButtonsMatch(remoteTemplate.components, definition.components)
   );
 }
@@ -534,18 +560,46 @@ export async function syncWhatsAppTemplates(
           Boolean(template) && canRetainApprovedFallback(variant.eventKey, template!, definition),
       );
       let activeTemplate = remoteTemplate;
+      let activeDefinition = definition;
+      let activeVersionId = variant.candidateVersionId;
       let status = normalizedStatus(remoteTemplate.status);
       if (status !== 'APPROVED' && approvedFallback) {
         activeTemplate = approvedFallback;
         status = 'APPROVED';
         action = 'retained-approved';
       }
+      if (status !== 'APPROVED' && zeroDowntimeTemplateEvents.has(variant.eventKey)) {
+        for (const version of variant.versions ?? []) {
+          if (version.versionId === variant.candidateVersionId) continue;
+          const fallbackDefinition = buildWhatsAppTemplateDefinition(
+            variant.eventKey,
+            version.content,
+            variant.locale,
+          );
+          const historicalFallback = [boundRemote, ...remoteTemplates].find(
+            (template): template is MetaTemplate =>
+              Boolean(template) &&
+              canRetainApprovedFallback(variant.eventKey, template!, fallbackDefinition),
+          );
+          if (!historicalFallback) continue;
+          activeTemplate = historicalFallback;
+          activeDefinition = fallbackDefinition;
+          activeVersionId = version.versionId;
+          status = 'APPROVED';
+          action = 'retained-approved';
+          break;
+        }
+      }
       if (status === 'APPROVED') result.approved += 1;
       else if (status === 'REJECTED') result.rejected += 1;
       else if (status === 'PAUSED') result.paused += 1;
       else result.pending += 1;
 
-      if (apply) {
+      const preserveApprovedPublishedVersion =
+        status !== 'APPROVED' &&
+        variant.candidateStatus === 'DRAFT' &&
+        variant.binding?.status === 'APPROVED';
+      if (apply && !preserveApprovedPublishedVersion) {
         await store.upsertWhatsAppTemplateBinding({
           variantId: variant.variantId,
           templateName: activeTemplate.name,
@@ -556,7 +610,9 @@ export async function syncWhatsAppTemplates(
               : definition.category,
           status,
           providerVersion: activeTemplate.id,
-          contentFingerprint: definition.contentFingerprint,
+          contentFingerprint: activeDefinition.contentFingerprint,
+          candidateVersionId: variant.candidateVersionId,
+          activeVersionId: status === 'APPROVED' ? activeVersionId : undefined,
         });
       }
       result.entries.push({
