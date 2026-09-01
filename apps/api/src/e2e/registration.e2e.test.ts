@@ -2088,6 +2088,11 @@ describe.runIf(runE2e)('E2E-REG Telegram registration', () => {
     expect((reflectionRequest.payload as { rendered: string }).rendered).toContain(
       'bugünkü pratiğini tamamladın',
     );
+    expect((reflectionRequest.payload as { rendered: string }).rendered).toContain(
+      'Şu anki ilerlemen:',
+    );
+    expect((reflectionRequest.payload as { rendered: string }).rendered).toContain('Son 7 gün:');
+    expect((reflectionRequest.payload as { rendered: string }).rendered).toContain('Toplam:');
     expect((reflectionRequest.payload as { rendered: string }).rendered).not.toContain(
       'Bir sonraki pratiğin',
     );

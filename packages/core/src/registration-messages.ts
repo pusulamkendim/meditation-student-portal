@@ -113,7 +113,7 @@ export const defaultRegistrationMessages: readonly DefaultRegistrationMessage[] 
   {
     eventKey: 'PRACTICE_REFLECTION_REQUEST',
     content:
-      'Eline sağlık, bugünkü pratiğini tamamladın. Kendine ayırdığın bu zamanı önemsiyorum. İstersen pratik sırasında veya sonrasında fark ettiklerini, yaşadığın zorlukları, bedenindeki hisleri ya da duygularını yazılı veya sesli olarak paylaşabilirsin.',
+      'Eline sağlık, bugünkü pratiğini tamamladın. Kendine ayırdığın bu zamanı önemsiyorum.\n\nŞu anki ilerlemen:\nSon 7 gün: {{weeklyCompletedPracticeCountText}} / {{weeklyPlannedPracticeCountText}} pratik tamamlandı • {{weeklyCompletedMinutesText}} dakika meditasyon • {{weeklyReflectionCountText}} refleksiyon\nToplam: {{totalCompletedPracticeCountText}} pratik • {{totalCompletedMinutesText}} dakika meditasyon\n\nİstersen pratik sırasında veya sonrasında fark ettiklerini, yaşadığın zorlukları, bedenindeki hisleri ya da duygularını yazılı veya sesli olarak paylaşabilirsin.',
   },
   {
     eventKey: 'PRACTICE_REFLECTION_RECEIVED',

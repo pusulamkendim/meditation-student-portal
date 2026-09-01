@@ -4,7 +4,7 @@ const DAY_MS = 86_400_000;
 
 type PracticeStatsDatabase = Pick<Prisma.TransactionClient, 'practiceSession'>;
 
-export type MeetingPracticeStats = {
+export type PracticeStats = {
   periodStart: Date;
   periodEndExclusive: Date;
   weeklyPlannedPracticeCount: number;
@@ -17,11 +17,11 @@ export type MeetingPracticeStats = {
   totalCompletedMinutes: number;
 };
 
-export async function calculateMeetingPracticeStats(
+export async function calculatePracticeStats(
   database: PracticeStatsDatabase,
   studentId: string,
   periodEndExclusive: Date,
-): Promise<MeetingPracticeStats> {
+): Promise<PracticeStats> {
   const periodStart = new Date(periodEndExclusive.getTime() - 7 * DAY_MS);
   const [weeklySessions, lifetime] = await Promise.all([
     database.practiceSession.findMany({
@@ -74,7 +74,7 @@ export async function calculateMeetingPracticeStats(
   };
 }
 
-export function meetingPracticeStatsVariables(stats: MeetingPracticeStats): Record<string, string> {
+export function practiceStatsVariables(stats: PracticeStats): Record<string, string> {
   return {
     weeklyCompletedPracticeCountText: String(stats.weeklyCompletedPracticeCount),
     weeklyPlannedPracticeCountText: String(stats.weeklyPlannedPracticeCount),

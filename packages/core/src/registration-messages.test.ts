@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { renderMessageTemplate } from './message-template.js';
 import { defaultRegistrationMessages } from './registration-messages.js';
 
 describe('default registration messages', () => {
@@ -57,9 +58,36 @@ describe('default registration messages', () => {
     );
 
     expect(reflectionRequest?.content).toContain('bugünkü pratiğini tamamladın');
+    expect(reflectionRequest?.content).toContain(
+      'Son 7 gün: {{weeklyCompletedPracticeCountText}} / {{weeklyPlannedPracticeCountText}} pratik tamamlandı',
+    );
+    expect(reflectionRequest?.content).toContain(
+      '{{weeklyCompletedMinutesText}} dakika meditasyon • {{weeklyReflectionCountText}} refleksiyon',
+    );
+    expect(reflectionRequest?.content).toContain(
+      'Toplam: {{totalCompletedPracticeCountText}} pratik • {{totalCompletedMinutesText}} dakika meditasyon',
+    );
     expect(reflectionRequest?.content).toContain('fark ettiklerini');
     expect(reflectionRequest?.content).toContain('yazılı veya sesli olarak paylaşabilirsin');
     expect(reflectionRequest?.content).not.toContain('?');
     expect(reflectionRequest?.content).not.toContain('Bir sonraki pratiğin');
+  });
+
+  it('renders practice progress values in the completion reflection request', () => {
+    const reflectionRequest = defaultRegistrationMessages.find(
+      (message) => message.eventKey === 'PRACTICE_REFLECTION_REQUEST',
+    );
+
+    expect(reflectionRequest).toBeDefined();
+    expect(
+      renderMessageTemplate('PRACTICE_REFLECTION_REQUEST', reflectionRequest!.content, {
+        weeklyCompletedPracticeCountText: '5',
+        weeklyPlannedPracticeCountText: '7',
+        weeklyCompletedMinutesText: '85',
+        weeklyReflectionCountText: '3',
+        totalCompletedPracticeCountText: '42',
+        totalCompletedMinutesText: '720',
+      }),
+    ).toContain('Son 7 gün: 5 / 7 pratik tamamlandı • 85 dakika meditasyon • 3 refleksiyon');
   });
 });

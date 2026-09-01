@@ -16,10 +16,7 @@ import {
   type Prisma,
 } from '@meditation/database';
 
-import {
-  calculateMeetingPracticeStats,
-  meetingPracticeStatsVariables,
-} from './meeting-practice-stats.js';
+import { calculatePracticeStats, practiceStatsVariables } from './practice-stats.js';
 
 type ReminderEvent = 'MEETING_REMINDER_24H' | 'MEETING_REMINDER_1H';
 type MeetingLifecycleConfig = Pick<
@@ -107,8 +104,8 @@ export async function createMeetingIntent(
     if (!variant) return false;
     const practiceVariables =
       eventKey === 'MEETING_REMINDER_1H'
-        ? meetingPracticeStatsVariables(
-            await calculateMeetingPracticeStats(tx, meeting.meetingSeries.studentId, now),
+        ? practiceStatsVariables(
+            await calculatePracticeStats(tx, meeting.meetingSeries.studentId, now),
           )
         : {};
     const variables: Record<string, string> = {

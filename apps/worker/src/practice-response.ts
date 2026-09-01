@@ -18,6 +18,8 @@ import {
   type Prisma,
 } from '@meditation/database';
 
+import { calculatePracticeStats, practiceStatsVariables } from './practice-stats.js';
+
 export async function createResponseIntent(
   tx: Prisma.TransactionClient,
   now: Date,
@@ -414,6 +416,10 @@ export async function processPracticeResponse(
       data: { status: response, version: { increment: 1 } },
     });
     if (changed.count !== 1) return false;
+    const progressVariables =
+      response === 'COMPLETED'
+        ? practiceStatsVariables(await calculatePracticeStats(tx, identity.studentId, now))
+        : {};
     const existingMessage = await tx.message.findUnique({
       where: { inboxEventId: inbox.id },
       select: { id: true },
@@ -465,7 +471,7 @@ export async function processPracticeResponse(
             stage: session.student.curriculumStage,
             aggregateVersion: session.version + 1,
             idempotencyKey: `practice:${session.id}:reflection-request`,
-            variables: {},
+            variables: progressVariables,
             context: { practiceSessionId: session.id },
           })
         : await createResponseIntent(tx, now, {

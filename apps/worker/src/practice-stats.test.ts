@@ -1,12 +1,9 @@
 import { PracticeSessionStatus } from '@meditation/database';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  calculateMeetingPracticeStats,
-  meetingPracticeStatsVariables,
-} from './meeting-practice-stats.js';
+import { calculatePracticeStats, practiceStatsVariables } from './practice-stats.js';
 
-describe('meeting practice stats', () => {
+describe('practice stats', () => {
   it('calculates the rolling weekly summary and lifetime completed totals', async () => {
     const findMany = vi.fn().mockResolvedValue([
       {
@@ -42,7 +39,7 @@ describe('meeting practice stats', () => {
     const database = { practiceSession: { findMany, aggregate } };
     const periodEnd = new Date('2026-09-01T10:00:00.000Z');
 
-    const stats = await calculateMeetingPracticeStats(database as never, 'student-1', periodEnd);
+    const stats = await calculatePracticeStats(database as never, 'student-1', periodEnd);
 
     expect(stats).toEqual({
       periodStart: new Date('2026-08-25T10:00:00.000Z'),
@@ -56,7 +53,7 @@ describe('meeting practice stats', () => {
       totalCompletedPracticeCount: 12,
       totalCompletedMinutes: 240,
     });
-    expect(meetingPracticeStatsVariables(stats)).toEqual({
+    expect(practiceStatsVariables(stats)).toEqual({
       weeklyCompletedPracticeCountText: '2',
       weeklyPlannedPracticeCountText: '5',
       weeklyCompletedMinutesText: '35',
@@ -103,7 +100,7 @@ describe('meeting practice stats', () => {
       },
     };
 
-    const stats = await calculateMeetingPracticeStats(
+    const stats = await calculatePracticeStats(
       database as never,
       'student-1',
       new Date('2026-09-01T10:00:00.000Z'),
