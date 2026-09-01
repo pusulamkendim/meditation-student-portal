@@ -8,7 +8,19 @@ const GRAPH_ORIGIN = 'https://graph.facebook.com';
 const placeholderPattern = /{{\s*([A-Za-z][A-Za-z0-9_]*)\s*}}/g;
 
 const marketingEvents = new Set(['CHANNEL_LINK_CONFIRMED', 'DRAWING_SHARED', 'READING_ASSIGNED']);
-const zeroDowntimeTemplateEvents = new Set(['PRACTICE_REMINDER', 'PRACTICE_CHECKIN']);
+const zeroDowntimeTemplateEvents = new Set([
+  'PRACTICE_REMINDER',
+  'PRACTICE_CHECKIN',
+  'MEETING_SERIES_SCHEDULED',
+  'MEETING_SCHEDULED',
+  'MEETING_REMINDER_24H',
+  'MEETING_REMINDER_1H',
+  'MEETING_RESCHEDULED',
+  'MEETING_CANCELLED',
+  'MEETING_COMPLETED',
+  'MEETING_NO_SHOW',
+  'MEET_LINK_UNAVAILABLE',
+]);
 const metaBodyFooter =
   'Bu mesaj, planlanan programınla ilgili bilgi vermek amacıyla gönderilmiştir.';
 

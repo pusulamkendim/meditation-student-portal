@@ -359,6 +359,67 @@ describe('WhatsApp template synchronization', () => {
     });
   });
 
+  it('retains a compatible approved meeting template while the exact candidate is pending', async () => {
+    const content = defaultRegistrationMessages.find(
+      (message) => message.eventKey === 'MEETING_REMINDER_1H',
+    )!.content;
+    const definition = buildWhatsAppTemplateDefinition('MEETING_REMINDER_1H', content, 'tr-TR');
+    const desiredBody = definition.components.find((component) => component.type === 'BODY')!;
+    const store = storeFor([
+      {
+        variantId: 'meeting-reminder-variant',
+        eventKey: 'MEETING_REMINDER_1H',
+        locale: 'tr-TR',
+        content,
+        binding: {
+          templateName: definition.templateName,
+          providerLocale: 'tr',
+          status: 'PENDING',
+          contentFingerprint: definition.contentFingerprint,
+        },
+      },
+    ]);
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        data: [
+          {
+            id: 'meta-approved-meeting',
+            name: 'meeting_reminder_1h_v2_tr',
+            language: 'tr',
+            category: 'UTILITY',
+            status: 'APPROVED',
+            components: [{ ...desiredBody, text: `${desiredBody.text} Görüşme hatırlatması.` }],
+          },
+          {
+            id: 'meta-pending-meeting',
+            name: definition.templateName,
+            language: 'tr',
+            category: 'UTILITY',
+            status: 'PENDING',
+            components: definition.components,
+          },
+        ],
+      }),
+    );
+
+    const result = await syncWhatsAppTemplates(store, {
+      accessToken: 'token',
+      businessAccountId: 'waba-1',
+      fetchImpl,
+    });
+
+    expect(result.entries[0]).toMatchObject({
+      action: 'retained-approved',
+      templateName: 'meeting_reminder_1h_v2_tr',
+      status: 'APPROVED',
+    });
+    expect(store.bindings[0]).toMatchObject({
+      templateName: 'meeting_reminder_1h_v2_tr',
+      status: 'APPROVED',
+      providerVersion: 'meta-approved-meeting',
+    });
+  });
+
   it('automatically submits a newly published message that has no hard-coded target', async () => {
     const store = storeFor([
       {
