@@ -17,12 +17,11 @@ import {
 import { processPracticeLifecycle } from './practice-lifecycle.js';
 import { processPracticeResponse } from './practice-response.js';
 import { expireStalePracticeResponses } from './practice-response-timeout.js';
-import { processMeetingReminder, processMeetingSummaries } from './meeting-lifecycle.js';
+import { processMeetingReminder } from './meeting-lifecycle.js';
 import { MeetingCalendarWorker } from './meeting-calendar.js';
 import { LlmAgentProcessor } from './llm-agent.js';
 import { KnowledgeIngestionProcessor } from './knowledge-ingestion.js';
 import { WeeklySummaryAiProcessor } from './weekly-summary-ai.js';
-import { StudentPulseAiProcessor } from './student-pulse-ai.js';
 import { StudentReportAiProcessor } from './student-report-ai.js';
 import { RegistrationInboundProcessor } from './registration-inbound.js';
 import { SubscriptionRenewalInboundProcessor } from './subscription-renewal-inbound.js';
@@ -36,6 +35,8 @@ import {
   RESPONSIVE_WORK_OPTIONS,
 } from './responsive-queue.js';
 
+const retiredRecurringQueues = ['meeting.summary-3h', 'llm.student-pulse-daily'] as const;
+
 async function bootstrap(): Promise<void> {
   const config = loadApplicationConfig();
   const logger = pino({ level: config.LOG_LEVEL, base: { service: 'worker' } });
@@ -46,7 +47,6 @@ async function bootstrap(): Promise<void> {
   const llmAgent = new LlmAgentProcessor(prisma, config, systemClock);
   const knowledgeIngestion = new KnowledgeIngestionProcessor(prisma, config, systemClock);
   const weeklySummaryAi = new WeeklySummaryAiProcessor(prisma, config, systemClock);
-  const studentPulseAi = new StudentPulseAiProcessor(prisma, config, systemClock);
   const studentReportAi = new StudentReportAiProcessor(prisma, config, systemClock);
   const registrationInbound = new RegistrationInboundProcessor(prisma, config, systemClock);
   const subscriptionRenewalInbound = new SubscriptionRenewalInboundProcessor(
@@ -62,6 +62,10 @@ async function bootstrap(): Promise<void> {
   await syncSystemEventRegistry(prisma);
   await syncDefaultRegistrationMessages(prisma);
   await boss.start();
+  for (const queueName of retiredRecurringQueues) {
+    await boss.unschedule(queueName);
+    await boss.deleteQueuedJobs(queueName);
+  }
   const whatsappAccessToken = config.WHATSAPP_ACCESS_TOKEN;
   const whatsappBusinessAccountId = config.WHATSAPP_BUSINESS_ACCOUNT_ID ?? config.WHATSAPP_WABA_ID;
   if (whatsappAccessToken && whatsappBusinessAccountId) {
@@ -362,12 +366,6 @@ async function bootstrap(): Promise<void> {
     for (const job of jobs)
       if (job.data.meetingId) await weeklySummaryAi.process(job.data.meetingId);
   });
-  await boss.createQueue('llm.student-pulse-daily');
-  await boss.work('llm.student-pulse-daily', async () => {
-    const result = await studentPulseAi.processAll();
-    logger.info(result, 'Daily student pulse analysis completed');
-  });
-  await boss.schedule('llm.student-pulse-daily', '15 2 * * *', {});
   await boss.createQueue('llm.student-report');
   await boss.work<{ reportId: string; operationId?: string }>(
     'llm.student-report',
@@ -403,11 +401,6 @@ async function bootstrap(): Promise<void> {
     await processMeetingReminder(prisma, systemClock, config, 60 * 60_000, 'MEETING_REMINDER_1H');
   });
   await boss.schedule('meeting.reminder-1h', '* * * * *', {});
-  await boss.createQueue('meeting.summary-3h');
-  await boss.work('meeting.summary-3h', async () => {
-    await processMeetingSummaries(prisma, systemClock);
-  });
-  await boss.schedule('meeting.summary-3h', '* * * * *', {});
   await boss.createQueue('calendar.incremental-sync');
   await boss.work('calendar.incremental-sync', async () => {
     await calendarWorker.incrementalSync(false);
