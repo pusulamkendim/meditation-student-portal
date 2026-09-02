@@ -9,6 +9,7 @@ import {
   BrainCircuit,
   BookMarked,
   CalendarDays,
+  ChartNoAxesCombined,
   CreditCard,
   FileText,
   LayoutDashboard,
@@ -45,6 +46,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
       { href: '/readings', label: 'Okumalar', icon: BookMarked },
       { href: '/knowledge', label: 'Bilgi bankası', icon: BookOpen },
       { href: '/drawings', label: 'Çizimler', icon: PencilRuler },
+      { href: '/site', label: 'Site & İçerik', icon: ChartNoAxesCombined },
     ],
   },
   {

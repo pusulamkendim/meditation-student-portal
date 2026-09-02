@@ -84,7 +84,8 @@ export default function OneToOnePage() {
             <span>01</span>
             <h3>Seni olduğun yerden alır</h3>
             <p>
-              Yeni başlıyor olman veya yıllardır meditasyon yapıyor olman, başlangıç noktanı belirler.
+              Yeni başlıyor olman veya yıllardır meditasyon yapıyor olman, başlangıç noktanı
+              belirler.
             </p>
           </div>
           <div className="difference-card difference-card-accent">
@@ -99,8 +100,8 @@ export default function OneToOnePage() {
             <span>03</span>
             <h3>Deneyimine göre uyumlanır</h3>
             <p>
-              İyi giden, zorlayan veya değişen şeyleri dikkate alarak meditasyon pratiğini teorik bir programa
-              sıkıştırmıyorum.
+              İyi giden, zorlayan veya değişen şeyleri dikkate alarak meditasyon pratiğini teorik
+              bir programa sıkıştırmıyorum.
             </p>
           </div>
         </div>
@@ -123,8 +124,8 @@ export default function OneToOnePage() {
           <span className="eyebrow">Görüşmeler arasında</span>
           <h2 id="tracking-title">Pratiğin görünür hale gelir.</h2>
           <p>
-            Ne zaman meditasyon yaptığını, ne kadar sürdüğünü veya sonrasında neler fark ettiğini takip
-            edebilmek; değerlendirmeyi yalnızca hafızaya bırakmamanı sağlar.
+            Ne zaman meditasyon yaptığını, ne kadar sürdüğünü veya sonrasında neler fark ettiğini
+            takip edebilmek; değerlendirmeyi yalnızca hafızaya bırakmamanı sağlar.
           </p>
           <div className="tracking-points">
             <span>
@@ -239,7 +240,9 @@ export default function OneToOnePage() {
       <section className="conversion-section" aria-labelledby="final-conversion-title">
         <div className="site-shell conversion-inner">
           <span className="eyebrow eyebrow-light">Birlikte başlayalım</span>
-          <h2 id="final-conversion-title">Kendi meditasyon pratiğini oluşturmaya başlamak ister misin?</h2>
+          <h2 id="final-conversion-title">
+            Kendi meditasyon pratiğini oluşturmaya başlamak ister misin?
+          </h2>
           <p>15 dakikalık ücretsiz bir tanışma görüşmesinde ihtiyaçlarını ve süreci konuşalım.</p>
           <TrackedLink
             className="button button-light"

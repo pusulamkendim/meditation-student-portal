@@ -17,6 +17,7 @@ const routeLabels: Array<{ prefix: string; label: string }> = [
   { prefix: '/meetings', label: 'Görüşmeler' },
   { prefix: '/readings', label: 'Okumalar' },
   { prefix: '/drawings', label: 'Çizimler' },
+  { prefix: '/site', label: 'Site & İçerik' },
   { prefix: '/llm', label: 'LLM platformu' },
   { prefix: '/ui-preview', label: 'UI sistemi' },
 ];

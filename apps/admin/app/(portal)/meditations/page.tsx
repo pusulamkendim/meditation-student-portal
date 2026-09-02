@@ -31,6 +31,7 @@ import {
   X,
 } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 const standardDurations = [15, 20, 25, 30];
@@ -208,6 +209,8 @@ function localDateTimeValue(value?: string | null) {
 }
 
 export default function MeditationsPage() {
+  const searchParams = useSearchParams();
+  const requestedMeditationId = searchParams.get('meditationId');
   const [items, setItems] = useState<MeditationType[]>();
   const [selectedId, setSelectedId] = useState<string>();
   const [detail, setDetail] = useState<MeditationType>();
@@ -313,6 +316,11 @@ export default function MeditationsPage() {
     if (selectedId) void loadDetail(selectedId);
     else setDetail(undefined);
   }, [loadDetail, selectedId]);
+  useEffect(() => {
+    if (requestedMeditationId && items?.some((item) => item.id === requestedMeditationId)) {
+      setSelectedId(requestedMeditationId);
+    }
+  }, [items, requestedMeditationId]);
   useEffect(() => {
     if (detail) void loadPublicShare(detail);
   }, [detail, loadPublicShare]);

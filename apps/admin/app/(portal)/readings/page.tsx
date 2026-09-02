@@ -35,6 +35,7 @@ import {
   X,
 } from 'lucide-react';
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 
 const api = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -189,6 +190,8 @@ function countWords(value: string) {
 }
 
 export default function ReadingsPage() {
+  const searchParams = useSearchParams();
+  const requestedReadingId = searchParams.get('readingId');
   const [readings, setReadings] = useState<ReadingSummary[]>();
   const [selectedId, setSelectedId] = useState<string>();
   const [detail, setDetail] = useState<ReadingDetail>();
@@ -269,6 +272,11 @@ export default function ReadingsPage() {
     if (selectedId) void loadDetail(selectedId);
     else setDetail(undefined);
   }, [loadDetail, selectedId]);
+  useEffect(() => {
+    if (requestedReadingId && readings?.some((reading) => reading.id === requestedReadingId)) {
+      setSelectedId(requestedReadingId);
+    }
+  }, [readings, requestedReadingId]);
 
   const filteredReadings = useMemo(() => {
     const term = query.trim().toLocaleLowerCase('tr-TR');

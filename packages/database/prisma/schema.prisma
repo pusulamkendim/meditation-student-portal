@@ -1499,6 +1499,7 @@ model ReadingPublicVisit {
   share ReadingPublicShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
 
   @@unique([shareId, visitorHmac])
+  @@index([shareId, firstOpenedAt])
   @@index([shareId, lastSeenAt])
   @@index([shareId, completedAt])
   @@map("reading_public_visits")
@@ -1589,6 +1590,7 @@ model MeditationPublicVisit {
   share MeditationPublicShare @relation(fields: [shareId], references: [id], onDelete: Cascade)
 
   @@unique([shareId, visitorHmac, durationMinutes], map: "meditation_public_visits_share_visitor_duration_key")
+  @@index([shareId, firstOpenedAt])
   @@index([shareId, lastSeenAt])
   @@index([shareId, durationMinutes])
   @@map("meditation_public_visits")
@@ -1609,6 +1611,7 @@ model PublicAnalyticsEvent {
 
   @@index([eventName, createdAt])
   @@index([sessionId, createdAt])
+  @@index([createdAt])
   @@map("public_analytics_events")
 }
 

@@ -7,8 +7,7 @@ const RESOURCES = {
   api: 'pc393rw7valhdz3mo8n0q7zn',
   worker: 'pky94uoyi5r2lm1qsdsduobc',
   admin: 'wd45ufa1ta1zkougz081a3qv',
-  'sakinzihin-web':
-    process.env.SAKINZIHIN_WEB_COOLIFY_RESOURCE ?? 'b1xufy058uk7avv6z2rlfla8',
+  'sakinzihin-web': process.env.SAKINZIHIN_WEB_COOLIFY_RESOURCE ?? 'b1xufy058uk7avv6z2rlfla8',
 };
 
 const TERMINAL_STATUSES = new Set(['finished', 'failed', 'cancelled', 'cancelled-by-user']);

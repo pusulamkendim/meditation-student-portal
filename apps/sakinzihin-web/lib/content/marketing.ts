@@ -77,7 +77,11 @@ export const processSteps = [
     text: 'Mevcut pratiğini ve ihtiyaçlarını anlamaya çalışıyorum.',
   },
   { number: '02', title: 'Plan', text: 'Sana özel bir pratik planı oluşturuyorum.' },
-  { number: '03', title: 'Pratik', text: 'Günlük pratiklerinden önce sana hatırlatmalar gönderiyorum.' },
+  {
+    number: '03',
+    title: 'Pratik',
+    text: 'Günlük pratiklerinden önce sana hatırlatmalar gönderiyorum.',
+  },
   {
     number: '04',
     title: 'Check-in',
