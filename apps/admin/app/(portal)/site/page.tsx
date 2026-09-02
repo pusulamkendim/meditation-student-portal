@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   ArrowRight,
   BookOpen,
-  CalendarDays,
   ChartNoAxesCombined,
   ExternalLink,
   Eye,
@@ -157,11 +156,11 @@ function SiteMetricCard({
   icon: typeof Users;
 }) {
   return (
-    <article className="ui-metric site-overview-kpi">
-      <div className="ui-metric__label">
+    <article className="site-overview-kpi">
+      <span className="site-overview-kpi-label">
         <Icon aria-hidden="true" />
         <span>{label}</span>
-      </div>
+      </span>
       <strong>{formatNumber(metric.value)}</strong>
       <small className={`site-overview-comparison is-${comparisonTone(metric)}`}>
         {comparisonText(metric)}
@@ -171,25 +170,27 @@ function SiteMetricCard({
 }
 
 function PanelHeading({
-  eyebrow,
+  number,
   title,
   description,
   action,
 }: {
-  eyebrow?: string;
+  number: string;
   title: string;
   description?: string;
   action?: React.ReactNode;
 }) {
   return (
-    <div className="dashboard-panel-heading site-overview-panel-heading">
+    <header className="studio-section-heading site-overview-panel-heading">
       <div>
-        {eyebrow ? <span>{eyebrow}</span> : null}
-        <h2>{title}</h2>
-        {description ? <p>{description}</p> : null}
+        <span aria-hidden="true">{number}</span>
+        <div>
+          <h2>{title}</h2>
+          {description ? <p>{description}</p> : null}
+        </div>
       </div>
       {action}
-    </div>
+    </header>
   );
 }
 
@@ -198,8 +199,10 @@ function InteractionChart({ daily }: { daily: SiteOverview['daily'] }) {
     return (
       <div className="site-overview-chart-empty">
         <ChartNoAxesCombined aria-hidden="true" />
-        <strong>Henüz yeterli ziyaret verisi yok.</strong>
-        <span>Yeni analytics kayıtları geldikçe günlük hareket burada görünecek.</span>
+        <div>
+          <strong>Henüz ziyaret verisi yok.</strong>
+          <p>Ziyaretler geldikçe günlük hareket ve trafik kaynakları burada görünecek.</p>
+        </div>
       </div>
     );
   }
@@ -300,27 +303,31 @@ function Funnel({ funnel }: { funnel: SiteOverview['funnel'] }) {
 
   return (
     <div className="site-overview-funnel">
-      {stages.map((stage, index) => (
-        <div className="site-overview-funnel-stage" key={stage.label}>
-          <div className="site-overview-funnel-label">
-            <span>{stage.label}</span>
-            <strong>{formatNumber(stage.value)}</strong>
+      <div className="site-overview-funnel-stages">
+        {stages.map((stage, index) => (
+          <div className="site-overview-funnel-stage" key={stage.label}>
+            <div className="site-overview-funnel-label">
+              <span>{stage.label}</span>
+              <span className="site-overview-funnel-values">
+                <strong>{formatNumber(stage.value)}</strong>
+                <small title={index === 0 ? 'Başlangıç' : 'Önceki aşamaya göre dönüşüm'}>
+                  {index === 0
+                    ? 'Başlangıç'
+                    : stage.rate === null
+                      ? '—'
+                      : `%${stage.rate.toLocaleString('tr-TR')}`}
+                </small>
+              </span>
+            </div>
+            <div className="site-overview-funnel-track">
+              <i style={{ width: `${Math.min(100, (stage.value / reference) * 100)}%` }} />
+            </div>
           </div>
-          <div className="site-overview-funnel-track">
-            <i style={{ width: `${Math.min(100, (stage.value / reference) * 100)}%` }} />
-          </div>
-          <small>
-            {index === 0
-              ? 'Başlangıç'
-              : stage.rate === null
-                ? 'Önceki aşamada veri yok'
-                : `%${stage.rate.toLocaleString('tr-TR')} önceki aşamadan`}
-          </small>
-        </div>
-      ))}
+        ))}
+      </div>
       <p className="site-overview-funnel-note">
-        Aşamalar tekil session bazında; son aşamanın ham tıklama sayısı{' '}
-        {formatNumber(funnel.conversionEvents)}.
+        Her aşamada tekil oturumlar sayılır. WhatsApp / Tanışma: toplam{' '}
+        {formatNumber(funnel.conversionEvents)} tıklama.
       </p>
     </div>
   );
@@ -343,9 +350,9 @@ function ContentPerformance({ content }: { content: SiteContent[] }) {
   }
 
   return (
-    <section className="dashboard-panel site-overview-content-panel">
+    <section className="site-overview-section site-overview-content-panel">
       <PanelHeading
-        eyebrow="İÇERİK KARARI"
+        number="03"
         title="İçerik performansı"
         description="Ziyaretçiyi bir sonraki adıma taşıyan içerikleri karşılaştırın."
         action={
@@ -404,8 +411,7 @@ function ContentPerformance({ content }: { content: SiteContent[] }) {
                         )}
                       </span>
                       <span>
-                        <strong>{item.title}</strong>
-                        <small>{item.slug ?? 'Genel paylaşım bağlantısı yok'}</small>
+                        <strong title={item.title}>{item.title}</strong>
                       </span>
                     </Link>
                   </td>
@@ -446,8 +452,7 @@ function ContentPerformance({ content }: { content: SiteContent[] }) {
         />
       )}
       <p className="site-overview-footnote">
-        * Şemada ayrı yayın tarihi olmadığı için mevcut yayın içeriğinin son güncelleme tarihi
-        kullanılır.
+        * Yayın tarihi, içeriğin son güncelleme tarihini gösterir.
       </p>
     </section>
   );
@@ -456,12 +461,8 @@ function ContentPerformance({ content }: { content: SiteContent[] }) {
 function TrafficSources({ sources }: { sources: SiteOverview['trafficSources'] }) {
   const max = Math.max(1, ...sources.map((source) => source.sessions));
   return (
-    <section className="dashboard-panel site-overview-traffic-panel">
-      <PanelHeading
-        eyebrow="İLK TEMAS"
-        title="Trafik kaynakları"
-        description="UTM kaynağı; yoksa ilk referrer hostname’i kullanılır."
-      />
+    <section className="site-overview-traffic-panel" aria-labelledby="site-traffic-title">
+      <h3 id="site-traffic-title">Trafik kaynakları</h3>
       {sources.length ? (
         <div className="site-overview-source-list">
           {sources.map((source) => (
@@ -477,11 +478,7 @@ function TrafficSources({ sources }: { sources: SiteOverview['trafficSources'] }
           ))}
         </div>
       ) : (
-        <EmptyState
-          icon={Eye}
-          title="Henüz trafik kaynağı yok"
-          description="Analytics kayıtları geldikçe kaynak dağılımı oluşacak."
-        />
+        <p className="site-overview-empty-note">Henüz trafik kaynağı yok.</p>
       )}
     </section>
   );
@@ -489,8 +486,8 @@ function TrafficSources({ sources }: { sources: SiteOverview['trafficSources'] }
 
 function Attention({ items }: { items: SiteOverview['attention'] }) {
   return (
-    <section className="dashboard-panel site-overview-attention-panel">
-      <PanelHeading eyebrow="EDİTORYAL SAĞLIK" title="Dikkat gerektirenler" />
+    <section className="site-overview-section site-overview-attention-panel">
+      <PanelHeading number="04" title="Dikkat gerektirenler" />
       {items.length ? (
         <div className="site-overview-attention-list">
           {items.map((item) => (
@@ -509,11 +506,7 @@ function Attention({ items }: { items: SiteOverview['attention'] }) {
           ))}
         </div>
       ) : (
-        <EmptyState
-          icon={ChartNoAxesCombined}
-          title="Şu an dikkat gerektiren bir durum yok"
-          description="Taslak, kapak ve yayın tazeliği kuralları temiz görünüyor."
-        />
+        <p className="site-overview-empty-note">Şu an dikkat gerektiren bir durum yok.</p>
       )}
     </section>
   );
@@ -521,8 +514,8 @@ function Attention({ items }: { items: SiteOverview['attention'] }) {
 
 function RecentContent({ items }: { items: SiteOverview['recentContent'] }) {
   return (
-    <section className="dashboard-panel site-overview-recent-panel">
-      <PanelHeading eyebrow="YAYIN AKIŞI" title="Son yayınlanan içerikler" />
+    <section className="site-overview-section site-overview-recent-panel">
+      <PanelHeading number="05" title="Son yayınlanan içerikler" />
       {items.length ? (
         <div className="site-overview-recent-list">
           {items.map((item) => (
@@ -545,11 +538,7 @@ function RecentContent({ items }: { items: SiteOverview['recentContent'] }) {
           ))}
         </div>
       ) : (
-        <EmptyState
-          icon={CalendarDays}
-          title="Henüz yayınlanmış içerik yok"
-          description="Yayınlanan okumalar ve meditasyonlar burada listelenir."
-        />
+        <p className="site-overview-empty-note">Henüz yayınlanmış içerik yok.</p>
       )}
     </section>
   );
@@ -590,25 +579,17 @@ export default function SiteOverviewPage() {
     void load();
   }, [load]);
 
-  const hasAnalytics = Boolean(
-    data &&
-    (data.summary.sessions.value ||
-      data.summary.siteEntries.value ||
-      data.summary.contentViews.value ||
-      data.summary.ctaClicks.value),
-  );
-
   return (
     <main className="content site-overview-page">
-      <div className="site-overview-header">
+      <header className="studio-dashboard-intro site-overview-header">
         <div>
-          <span className="eyebrow">GENEL PERFORMANS</span>
+          <span>GENEL PERFORMANS</span>
           <h1>Site &amp; İçerik</h1>
           <p>Genel performans, içerik analitiği ve dönüşüm özeti.</p>
         </div>
         <div className="site-overview-toolbar">
           <SegmentedControl
-            label="Analytics tarih aralığı"
+            label="Analitik tarih aralığı"
             value={range}
             options={rangeOptions}
             onChange={setRange}
@@ -629,7 +610,7 @@ export default function SiteOverviewPage() {
             <RefreshCw aria-hidden="true" />
           </Button>
         </div>
-      </div>
+      </header>
 
       {error && data ? (
         <Alert tone="danger" title="Site analitiği güncellenemedi">
@@ -648,7 +629,7 @@ export default function SiteOverviewPage() {
         </div>
       ) : loading && !data ? (
         <div className="site-overview-loading" aria-busy="true">
-          <div className="site-overview-kpi-grid">
+          <div className="studio-pulse site-overview-kpi-grid">
             {Array.from({ length: 4 }, (_, index) => (
               <Skeleton key={index} />
             ))}
@@ -661,15 +642,7 @@ export default function SiteOverviewPage() {
         </div>
       ) : data ? (
         <>
-          {!hasAnalytics ? (
-            <div className="site-overview-zero-state">
-              <ChartNoAxesCombined aria-hidden="true" />
-              <span>
-                Henüz yeterli ziyaret verisi yok. Yeni analytics kayıtları geldikçe bu özet dolacak.
-              </span>
-            </div>
-          ) : null}
-          <section className="site-overview-kpi-grid" aria-label="Site özeti">
+          <section className="studio-pulse site-overview-kpi-grid" aria-label="Site özeti">
             <SiteMetricCard label="Tekil oturum" metric={data.summary.sessions} icon={Users} />
             <SiteMetricCard label="Site girişleri" metric={data.summary.siteEntries} icon={Eye} />
             <SiteMetricCard
@@ -680,32 +653,29 @@ export default function SiteOverviewPage() {
             <SiteMetricCard label="CTA tıklamaları" metric={data.summary.ctaClicks} icon={Send} />
           </section>
 
-          <div className="site-overview-top-grid">
-            <section className="dashboard-panel site-overview-chart-panel">
+          <div className="site-overview-analysis-grid">
+            <section className="site-overview-section site-overview-chart-panel">
               <PanelHeading
-                eyebrow="GÜNLÜK HAREKET"
+                number="01"
                 title="Ziyaretler ve etkileşim"
-                description="Oturum ve canonical CTA event toplamları seçili döneme göre gösterilir."
+                description="Seçili dönemde ziyaretler, içerik açılışları ve iletişim tıklamaları."
               />
               <InteractionChart daily={data.daily} />
+              <TrafficSources sources={data.trafficSources} />
             </section>
-            <section className="dashboard-panel site-overview-funnel-panel">
+            <section className="site-overview-section site-overview-funnel-panel">
               <PanelHeading
-                eyebrow="ADIM ADIM"
+                number="02"
                 title="Dönüşüm hunisi"
-                description="Tekil session bazında, bir önceki aşamaya göre dönüşüm."
+                description="Ziyaretten iletişime uzanan adımlar; oranlar bir önceki aşamaya göredir."
               />
               <Funnel funnel={data.funnel} />
             </section>
           </div>
+          <ContentPerformance content={data.content} />
 
-          <div className="site-overview-main-grid">
-            <ContentPerformance content={data.content} />
+          <div className="site-overview-editorial-grid">
             <Attention items={data.attention} />
-          </div>
-
-          <div className="site-overview-bottom-grid">
-            <TrafficSources sources={data.trafficSources} />
             <RecentContent items={data.recentContent} />
           </div>
         </>
