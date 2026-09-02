@@ -38,18 +38,14 @@ describe('default registration messages', () => {
     expect(meetingReminder?.content).not.toMatch(/\b(?:bugün|yarın)\b/iu);
   });
 
-  it('includes weekly and lifetime practice totals in the one-hour meeting reminder', () => {
+  it('uses the approved meeting link message for the one-hour reminder', () => {
     const meetingReminder = defaultRegistrationMessages.find(
       (message) => message.eventKey === 'MEETING_REMINDER_1H',
     );
 
-    expect(meetingReminder?.content).toContain(
-      '{{weeklyCompletedPracticeCountText}} / {{weeklyPlannedPracticeCountText}}',
+    expect(meetingReminder?.content).toBe(
+      'Merhaba{{studentDisplayName}}, görüşmemize 1 saat kaldı. Görüşme saati: {{startsAtText}}\n\nHazır olduğunda şu Google Meet bağlantısından katılabilirsin:\n{{meetUrl}}\n\nGörüşmede buluşmak üzere.',
     );
-    expect(meetingReminder?.content).toContain('{{weeklyCompletedMinutesText}} dakika');
-    expect(meetingReminder?.content).toContain('{{weeklyReflectionCountText}}');
-    expect(meetingReminder?.content).toContain('{{totalCompletedPracticeCountText}}');
-    expect(meetingReminder?.content).toContain('{{totalCompletedMinutesText}} dakika');
   });
 
   it('combines practice completion acknowledgement and reflection request', () => {

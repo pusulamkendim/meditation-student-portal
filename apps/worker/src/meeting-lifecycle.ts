@@ -16,8 +16,6 @@ import {
   type Prisma,
 } from '@meditation/database';
 
-import { calculatePracticeStats, practiceStatsVariables } from './practice-stats.js';
-
 type ReminderEvent = 'MEETING_REMINDER_24H' | 'MEETING_REMINDER_1H';
 type MeetingLifecycleConfig = Pick<
   ApplicationConfig,
@@ -102,12 +100,6 @@ export async function createMeetingIntent(
       },
     );
     if (!variant) return false;
-    const practiceVariables =
-      eventKey === 'MEETING_REMINDER_1H'
-        ? practiceStatsVariables(
-            await calculatePracticeStats(tx, meeting.meetingSeries.studentId, now),
-          )
-        : {};
     const variables: Record<string, string> = {
       startsAtText: new Intl.DateTimeFormat('tr-TR', {
         timeZone: meeting.meetingSeries.timezone,
@@ -118,7 +110,6 @@ export async function createMeetingIntent(
       ...(studentDisplayName
         ? { studentDisplayName: ` ${studentDisplayName.trim().split(/\s+/)[0]}` }
         : {}),
-      ...practiceVariables,
     };
     const rendered = renderMessageTemplate(eventKey as SystemEventKey, variant.content, variables);
     const binding = variant.variant.providerBinding;

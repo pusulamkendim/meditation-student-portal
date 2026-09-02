@@ -88,6 +88,41 @@ export async function syncDefaultRegistrationMessages(database: DatabaseClient):
         const existing = await transaction.standardMessageVersion.findFirst({
           where: { variantId: variant.id, content: definition.content },
         });
+        const canRestoreApprovedWhatsAppVersion =
+          existing &&
+          channel === 'WHATSAPP' &&
+          requiresZeroDowntimeWhatsAppTemplate(definition.eventKey) &&
+          bindingMatchesWhatsAppTemplate(
+            variant.providerBinding,
+            definition.eventKey,
+            existing.content,
+            variant.locale,
+          );
+        if (canRestoreApprovedWhatsAppVersion) {
+          if (existing.status !== 'PUBLISHED') {
+            await transaction.standardMessageVersion.updateMany({
+              where: { variantId: variant.id, status: 'PUBLISHED' },
+              data: { status: 'ARCHIVED', archivedAt: now },
+            });
+            await transaction.standardMessageVersion.update({
+              where: { id: existing.id },
+              data: {
+                status: 'PUBLISHED',
+                effectiveAt: now,
+                publishedAt: now,
+                archivedAt: null,
+              },
+            });
+          }
+          await transaction.standardMessageVersion.updateMany({
+            where: {
+              variantId: variant.id,
+              status: 'DRAFT',
+              id: { not: existing.id },
+            },
+            data: { status: 'ARCHIVED', archivedAt: now },
+          });
+        }
         if (!existing) {
           const latest = await transaction.standardMessageVersion.aggregate({
             where: { variantId: variant.id },
