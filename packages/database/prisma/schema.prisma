@@ -1594,6 +1594,24 @@ model MeditationPublicVisit {
   @@map("meditation_public_visits")
 }
 
+model PublicAnalyticsEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  eventName  String   @map("event_name")
+  sessionId  String   @map("session_id")
+  pathname   String
+  slug       String?
+  location   String?
+  source     String?
+  medium     String?
+  campaign   String?
+  referrer   String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([eventName, createdAt])
+  @@index([sessionId, createdAt])
+  @@map("public_analytics_events")
+}
+
 model MeditationAudioAsset {
   id               String              @id @default(uuid()) @db.Uuid
   meditationTypeId String              @map("meditation_type_id") @db.Uuid

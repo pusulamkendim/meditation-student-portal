@@ -1,3 +1,5 @@
+import { apiUrl } from '../api/client';
+
 export type AnalyticsEventName =
   | 'landing_view'
   | 'reading_view'
@@ -17,6 +19,25 @@ export interface AnalyticsProperties {
   [key: string]: string | number | boolean | undefined;
 }
 
+type QueuedAnalyticsEvent = {
+  event: AnalyticsEventName;
+  properties: AnalyticsProperties;
+};
+
+type AnalyticsAttribution = {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  referrer?: string;
+};
+
+const analyticsEndpoint = apiUrl('/v1/public/analytics/events');
+const attributionStorageKey = 'sakinzihin-analytics-attribution';
+const sessionStorageKey = 'sakinzihin-analytics-session';
+const maxQueuedEvents = 50;
+let queuedEvents: QueuedAnalyticsEvent[] = [];
+let sessionId: string | undefined;
+
 declare global {
   interface Window {
     SakinZihinAnalytics?: {
@@ -27,5 +48,155 @@ declare global {
 
 export function track(event: AnalyticsEventName, properties: AnalyticsProperties = {}): void {
   if (typeof window === 'undefined') return;
-  window.SakinZihinAnalytics?.track(event, properties);
+  const provider = window.SakinZihinAnalytics;
+  if (!provider) {
+    if (queuedEvents.length < maxQueuedEvents) queuedEvents.push({ event, properties });
+    return;
+  }
+  try {
+    provider.track(event, properties);
+  } catch {
+    // Analytics must never affect the public-site experience.
+  }
+}
+
+function safeSessionStorage(): Storage | undefined {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function textValue(value: unknown, maxLength: number): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : undefined;
+}
+
+function createSessionId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID().replaceAll('-', '');
+  }
+  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`.slice(0, 64);
+}
+
+function getSessionId(): string {
+  if (sessionId) return sessionId;
+  const storage = safeSessionStorage();
+  let stored: string | null = null;
+  try {
+    stored = storage?.getItem(sessionStorageKey) ?? null;
+  } catch {
+    stored = null;
+  }
+  if (stored && /^[A-Za-z0-9_-]{16,100}$/u.test(stored)) {
+    sessionId = stored;
+    return stored;
+  }
+  sessionId = createSessionId();
+  try {
+    storage?.setItem(sessionStorageKey, sessionId);
+  } catch {
+    // Private browsing and blocked storage are valid browser configurations.
+  }
+  return sessionId;
+}
+
+function safeReferrer(value: string): string | undefined {
+  if (!value) return undefined;
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+    return `${url.origin}${url.pathname}`.slice(0, 2_048);
+  } catch {
+    return undefined;
+  }
+}
+
+function readAttribution(): AnalyticsAttribution {
+  const storage = safeSessionStorage();
+  let attribution: AnalyticsAttribution = {};
+  try {
+    const stored = storage?.getItem(attributionStorageKey);
+    if (stored) {
+      const parsed = JSON.parse(stored) as Record<string, unknown>;
+      attribution = {
+        utm_source: textValue(parsed.utm_source, 100),
+        utm_medium: textValue(parsed.utm_medium, 100),
+        utm_campaign: textValue(parsed.utm_campaign, 160),
+        referrer: safeReferrer(textValue(parsed.referrer, 2_048) ?? ''),
+      };
+    }
+  } catch {
+    attribution = {};
+  }
+
+  const query = new URLSearchParams(window.location.search);
+  const current: AnalyticsAttribution = {
+    utm_source: textValue(query.get('utm_source'), 100),
+    utm_medium: textValue(query.get('utm_medium'), 100),
+    utm_campaign: textValue(query.get('utm_campaign'), 160),
+    referrer: safeReferrer(document.referrer),
+  };
+  const next = {
+    ...attribution,
+    ...(current.utm_source ? { utm_source: current.utm_source } : {}),
+    ...(current.utm_medium ? { utm_medium: current.utm_medium } : {}),
+    ...(current.utm_campaign ? { utm_campaign: current.utm_campaign } : {}),
+    ...(!attribution.referrer && current.referrer ? { referrer: current.referrer } : {}),
+  } satisfies AnalyticsAttribution;
+
+  try {
+    storage?.setItem(attributionStorageKey, JSON.stringify(next));
+  } catch {
+    // Attribution is best effort and never blocks tracking.
+  }
+  return next;
+}
+
+function buildPayload(event: AnalyticsEventName, properties: AnalyticsProperties) {
+  const attribution = readAttribution();
+  const slug = textValue(properties.slug, 200);
+  const location = textValue(properties.location, 120);
+  return {
+    event,
+    sessionId: getSessionId(),
+    pathname: window.location.pathname.slice(0, 2_048) || '/',
+    ...(slug ? { slug } : {}),
+    ...(location ? { location } : {}),
+    ...(attribution.utm_source ? { utm_source: attribution.utm_source } : {}),
+    ...(attribution.utm_medium ? { utm_medium: attribution.utm_medium } : {}),
+    ...(attribution.utm_campaign ? { utm_campaign: attribution.utm_campaign } : {}),
+    ...(attribution.referrer ? { referrer: attribution.referrer } : {}),
+  };
+}
+
+function send(event: AnalyticsEventName, properties: AnalyticsProperties = {}): void {
+  const body = JSON.stringify(buildPayload(event, properties));
+  try {
+    if (
+      typeof navigator.sendBeacon === 'function' &&
+      navigator.sendBeacon(analyticsEndpoint, new Blob([body], { type: 'application/json' }))
+    ) {
+      return;
+    }
+  } catch {
+    // Fall back to fetch when Beacon is unavailable or rejected.
+  }
+  void fetch(analyticsEndpoint, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body,
+    keepalive: true,
+    credentials: 'omit',
+  }).catch(() => undefined);
+}
+
+export function initializeAnalytics(): void {
+  if (typeof window === 'undefined' || window.SakinZihinAnalytics) return;
+  window.SakinZihinAnalytics = { track: send };
+  const pending = queuedEvents;
+  queuedEvents = [];
+  pending.forEach(({ event, properties }) => send(event, properties));
 }

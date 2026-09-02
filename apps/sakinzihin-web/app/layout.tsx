@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 
+import { AnalyticsInitializer } from '../components/shared/analytics-initializer';
 import { SiteFooter } from '../components/shared/site-footer';
 import { SiteHeader } from '../components/shared/site-header';
 import { siteConfig } from '../lib/config/site';
@@ -65,6 +66,7 @@ export default function PublicLayout({ children }: Readonly<{ children: React.Re
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
+        <AnalyticsInitializer />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteStructuredData) }}

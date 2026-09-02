@@ -235,6 +235,17 @@ proxy katmanında otomatik olarak enjekte edilir; uygulamada manuel token,
 environment variable veya JavaScript snippet'i tutulmaz. Okuma ve meditasyon
 başlangıç/tamamlama gibi ürün olayları mevcut public API analytics akışında kalır.
 
+Public site'daki `landing_view`, okuma/meditasyon, birebir çalışma ve CTA
+event'leri de `window.SakinZihinAnalytics.track(...)` API'sini değiştirmeden
+layout açılışında başlatılan küçük bir provider ile
+`POST /v1/public/analytics/events` endpoint'ine gönderilir. Gönderim için
+`navigator.sendBeacon`, yedek olarak `fetch(..., { keepalive: true })` kullanılır;
+analytics hatası sayfa veya CTA davranışını engellemez. API yalnızca anonim bir
+session anahtarı, event, pathname/slug, CTA konumu, UTM alanları ve query/hash'i
+kırpılmış referrer saklar; öğrenci verisi, iletişim bilgisi veya mesaj içeriği
+toplanmaz. Bunun için `NEXT_PUBLIC_API_URL` dışında yeni bir environment variable
+gerekmez.
+
 `staging` ve `production` ortamlarında eksik zorunlu secret'lar uygulamanın
 başlamasını engeller. Güncel sözleşmenin kaynakları [`.env.example`](.env.example)
 ve [`packages/core/src/config.ts`](packages/core/src/config.ts) dosyalarıdır;
