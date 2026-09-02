@@ -102,6 +102,13 @@ type PublicShare = {
     ctaClicks: number;
     ctaClickRate: number;
     completedMinutes: number;
+    sources: Array<{
+      source: string;
+      medium?: string | null;
+      campaign?: string | null;
+      uniqueVisitors: number;
+      totalViews: number;
+    }>;
     durations: Array<{
       durationMinutes: number;
       uniqueVisitors: number;
@@ -1219,6 +1226,30 @@ export default function MeditationsPage() {
                                   <strong>%{publicShare.metrics.ctaClickRate}</strong>
                                 </article>
                               </div>
+                              {publicShare.metrics.sources?.length ? (
+                                <div className="reading-public-sources">
+                                  <span className="eyebrow">Kaynaklar</span>
+                                  {publicShare.metrics.sources.map((source) => (
+                                    <div
+                                      key={JSON.stringify([
+                                        source.source,
+                                        source.medium,
+                                        source.campaign,
+                                      ])}
+                                    >
+                                      <strong>
+                                        {source.source}
+                                        {source.medium ? ` · ${source.medium}` : ''}
+                                        {source.campaign ? ` · ${source.campaign}` : ''}
+                                      </strong>
+                                      <span>
+                                        {source.uniqueVisitors} ziyaretçi · {source.totalViews}{' '}
+                                        açılış
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : null}
                             </section>
                           ) : (
                             <Alert tone="info">

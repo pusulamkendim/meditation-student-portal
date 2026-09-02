@@ -246,6 +246,24 @@ kırpılmış referrer saklar; öğrenci verisi, iletişim bilgisi veya mesaj i�
 toplanmaz. Bunun için `NEXT_PUBLIC_API_URL` dışında yeni bir environment variable
 gerekmez.
 
+Global `page_view`, public layout üzerinden ilk sayfa açılışında ve her pathname
+değişiminde mevcut `track('page_view')` akışıyla bir kez gönderilir. Doğrudan okuma,
+meditasyon veya diğer public sayfalara gelen ziyaretler de kapsanır; aynı pathname
+içindeki query/hash değişimleri ve React Strict Mode efekt tekrarı ek olay üretmez.
+Başka bir sayfadan geri dönmek veya sayfayı yenilemek yeni bir görüntülemedir.
+Mevcut `landing_view` ve içerik/CTA olayları korunur; yeni DB alanı veya provider
+eklenmez.
+
+Site & İçerik özetindeki “Sayfa görüntüleme” (`summary.pageViews`), seçili dönemin
+`page_view` olaylarının toplamıdır; aynı oturumdaki farklı sayfa görüntülemeleri
+ayrı sayılır. Önceki dönem karşılaştırması da aynı olaydan hesaplanır. “Tekil
+oturum” (`summary.sessions`) ve dönüşüm hunisinin ilk adımı (`funnel.sessions`)
+tekil `session_id` sayısını kullanır; huni oranları toplam sayfa görüntülemesine
+bölünmez. Huninin ilk adımı, seçili dönemde herhangi bir analytics olayı bulunan
+tüm oturumları kapsar; `landing_view` veya ana sayfaya giriş şartı aranmaz. Diğer
+adımlardaki `contentViews`, `oneToOneViews` ve `conversionClicks` alanları ilgili
+olayı üreten tekil oturumları, `conversionEvents` ise ham aksiyon sayısını gösterir.
+
 `staging` ve `production` ortamlarında eksik zorunlu secret'lar uygulamanın
 başlamasını engeller. Güncel sözleşmenin kaynakları [`.env.example`](.env.example)
 ve [`packages/core/src/config.ts`](packages/core/src/config.ts) dosyalarıdır;

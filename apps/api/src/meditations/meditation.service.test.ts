@@ -244,6 +244,9 @@ describe('MeditationService public access', () => {
       service.publicMeditationAccess('anapanasati', {
         visitorId: 'visitor_1234567890',
         durationMinutes: 20,
+        source: 'instagram',
+        medium: 'story',
+        campaign: 'nefese-donus',
       }),
     ).resolves.toEqual(
       expect.objectContaining({
@@ -253,6 +256,15 @@ describe('MeditationService public access', () => {
         guided: false,
         audioUrl: undefined,
         visitToken: expect.any(String),
+      }),
+    );
+    expect(prisma.meditationPublicVisit.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          source: 'instagram',
+          medium: 'story',
+          campaign: 'nefese-donus',
+        }),
       }),
     );
   });
@@ -319,10 +331,26 @@ describe('MeditationService public access', () => {
     );
   });
 
-  it('reports CTA impressions, clicks and their conversion rate in public share metrics', async () => {
+  it('reports CTA and source metrics in public share details', async () => {
     const secret = randomBytes(32);
     const clock = new FakeClock('2026-08-01T10:00:00.000Z');
     const prisma = {
+      $queryRaw: vi.fn().mockResolvedValue([
+        {
+          source: 'instagram',
+          medium: 'story',
+          campaign: 'nefese-donus',
+          unique_visitors: 2n,
+          total_views: 9n,
+        },
+        {
+          source: 'direct',
+          medium: null,
+          campaign: null,
+          unique_visitors: 1n,
+          total_views: 3n,
+        },
+      ]),
       meditationPublicShare: {
         findUnique: vi.fn(async () => ({
           id: '20000000-0000-4000-8000-000000000001',
@@ -375,8 +403,27 @@ describe('MeditationService public access', () => {
           ctaViews: 5,
           ctaClicks: 2,
           ctaClickRate: 40,
+          sources: [
+            {
+              source: 'instagram',
+              medium: 'story',
+              campaign: 'nefese-donus',
+              uniqueVisitors: 2,
+              totalViews: 9,
+            },
+            {
+              source: 'direct',
+              medium: null,
+              campaign: null,
+              uniqueVisitors: 1,
+              totalViews: 3,
+            },
+          ],
         }),
       }),
     );
+    prisma.$queryRaw.mockResolvedValueOnce([]);
+    const withoutSources = await service.publicShareDetail('30000000-0000-4000-8000-000000000001');
+    expect(withoutSources.metrics.sources).toEqual([]);
   });
 });

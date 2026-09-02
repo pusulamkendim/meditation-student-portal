@@ -16,6 +16,7 @@ import {
 } from './public-analytics.service.js';
 
 const eventNames = [
+  'page_view',
   'landing_view',
   'reading_view',
   'reading_cta_click',

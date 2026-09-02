@@ -49,6 +49,13 @@ type PublicMeditationClaims = {
   renderId?: string;
   expiresAtEpochMs: number;
 };
+type PublicMeditationSourceRow = {
+  source: string;
+  medium: string | null;
+  campaign: string | null;
+  unique_visitors: bigint;
+  total_views: bigint;
+};
 
 export type MeditationUpload = {
   filename: string;
@@ -614,7 +621,7 @@ export class MeditationService {
       include: { meditationType: { select: { title: true, status: true } } },
     });
     if (!share) throw new NotFoundException('Herkese açık paylaşım bulunamadı.');
-    const [aggregate, visitors, durationRows] = await Promise.all([
+    const [aggregate, visitors, durationRows, sourceRows] = await Promise.all([
       this.prisma.meditationPublicVisit.aggregate({
         where: { shareId: share.id },
         _sum: {
@@ -636,6 +643,19 @@ export class MeditationService {
         _sum: { viewCount: true, startCount: true, completionCount: true },
         _count: { _all: true },
       }),
+      // One visitor can have a visit row for each duration; count them once per source.
+      this.prisma.$queryRaw<PublicMeditationSourceRow[]>(Prisma.sql`
+        SELECT
+          COALESCE(source, 'direct') AS source,
+          medium,
+          campaign,
+          COUNT(DISTINCT visitor_hmac)::bigint AS unique_visitors,
+          COALESCE(SUM(view_count), 0)::bigint AS total_views
+        FROM meditation_public_visits
+        WHERE share_id = ${share.id}::uuid
+        GROUP BY COALESCE(source, 'direct'), medium, campaign
+        ORDER BY unique_visitors DESC, total_views DESC, source, medium, campaign
+      `),
     ]);
     const starts = aggregate._sum.startCount ?? 0;
     const completions = aggregate._sum.completionCount ?? 0;
@@ -670,6 +690,13 @@ export class MeditationService {
         ctaViews,
         ctaClicks,
         ctaClickRate: ctaViews ? Math.round((ctaClicks / ctaViews) * 100) : 0,
+        sources: sourceRows.map((row) => ({
+          source: row.source,
+          medium: row.medium,
+          campaign: row.campaign,
+          uniqueVisitors: Number(row.unique_visitors),
+          totalViews: Number(row.total_views),
+        })),
         completedMinutes: durationRows.reduce(
           (total, row) => total + row.durationMinutes * (row._sum.completionCount ?? 0),
           0,

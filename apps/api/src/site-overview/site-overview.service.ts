@@ -15,7 +15,7 @@ type Numeric = bigint | number;
 
 type EventSummaryRow = {
   sessions: Numeric;
-  site_entries: Numeric;
+  page_views: Numeric;
   content_views: Numeric;
   content_sessions: Numeric;
   one_to_one_views: Numeric;
@@ -51,7 +51,8 @@ type ReadingPerformanceRow = {
   published_at: Date;
   cover_image_storage_key: string | null;
   cover_image_hash: string | null;
-  average_progress: number | null;
+  readers: Numeric;
+  completions: Numeric;
   cta_clicks: Numeric;
 };
 
@@ -86,7 +87,7 @@ export type SiteContentPerformanceItem = {
   sessions: number;
   engagement: {
     value: number | null;
-    kind: 'AVERAGE_PROGRESS' | 'COMPLETION_RATE';
+    kind: 'COMPLETION_RATE';
   };
   ctaClicks: number;
   conversionRate: number | null;
@@ -112,7 +113,7 @@ export type SiteOverviewResponse = {
   range: SiteOverviewRange;
   summary: {
     sessions: SiteMetric;
-    siteEntries: SiteMetric;
+    pageViews: SiteMetric;
     contentViews: SiteMetric;
     ctaClicks: SiteMetric;
   };
@@ -123,13 +124,13 @@ export type SiteOverviewResponse = {
     ctaClicks: number;
   }>;
   funnel: {
-    siteEntries: number;
+    sessions: number;
     contentViews: number;
     oneToOneViews: number;
     conversionClicks: number;
     conversionEvents: number;
     rates: {
-      siteEntries: number | null;
+      sessions: number | null;
       contentViews: number | null;
       oneToOneViews: number | null;
       conversionClicks: number | null;
@@ -144,10 +145,6 @@ export type SiteOverviewResponse = {
 
 function asNumber(value: Numeric | null | undefined) {
   return typeof value === 'bigint' ? Number(value) : (value ?? 0);
-}
-
-function asNullableNumber(value: number | null | undefined) {
-  return value === null || value === undefined ? null : Math.round(value * 10) / 10;
 }
 
 function percentage(value: number, denominator: number) {
@@ -210,20 +207,20 @@ export class SiteOverviewService {
       range,
       summary: {
         sessions: this.metric(current.sessions, previous.sessions),
-        siteEntries: this.metric(current.siteEntries, previous.siteEntries),
+        pageViews: this.metric(current.pageViews, previous.pageViews),
         contentViews: this.metric(contentViews, previous.contentViews),
         ctaClicks: this.metric(current.ctaClicks, previous.ctaClicks),
       },
       daily,
       funnel: {
-        siteEntries: current.siteEntries,
+        sessions: current.sessions,
         contentViews: contentSessions,
         oneToOneViews: current.oneToOneSessions,
         conversionClicks: current.conversionSessions,
         conversionEvents: current.conversionClicks,
         rates: {
-          siteEntries: current.siteEntries ? 100 : null,
-          contentViews: percentage(contentSessions, current.siteEntries),
+          sessions: current.sessions ? 100 : null,
+          contentViews: percentage(contentSessions, current.sessions),
           oneToOneViews: percentage(current.oneToOneSessions, contentSessions),
           conversionClicks: percentage(current.conversionSessions, current.oneToOneSessions),
         },
@@ -244,7 +241,7 @@ export class SiteOverviewService {
     const [row] = await this.prisma.$queryRaw<EventSummaryRow[]>(Prisma.sql`
       SELECT
         COUNT(DISTINCT session_id)::bigint AS sessions,
-        COUNT(DISTINCT session_id) FILTER (WHERE event_name = 'landing_view')::bigint AS site_entries,
+        COUNT(*) FILTER (WHERE event_name = 'page_view')::bigint AS page_views,
         COUNT(*) FILTER (WHERE event_name IN ('reading_view', 'meditation_view'))::bigint AS content_views,
         COUNT(DISTINCT session_id) FILTER (WHERE event_name IN ('reading_view', 'meditation_view'))::bigint AS content_sessions,
         COUNT(*) FILTER (WHERE event_name = 'one_to_one_page_view')::bigint AS one_to_one_views,
@@ -257,7 +254,7 @@ export class SiteOverviewService {
     `);
     return {
       sessions: asNumber(row?.sessions),
-      siteEntries: asNumber(row?.site_entries),
+      pageViews: asNumber(row?.page_views),
       contentViews: asNumber(row?.content_views),
       contentSessions: asNumber(row?.content_sessions),
       oneToOneViews: asNumber(row?.one_to_one_views),
@@ -338,7 +335,8 @@ export class SiteOverviewService {
           r.updated_at AS published_at,
           r.cover_image_storage_key,
           r.cover_image_hash,
-          AVG(rpv.progress_percent)::float AS average_progress,
+          COUNT(rpv.id)::bigint AS readers,
+          COUNT(rpv.completed_at)::bigint AS completions,
           COALESCE(SUM(rpv.whatsapp_click_count), 0)::bigint AS cta_clicks
         FROM reading_public_shares rps
         INNER JOIN readings r ON r.id = rps.reading_id
@@ -385,16 +383,13 @@ export class SiteOverviewService {
     const eventName = item.type === 'READING' ? 'reading_view' : 'meditation_view';
     const sessions = eventMetrics.get(eventMetricKey(eventName, item.slug)) ?? 0;
     const ctaClicks = asNumber(item.cta_clicks);
-    const engagement =
-      item.type === 'READING'
-        ? {
-            value: asNullableNumber(item.average_progress),
-            kind: 'AVERAGE_PROGRESS' as const,
-          }
-        : {
-            value: percentage(asNumber(item.completions), asNumber(item.starts)),
-            kind: 'COMPLETION_RATE' as const,
-          };
+    const engagement = {
+      value: percentage(
+        asNumber(item.completions),
+        asNumber(item.type === 'READING' ? item.readers : item.starts),
+      ),
+      kind: 'COMPLETION_RATE' as const,
+    };
     return {
       type: item.type,
       id: item.id,

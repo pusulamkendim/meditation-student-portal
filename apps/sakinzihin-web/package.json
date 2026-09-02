@@ -6,6 +6,7 @@
     "build": "next build",
     "dev": "next dev -p 3002",
     "start": "next start -p 3002",
+    "test": "vitest run --config ../../vitest.config.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

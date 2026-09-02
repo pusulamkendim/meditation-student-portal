@@ -1,6 +1,7 @@
 import { apiUrl } from '../api/client';
 
 export type AnalyticsEventName =
+  | 'page_view'
   | 'landing_view'
   | 'reading_view'
   | 'reading_cta_click'

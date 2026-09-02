@@ -40,7 +40,7 @@ type SiteContent = {
   sessions: number;
   engagement: {
     value: number | null;
-    kind: 'AVERAGE_PROGRESS' | 'COMPLETION_RATE';
+    kind: 'COMPLETION_RATE';
   };
   ctaClicks: number;
   conversionRate: number | null;
@@ -51,7 +51,7 @@ type SiteOverview = {
   range: SiteRange;
   summary: {
     sessions: SiteMetric;
-    siteEntries: SiteMetric;
+    pageViews: SiteMetric;
     contentViews: SiteMetric;
     ctaClicks: SiteMetric;
   };
@@ -62,13 +62,13 @@ type SiteOverview = {
     ctaClicks: number;
   }>;
   funnel: {
-    siteEntries: number;
+    sessions: number;
     contentViews: number;
     oneToOneViews: number;
     conversionClicks: number;
     conversionEvents: number;
     rates: {
-      siteEntries: number | null;
+      sessions: number | null;
       contentViews: number | null;
       oneToOneViews: number | null;
       conversionClicks: number | null;
@@ -286,15 +286,19 @@ function InteractionChart({ daily }: { daily: SiteOverview['daily'] }) {
 
 function Funnel({ funnel }: { funnel: SiteOverview['funnel'] }) {
   const stages = [
-    { label: 'Site girişleri', value: funnel.siteEntries, rate: funnel.rates.siteEntries },
-    { label: 'İçerik görüntüleme', value: funnel.contentViews, rate: funnel.rates.contentViews },
+    { label: 'Site oturumu', value: funnel.sessions, rate: funnel.rates.sessions },
     {
-      label: 'Birebir çalışma sayfası',
+      label: 'İçerik görüntüleyen oturum',
+      value: funnel.contentViews,
+      rate: funnel.rates.contentViews,
+    },
+    {
+      label: 'Birebir çalışma sayfasını görüntüleyen oturum',
       value: funnel.oneToOneViews,
       rate: funnel.rates.oneToOneViews,
     },
     {
-      label: 'WhatsApp / Tanışma',
+      label: 'WhatsApp / Tanışma aksiyonu alan oturum',
       value: funnel.conversionClicks,
       rate: funnel.rates.conversionClicks,
     },
@@ -428,11 +432,7 @@ function ContentPerformance({ content }: { content: SiteContent[] }) {
                         ? '—'
                         : `%${item.engagement.value.toLocaleString('tr-TR')}`}
                     </strong>
-                    <small>
-                      {item.engagement.kind === 'AVERAGE_PROGRESS'
-                        ? 'Ort. ilerleme'
-                        : 'Tamamlama oranı'}
-                    </small>
+                    <small>Tamamlama oranı</small>
                   </td>
                   <td className="site-overview-number-cell">{formatNumber(item.ctaClicks)}</td>
                   <td className="site-overview-conversion-cell">
@@ -644,7 +644,7 @@ export default function SiteOverviewPage() {
         <>
           <section className="studio-pulse site-overview-kpi-grid" aria-label="Site özeti">
             <SiteMetricCard label="Tekil oturum" metric={data.summary.sessions} icon={Users} />
-            <SiteMetricCard label="Site girişleri" metric={data.summary.siteEntries} icon={Eye} />
+            <SiteMetricCard label="Sayfa görüntüleme" metric={data.summary.pageViews} icon={Eye} />
             <SiteMetricCard
               label="İçerik açılışı"
               metric={data.summary.contentViews}
