@@ -37,13 +37,9 @@ type SiteContent = {
   title: string;
   publishedAt: string | null;
   coverImageUrl: string | null;
-  sessions: number;
-  engagement: {
-    value: number | null;
-    kind: 'COMPLETION_RATE';
-  };
-  ctaClicks: number;
-  conversionRate: number | null;
+  totalViews: number;
+  uniqueVisitors: number;
+  completionRate: number;
   adminHref: string;
 };
 
@@ -358,7 +354,7 @@ function ContentPerformance({ content }: { content: SiteContent[] }) {
       <PanelHeading
         number="03"
         title="İçerik performansı"
-        description="Ziyaretçiyi bir sonraki adıma taşıyan içerikleri karşılaştırın."
+        description="İçeriklerin paylaşım istatistikleri · Tüm zamanlar"
         action={
           <SegmentedControl
             label="İçerik türü filtresi"
@@ -376,10 +372,15 @@ function ContentPerformance({ content }: { content: SiteContent[] }) {
                 <th>İçerik</th>
                 <th>Tür</th>
                 <th>Yayın tarihi*</th>
-                <th>Tekil oturum</th>
-                <th>Etkileşim</th>
-                <th>CTA</th>
-                <th>Dönüşüm</th>
+                <th>Toplam açılış</th>
+                <th>
+                  {filter === 'READING'
+                    ? 'Tekil okuyucu'
+                    : filter === 'MEDITATION'
+                      ? 'Tekil ziyaretçi'
+                      : 'Tekil okuyucu / ziyaretçi'}
+                </th>
+                <th>Tamamlama oranı</th>
               </tr>
             </thead>
             <tbody>
@@ -425,18 +426,10 @@ function ContentPerformance({ content }: { content: SiteContent[] }) {
                     </Badge>
                   </td>
                   <td>{formatDate(item.publishedAt)}</td>
-                  <td className="site-overview-number-cell">{formatNumber(item.sessions)}</td>
-                  <td>
-                    <strong>
-                      {item.engagement.value === null
-                        ? '—'
-                        : `%${item.engagement.value.toLocaleString('tr-TR')}`}
-                    </strong>
-                    <small>Tamamlama oranı</small>
-                  </td>
-                  <td className="site-overview-number-cell">{formatNumber(item.ctaClicks)}</td>
-                  <td className="site-overview-conversion-cell">
-                    <strong>{formatPercent(item.conversionRate)}</strong>
+                  <td className="site-overview-number-cell">{formatNumber(item.totalViews)}</td>
+                  <td className="site-overview-number-cell">{formatNumber(item.uniqueVisitors)}</td>
+                  <td className="site-overview-completion-cell">
+                    <strong>{formatPercent(item.completionRate)}</strong>
                     <ExternalLink aria-hidden="true" />
                   </td>
                 </tr>
@@ -452,7 +445,8 @@ function ContentPerformance({ content }: { content: SiteContent[] }) {
         />
       )}
       <p className="site-overview-footnote">
-        * Yayın tarihi, içeriğin son güncelleme tarihini gösterir.
+        Veriler tüm zamanların toplamıdır; üstteki tarih filtresinden bağımsızdır. * Yayın tarihi,
+        içeriğin son güncelleme tarihini gösterir.
       </p>
     </section>
   );

@@ -86,9 +86,9 @@ describe('SiteOverviewService', () => {
           published_at: new Date('2026-08-20T10:00:00.000Z'),
           cover_image_storage_key: 'reading-cover',
           cover_image_hash: 'reading-hash',
-          readers: 4n,
-          completions: 1n,
-          cta_clicks: 2n,
+          total_views: 90n,
+          unique_visitors: 64n,
+          completions: 25n,
         },
       ])
       .mockResolvedValueOnce([
@@ -99,14 +99,11 @@ describe('SiteOverviewService', () => {
           published_at: new Date('2026-08-21T10:00:00.000Z'),
           cover_image_storage_key: null,
           cover_image_hash: null,
+          total_views: 12n,
+          unique_visitors: 2n,
           starts: 4n,
           completions: 3n,
-          cta_clicks: 1n,
         },
-      ])
-      .mockResolvedValueOnce([
-        { event_name: 'reading_view', slug: 'fark-etmek', sessions: 3n },
-        { event_name: 'meditation_view', slug: 'nefes', sessions: 2n },
       ]);
 
     const service = new SiteOverviewService(
@@ -118,17 +115,15 @@ describe('SiteOverviewService', () => {
     expect(result.content).toEqual([
       expect.objectContaining({
         type: 'READING',
-        sessions: 3,
-        engagement: { value: 25, kind: 'COMPLETION_RATE' },
-        ctaClicks: 2,
-        conversionRate: 66.7,
+        totalViews: 90,
+        uniqueVisitors: 64,
+        completionRate: 39,
       }),
       expect.objectContaining({
         type: 'MEDITATION',
-        sessions: 2,
-        engagement: { value: 75, kind: 'COMPLETION_RATE' },
-        ctaClicks: 1,
-        conversionRate: 50,
+        totalViews: 12,
+        uniqueVisitors: 2,
+        completionRate: 75,
       }),
     ]);
     expect(result.summary.ctaClicks.value).toBe(7);
@@ -221,9 +216,9 @@ describe('SiteOverviewService', () => {
   );
 
   it.each([
-    { readers: 0n, completions: 0n, expected: null },
+    { readers: 0n, completions: 0n, expected: 0 },
     { readers: 4n, completions: 0n, expected: 0 },
-    { readers: 3n, completions: 1n, expected: 33.3 },
+    { readers: 3n, completions: 1n, expected: 33 },
     { readers: 3n, completions: 3n, expected: 100 },
   ])(
     'reports reading completion rate $expected for $completions of $readers readers',
@@ -239,9 +234,9 @@ describe('SiteOverviewService', () => {
             published_at: new Date('2026-08-20T10:00:00.000Z'),
             cover_image_storage_key: null,
             cover_image_hash: null,
-            readers,
+            total_views: readers,
+            unique_visitors: readers,
             completions,
-            cta_clicks: 0n,
           },
         ];
       });
@@ -252,9 +247,91 @@ describe('SiteOverviewService', () => {
 
       const result = await service.overview('30d');
 
-      expect(result.content[0]?.engagement).toEqual({
-        value: expected,
-        kind: 'COMPLETION_RATE',
+      expect(result.content[0]?.completionRate).toBe(expected);
+    },
+  );
+
+  it.each(['7d', '30d', '90d'] as const)(
+    'uses lifetime content counters for %s even without analytics events',
+    async (range) => {
+      const prisma = emptyPrisma();
+      prisma.$queryRaw.mockImplementation(async (query: { text: string; values: unknown[] }) => {
+        if (!query.text.includes('FROM reading_public_shares')) return [];
+        expect(query.text).not.toContain('first_opened_at');
+        expect(query.values).toEqual([]);
+        return [
+          {
+            id: 'historical-reading',
+            slug: 'eski-okuma',
+            title: 'Eski Okuma',
+            published_at: new Date('2026-01-01T00:00:00.000Z'),
+            cover_image_storage_key: null,
+            cover_image_hash: null,
+            total_views: 90n,
+            unique_visitors: 64n,
+            completions: 25n,
+          },
+        ];
+      });
+      const result = await new SiteOverviewService(
+        prisma as never,
+        new FakeClock('2026-09-02T12:00:00.000Z'),
+      ).overview(range);
+
+      expect(result.summary.sessions.value).toBe(0);
+      expect(result.funnel.sessions).toBe(0);
+      expect(result.content[0]).toEqual({
+        type: 'READING',
+        id: 'historical-reading',
+        slug: 'eski-okuma',
+        title: 'Eski Okuma',
+        publishedAt: '2026-01-01T00:00:00.000Z',
+        coverImageUrl: null,
+        totalViews: 90,
+        uniqueVisitors: 64,
+        completionRate: 39,
+        adminHref: '/readings?readingId=historical-reading',
+      });
+    },
+  );
+
+  it.each([
+    { starts: 0n, completions: 0n, expected: 0 },
+    { starts: 4n, completions: 3n, expected: 75 },
+    { starts: 13n, completions: 2n, expected: 15 },
+  ])(
+    'matches meditation share completion rate $expected without counting duration rows as visitors',
+    async ({ starts, completions, expected }) => {
+      const prisma = emptyPrisma();
+      prisma.$queryRaw.mockImplementation(async (query: { text: string; values: unknown[] }) => {
+        if (!query.text.includes('FROM meditation_public_shares')) return [];
+        expect(query.text).toContain('COUNT(DISTINCT mpv.visitor_hmac)::bigint AS unique_visitors');
+        expect(query.text).not.toContain('first_opened_at');
+        expect(query.values).toEqual([]);
+        return [
+          {
+            id: 'meditation-id',
+            slug: 'nefes',
+            title: 'Nefes',
+            published_at: new Date('2026-01-01T00:00:00.000Z'),
+            cover_image_storage_key: null,
+            cover_image_hash: null,
+            total_views: 20n,
+            unique_visitors: 2n,
+            starts,
+            completions,
+          },
+        ];
+      });
+      const result = await new SiteOverviewService(
+        prisma as never,
+        new FakeClock('2026-09-02T12:00:00.000Z'),
+      ).overview('30d');
+
+      expect(result.content[0]).toMatchObject({
+        totalViews: 20,
+        uniqueVisitors: 2,
+        completionRate: expected,
       });
     },
   );

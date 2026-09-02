@@ -12417,16 +12417,21 @@ body:has(.portal-theme) {
   font-weight: 700;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  white-space: nowrap;
+  white-space: normal;
 }
 .site-overview-table th:first-child {
-  width: 32%;
+  width: 30%;
+}
+.site-overview-table th:nth-child(2),
+.site-overview-table th:nth-child(5),
+.site-overview-table th:nth-child(6) {
+  width: 14%;
 }
 .site-overview-table th:nth-child(3) {
   width: 15%;
 }
-.site-overview-table th:nth-child(6) {
-  width: 7%;
+.site-overview-table th:nth-child(4) {
+  width: 13%;
 }
 .site-overview-table :is(th, td):first-child {
   padding-left: 0;
@@ -12513,13 +12518,11 @@ body:has(.portal-theme) {
   font-size: 0.75rem;
   font-variant-numeric: tabular-nums;
 }
-.site-overview-conversion-cell {
-  min-width: 84px;
-}
-.site-overview-conversion-cell {
+.site-overview-completion-cell {
+  min-width: 120px;
   position: relative;
 }
-.site-overview-conversion-cell svg {
+.site-overview-completion-cell svg {
   width: 14px;
   float: right;
   color: var(--color-brand);

@@ -38,12 +38,6 @@ type TrafficSourceRow = {
   sessions: Numeric;
 };
 
-type ContentEventRow = {
-  event_name: string;
-  slug: string | null;
-  sessions: Numeric;
-};
-
 type ReadingPerformanceRow = {
   id: string;
   slug: string;
@@ -51,9 +45,9 @@ type ReadingPerformanceRow = {
   published_at: Date;
   cover_image_storage_key: string | null;
   cover_image_hash: string | null;
-  readers: Numeric;
+  total_views: Numeric;
+  unique_visitors: Numeric;
   completions: Numeric;
-  cta_clicks: Numeric;
 };
 
 type MeditationPerformanceRow = {
@@ -63,9 +57,10 @@ type MeditationPerformanceRow = {
   published_at: Date;
   cover_image_storage_key: string | null;
   cover_image_hash: string | null;
+  total_views: Numeric;
+  unique_visitors: Numeric;
   starts: Numeric;
   completions: Numeric;
-  cta_clicks: Numeric;
 };
 
 type RecentReading = { id: string; title: string; updatedAt: Date };
@@ -84,13 +79,9 @@ export type SiteContentPerformanceItem = {
   title: string;
   publishedAt: string | null;
   coverImageUrl: string | null;
-  sessions: number;
-  engagement: {
-    value: number | null;
-    kind: 'COMPLETION_RATE';
-  };
-  ctaClicks: number;
-  conversionRate: number | null;
+  totalViews: number;
+  uniqueVisitors: number;
+  completionRate: number;
   adminHref: string;
 };
 
@@ -159,10 +150,6 @@ function imagePath(type: 'READING' | 'MEDITATION', slug: string, hash: string | 
   return hash ? `${path}?v=${encodeURIComponent(hash.slice(0, 16))}` : path;
 }
 
-function eventMetricKey(eventName: string, slug: string | null) {
-  return `${eventName}:${slug ?? ''}`;
-}
-
 @Injectable()
 export class SiteOverviewService {
   constructor(
@@ -173,33 +160,18 @@ export class SiteOverviewService {
   async overview(range: SiteOverviewRange): Promise<SiteOverviewResponse> {
     const now = this.clock.now();
     const period = siteOverviewPeriod(range, now);
-    const [
-      current,
-      previous,
-      daily,
-      trafficSources,
-      contentRows,
-      contentEvents,
-      attention,
-      recent,
-    ] = await Promise.all([
-      this.eventSummary(period.start, period.end),
-      this.eventSummary(period.previousStart, period.previousEnd),
-      this.dailyEvents(period.start, period.end),
-      this.trafficSources(period.start, period.end),
-      this.contentPerformance(period.start, period.end),
-      this.contentEventMetrics(period.start, period.end),
-      this.editorialAttention(now),
-      this.recentContent(),
-    ]);
+    const [current, previous, daily, trafficSources, contentRows, attention, recent] =
+      await Promise.all([
+        this.eventSummary(period.start, period.end),
+        this.eventSummary(period.previousStart, period.previousEnd),
+        this.dailyEvents(period.start, period.end),
+        this.trafficSources(period.start, period.end),
+        this.contentPerformance(),
+        this.editorialAttention(now),
+        this.recentContent(),
+      ]);
 
-    const contentEventsByKey = new Map(
-      contentEvents.map((item) => [
-        eventMetricKey(item.event_name, item.slug),
-        asNumber(item.sessions),
-      ]),
-    );
-    const content = contentRows.map((item) => this.mapContentItem(item, contentEventsByKey));
+    const content = contentRows.map((item) => this.mapContentItem(item));
     const contentViews = current.contentViews;
     const contentSessions = current.contentSessions;
 
@@ -310,22 +282,8 @@ export class SiteOverviewService {
       .sort((left, right) => right.sessions - left.sessions);
   }
 
-  private async contentEventMetrics(start: Date, end: Date) {
-    return this.prisma.$queryRaw<ContentEventRow[]>(Prisma.sql`
-      SELECT
-        event_name,
-        slug,
-        COUNT(DISTINCT session_id)::bigint AS sessions
-      FROM public_analytics_events
-      WHERE created_at >= ${start}
-        AND created_at < ${end}
-        AND slug IS NOT NULL
-        AND event_name IN ('reading_view', 'meditation_view')
-      GROUP BY event_name, slug
-    `);
-  }
-
-  private async contentPerformance(start: Date, end: Date) {
+  // Match the lifetime counters in the content's public-share details.
+  private async contentPerformance() {
     const [readings, meditations] = await Promise.all([
       this.prisma.$queryRaw<ReadingPerformanceRow[]>(Prisma.sql`
         SELECT
@@ -335,15 +293,13 @@ export class SiteOverviewService {
           r.updated_at AS published_at,
           r.cover_image_storage_key,
           r.cover_image_hash,
-          COUNT(rpv.id)::bigint AS readers,
-          COUNT(rpv.completed_at)::bigint AS completions,
-          COALESCE(SUM(rpv.whatsapp_click_count), 0)::bigint AS cta_clicks
+          COALESCE(SUM(rpv.view_count), 0)::bigint AS total_views,
+          COUNT(rpv.id)::bigint AS unique_visitors,
+          COUNT(rpv.completed_at)::bigint AS completions
         FROM reading_public_shares rps
         INNER JOIN readings r ON r.id = rps.reading_id
         LEFT JOIN reading_public_visits rpv
           ON rpv.share_id = rps.id
-         AND rpv.first_opened_at >= ${start}
-         AND rpv.first_opened_at < ${end}
         WHERE rps.status = 'ACTIVE' AND r.status = 'PUBLISHED'
         GROUP BY r.id, rps.slug, r.title, r.updated_at, r.cover_image_storage_key, r.cover_image_hash
       `),
@@ -355,15 +311,14 @@ export class SiteOverviewService {
           mt.updated_at AS published_at,
           mt.cover_image_storage_key,
           mt.cover_image_hash,
+          COALESCE(SUM(mpv.view_count), 0)::bigint AS total_views,
+          COUNT(DISTINCT mpv.visitor_hmac)::bigint AS unique_visitors,
           COALESCE(SUM(mpv.start_count), 0)::bigint AS starts,
-          COALESCE(SUM(mpv.completion_count), 0)::bigint AS completions,
-          COALESCE(SUM(mpv.cta_click_count), 0)::bigint AS cta_clicks
+          COALESCE(SUM(mpv.completion_count), 0)::bigint AS completions
         FROM meditation_public_shares mps
         INNER JOIN meditation_types mt ON mt.id = mps.meditation_type_id
         LEFT JOIN meditation_public_visits mpv
           ON mpv.share_id = mps.id
-         AND mpv.first_opened_at >= ${start}
-         AND mpv.first_opened_at < ${end}
         WHERE mps.status = 'ACTIVE' AND mt.status = 'PUBLISHED'
         GROUP BY mt.id, mps.slug, mt.title, mt.updated_at, mt.cover_image_storage_key, mt.cover_image_hash
       `),
@@ -378,18 +333,12 @@ export class SiteOverviewService {
     item:
       | (ReadingPerformanceRow & { type: 'READING' })
       | (MeditationPerformanceRow & { type: 'MEDITATION' }),
-    eventMetrics: Map<string, number>,
   ): SiteContentPerformanceItem {
-    const eventName = item.type === 'READING' ? 'reading_view' : 'meditation_view';
-    const sessions = eventMetrics.get(eventMetricKey(eventName, item.slug)) ?? 0;
-    const ctaClicks = asNumber(item.cta_clicks);
-    const engagement = {
-      value: percentage(
-        asNumber(item.completions),
-        asNumber(item.type === 'READING' ? item.readers : item.starts),
-      ),
-      kind: 'COMPLETION_RATE' as const,
-    };
+    const uniqueVisitors = asNumber(item.unique_visitors);
+    const denominator = item.type === 'READING' ? uniqueVisitors : asNumber(item.starts);
+    const completionRate = denominator
+      ? Math.round((asNumber(item.completions) / denominator) * 100)
+      : 0;
     return {
       type: item.type,
       id: item.id,
@@ -400,10 +349,9 @@ export class SiteOverviewService {
       coverImageUrl: item.cover_image_storage_key
         ? imagePath(item.type, item.slug, item.cover_image_hash)
         : null,
-      sessions,
-      engagement,
-      ctaClicks,
-      conversionRate: percentage(ctaClicks, sessions),
+      totalViews: asNumber(item.total_views),
+      uniqueVisitors,
+      completionRate,
       adminHref: `/${item.type === 'READING' ? 'readings' : 'meditations'}?${item.type === 'READING' ? 'readingId' : 'meditationId'}=${encodeURIComponent(item.id)}`,
     };
   }

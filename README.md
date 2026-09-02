@@ -264,6 +264,15 @@ tüm oturumları kapsar; `landing_view` veya ana sayfaya giriş şartı aranmaz.
 adımlardaki `contentViews`, `oneToOneViews` ve `conversionClicks` alanları ilgili
 olayı üreten tekil oturumları, `conversionEvents` ise ham aksiyon sayısını gösterir.
 
+İçerik performansı tablosu ise tarih filtresinden bağımsız, tüm zamanların içerik
+paylaşım istatistiklerini gösterir: `totalViews` toplam açılış, `uniqueVisitors`
+tekil okuyucu/ziyaretçi ve `completionRate` tamamlama oranıdır. Kaynakları
+`reading_public_visits` ve `meditation_public_visits` tablolarıdır; yeni analytics
+olaylarına veya oturum sayısına bağlı değildir. Meditasyonlarda aynı ziyaretçinin
+farklı süreleri açması tekil sayıyı artırmaz. Tamamlama oranı, paylaşım ekranındaki
+gibi okumalarda tamamlayan/okuyucu, meditasyonlarda tamamlanan/başlatılan üzerinden
+hesaplanır; tam sayıya yuvarlanır ve payda sıfırsa sıfır gösterilir.
+
 `staging` ve `production` ortamlarında eksik zorunlu secret'lar uygulamanın
 başlamasını engeller. Güncel sözleşmenin kaynakları [`.env.example`](.env.example)
 ve [`packages/core/src/config.ts`](packages/core/src/config.ts) dosyalarıdır;
