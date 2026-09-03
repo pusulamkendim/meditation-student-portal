@@ -77,7 +77,7 @@ export function SiteHeader() {
             eventProperties={{ location: 'mobile-menu' }}
             onClick={() => setOpen(false)}
           >
-            Tanışma görüşmesi yap
+            Ücretsiz Tanışma Görüşmesi Yap
           </TrackedLink>
         </nav>
       </div>

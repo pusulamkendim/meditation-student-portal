@@ -50,7 +50,7 @@ export default function OneToOnePage() {
               event="intro_call_click"
               eventProperties={{ location: 'one-to-one-hero' }}
             >
-              Tanışma görüşmesi yap <ArrowRight size={17} />
+              Ücretsiz Tanışma Görüşmesi Yap <ArrowRight size={17} />
             </TrackedLink>
             <Link className="button button-outline" href="#surec">
               Süreci incele
@@ -226,7 +226,7 @@ export default function OneToOnePage() {
               event="whatsapp_click"
               eventProperties={{ location: 'pricing' }}
             >
-              Tanışma görüşmesi yap <ArrowRight size={17} />
+              Ücretsiz Tanışma Görüşmesi Yap <ArrowRight size={17} />
             </TrackedLink>
           </div>
         </div>
@@ -250,7 +250,7 @@ export default function OneToOnePage() {
             event="intro_call_click"
             eventProperties={{ location: 'one-to-one-final' }}
           >
-            Tanışma görüşmesi yap <ArrowRight size={17} />
+            Ücretsiz Tanışma Görüşmesi Yap <ArrowRight size={17} />
           </TrackedLink>
         </div>
       </section>

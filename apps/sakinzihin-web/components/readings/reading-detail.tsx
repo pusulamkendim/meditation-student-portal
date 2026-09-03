@@ -2,22 +2,21 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { ArrowRight, Clock3 } from 'lucide-react';
 
-import type { HubMeditation, HubReading, PublicReadingContent } from '../../lib/api/types';
+import type { HubReading, PublicReadingContent } from '../../lib/api/types';
 import { resolveContentImage } from '../../lib/content/images';
 import { siteConfig } from '../../lib/config/site';
 import { ReadingActions } from './reading-actions';
 import { ReadingBody } from './reading-body';
 import { ReadingToc, ReadingTocDesktop } from './reading-toc';
 import { ReadingEngagement } from './reading-engagement';
+import { TrackedLink } from '../shared/tracked-link';
 
 export function ReadingDetail({
   reading,
   relatedReading,
-  relatedMeditation,
 }: {
   reading: PublicReadingContent;
   relatedReading?: HubReading;
-  relatedMeditation?: HubMeditation;
 }) {
   const cover = resolveContentImage(reading, 3);
   const hasToc = reading.sections.length >= 2;
@@ -106,20 +105,25 @@ export function ReadingDetail({
               <ReadingBody sections={reading.sections} />
 
               <aside className="reading-practice-note">
-                <span className="eyebrow eyebrow-light">Bir an dur</span>
-                <h2>Okuduklarını kendi deneyiminde gözlemle.</h2>
+                <span className="eyebrow eyebrow-light">Birebir çalışma</span>
+                <h2>Okuduklarını düzenli bir pratiğe dönüştürmek ister misin?</h2>
                 <p>
-                  Bir sonraki pratiğinde bu yazıdan aklında kalan tek bir şeyi takip etmeyi dene.
-                  Değiştirmeden, sadece fark ederek.
+                  Kendi deneyimine ve gündelik ritmine göre şekillenen bir meditasyon pratiğini
+                  birlikte oluşturabiliriz.
                 </p>
-                <Link className="button button-light" href="/pratik">
-                  Bir pratik seç <ArrowRight size={17} />
-                </Link>
+                <TrackedLink
+                  className="button button-light"
+                  href="/birebir-meditasyon"
+                  event="one_to_one_cta_click"
+                  eventProperties={{ location: 'reading-end', slug: reading.slug }}
+                >
+                  Birebir çalışmayı incele <ArrowRight size={17} />
+                </TrackedLink>
               </aside>
             </div>
           </div>
 
-          {relatedReading || relatedMeditation ? (
+          {relatedReading ? (
             <section className="reading-related" aria-labelledby="reading-related-title">
               <div className="section-heading">
                 <div>
@@ -127,31 +131,13 @@ export function ReadingDetail({
                   <h2 id="reading-related-title">İlgili içerikler</h2>
                 </div>
               </div>
-              <div className="related-grid">
-                {relatedMeditation ? (
-                  <Link
-                    className="related-card related-card-dark"
-                    href={`/meditasyon/${relatedMeditation.slug}`}
-                  >
-                    <span className="related-label">İlgili meditasyon</span>
-                    <h3>{relatedMeditation.title}</h3>
-                    <p>
-                      {relatedMeditation.description ??
-                        'Düşüncelere kapılmadan onları izlemeyi öğren.'}
-                    </p>
-                    <ArrowRight size={19} />
-                  </Link>
-                ) : null}
-                {relatedReading ? (
-                  <Link className="related-card" href={`/oku/${relatedReading.slug}`}>
-                    <span className="related-label">Başka bir okuma</span>
-                    <h3>{relatedReading.title}</h3>
-                    <p>
-                      {relatedReading.description ?? 'Sakin Zihin okumalarından bir başka yazı.'}
-                    </p>
-                    <ArrowRight size={19} />
-                  </Link>
-                ) : null}
+              <div className="related-grid related-grid-single">
+                <Link className="related-card" href={`/oku/${relatedReading.slug}`}>
+                  <span className="related-label">Başka bir okuma</span>
+                  <h3>{relatedReading.title}</h3>
+                  <p>{relatedReading.description ?? 'Sakin Zihin okumalarından bir başka yazı.'}</p>
+                  <ArrowRight size={19} />
+                </Link>
               </div>
             </section>
           ) : null}

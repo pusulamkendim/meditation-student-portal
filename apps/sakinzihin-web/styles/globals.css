@@ -1539,6 +1539,10 @@ p {
   gap: 16px;
 }
 
+.related-grid-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .related-card {
   position: relative;
   min-height: 185px;

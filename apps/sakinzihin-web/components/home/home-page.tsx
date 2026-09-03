@@ -219,7 +219,7 @@ export function HomePage({ catalog }: { catalog: HubCatalog | null }) {
               event="intro_call_click"
               eventProperties={{ location: 'home-final-cta' }}
             >
-              Tanışma görüşmesi yap <ArrowRight size={17} />
+              Ücretsiz Tanışma Görüşmesi Yap <ArrowRight size={17} />
             </TrackedLink>
             <Link className="button button-outline-light" href={publicRoutes.meditations}>
               Önce ücretsiz pratikleri dene

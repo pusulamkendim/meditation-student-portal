@@ -50,13 +50,6 @@ export default async function ReadingPage({ params }: PageProps) {
   if (!reading) notFound();
 
   const relatedReading = catalog?.readings.find((candidate) => candidate.slug !== slug);
-  const relatedMeditation = catalog?.meditations[0];
 
-  return (
-    <ReadingDetail
-      reading={reading}
-      relatedReading={relatedReading}
-      relatedMeditation={relatedMeditation}
-    />
-  );
+  return <ReadingDetail reading={reading} relatedReading={relatedReading} />;
 }

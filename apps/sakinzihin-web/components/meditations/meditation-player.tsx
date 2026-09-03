@@ -428,7 +428,7 @@ export function MeditationPlayer({ slug, meta }: MeditationPlayerProps) {
                 track('whatsapp_click', { slug, location: 'meditation-complete' });
               }}
             >
-              <MessageCircle aria-hidden="true" /> Tanışma görüşmesi yap
+              <MessageCircle aria-hidden="true" /> Ücretsiz Tanışma Görüşmesi Yap
             </a>
           </aside>
         ) : null}
