@@ -91,6 +91,78 @@ export const processSteps = [
   { number: '06', title: 'Değerlendirme', text: 'İlerlemene göre pratiğini yeniden düzenliyorum.' },
 ] as const;
 
+export const oneToOneProcessSteps = [
+  {
+    number: '01',
+    title: 'Kayıt ve görüşme takvimi',
+    text: 'WhatsApp veya Telegram üzerinden sisteme kaydolur, her hafta görüşeceğimiz gün ve saati birlikte belirleriz.',
+  },
+  {
+    number: '02',
+    title: 'Görüşme ve birlikte pratik',
+    text: 'Google Meet bağlantın görüşmeden önce otomatik gelir. Görüşmede tekniği açıklar, birlikte uygular ve deneyimini konuşuruz.',
+  },
+  {
+    number: '03',
+    title: 'Kişisel haftalık plan',
+    text: 'Günlerini, saatlerini, süreyi ve meditasyon türünü hayatına göre belirleriz. Başlangıç için günde 10 dakika bile yeterli olabilir.',
+  },
+  {
+    number: '04',
+    title: 'Takip ve yeni plan',
+    text: 'Günlük check-in ve refleksiyonlarını takip ederim. Sonraki görüşmede pratiği derinleştirir, sadeleştirir veya değiştiririz.',
+  },
+] as const;
+
+export const oneToOneWeekSteps = [
+  {
+    number: '01',
+    label: 'Görüşme günü',
+    title: 'Önce deneyimine bakıyor, sonra birlikte pratik yapıyoruz.',
+    text: 'Geçen haftanın nasıl ilerlediğini konuşuyoruz. O gün çalışacağımız meditasyonu açıklıyor, birlikte uyguluyor ve pratik sırasında yaşadıklarını değerlendiriyoruz.',
+  },
+  {
+    number: '02',
+    label: 'Görüşmeden sonra',
+    title: 'O haftanın günlük takvimini birlikte oluşturuyoruz.',
+    text: 'Hangi günlerde, saat kaçta ve kaç dakika pratik yapacağını belirliyoruz. Süre, saat ve meditasyon türü hazır bir programa göre değil, senin hayatına göre şekilleniyor.',
+  },
+  {
+    number: '03',
+    label: 'Her gün',
+    title: 'Hatırlatma, belirlediğimiz saatte sana geliyor.',
+    text: 'WhatsApp veya Telegram üzerinden günlük pratik mesajını alıyorsun. Mesajdaki bağlantıyı kullanarak sayacı açabilir ve o günkü pratiğine başlayabilirsin.',
+  },
+  {
+    number: '04',
+    label: 'Pratikten sonra',
+    title: 'Kısa bir check-in ile sonucu işaretliyorsun.',
+    text: 'Pratiğini “Yaptım” veya “Yapamadım” olarak kaydediyorsun. İstersen meditasyonun nasıl geçtiğini yazılı ya da sesli bir refleksiyonla paylaşabiliyorsun.',
+  },
+  {
+    number: '05',
+    label: 'Hafta boyunca',
+    title: 'Görüşmeler arasındaki süreci takip ediyorum.',
+    text: 'Pratik durumlarını ve paylaştığın refleksiyonları görebiliyorum. Tekrarlayan bir güçlük varsa bir sonraki görüşmeyi beklemeden kısa bir yönlendirme yapabiliyorum.',
+  },
+  {
+    number: '06',
+    label: 'Sonraki görüşme',
+    title: 'Plan, gerçek deneyimine göre yeniden şekilleniyor.',
+    text: 'Hangi pratiğin yardımcı olduğunu ve nerede zorlandığını birlikte değerlendiriyoruz. Ardından süreyi, tekniği veya haftalık ritmi derinleştiriyor ya da değiştiriyoruz.',
+  },
+] as const;
+
+export const oneToOneIncluded = [
+  'Haftada bir Google Meet görüşmesi',
+  'Görüşme öncesi otomatik bağlantı gönderimi',
+  'Sana göre oluşturulan günlük pratik takvimi',
+  'WhatsApp veya Telegram hatırlatmaları',
+  'Pratik sayacı ve pratik sonrası check-in',
+  'İsteğe bağlı yazılı veya sesli refleksiyon',
+  'Görüşmeler arasında günlük takip',
+] as const;
+
 export const aboutSections = [
   {
     title: 'Benim meditasyon yolculuğum bir kariyer planıyla başlamadı.',
@@ -156,28 +228,58 @@ export const testimonials = [
 
 export const oneToOneFaq = [
   {
-    question: 'Birebir çalışma nasıl ilerliyor?',
+    question: 'Sisteme nasıl kaydoluyorum?',
     answer:
-      'İlk görüşmede mevcut pratiğini, deneyimini ve ihtiyaçlarını anlamaya çalışıyorum. Ardından günlük pratik, check-in ve refleksiyonların takip edildiği kişiye özel bir süreç oluşturuyorum. Bir sonraki görüşmede ise pratiğinin nasıl ilerlediğini birlikte değerlendiriyoruz.',
+      'Tanışma görüşmesinden sonra tercih ettiğin WhatsApp veya Telegram kanalı üzerinden sisteme kaydolursun. Görüşme bağlantılarını, günlük hatırlatmaları ve check-in mesajlarını bu kanaldan alırsın.',
   },
   {
-    question: 'Meditasyona yeni başladıysam katılabilir miyim?',
+    question: 'WhatsApp ve Telegram arasında seçim yapabilir miyim?',
     answer:
-      'Evet. Süreç tek bir seviyeye veya yönteme göre hazırlanmaz; pratiğin mevcut durumuna göre şekillenir.',
+      'Evet. Öğrenci sistemi her iki kanalı da destekler. Public sayfadaki ilk iletişim WhatsApp üzerinden başlar; kayıt sırasında günlük mesajlarını hangi kanaldan almak istediğini birlikte belirleriz.',
   },
   {
-    question: 'Programda haftada kaç görüşme var?',
+    question: 'Görüşmeler nerede gerçekleşiyor ve bağlantı nasıl geliyor?',
     answer:
-      'Program haftalık birebir görüşme ve görüşmeler arasındaki günlük pratik takibi üzerine kuruludur.',
+      'Görüşmeler Google Meet üzerinden gerçekleşir. Birlikte belirlediğimiz haftalık görüşmeden önce Meet bağlantısı sistem tarafından mesaj olarak otomatik gönderilir.',
   },
   {
-    question: 'Görüşmeler arasında destek alabilir miyim?',
+    question: 'Günlük ne kadar zaman ayırmam gerekiyor?',
     answer:
-      'Evet. Check-in ve refleksiyonlarla pratiğinin nasıl ilerlediğini düzenli olarak görürsün; amaç görüşmeler arasındaki sürekliliği desteklemektir.',
+      'Başlangıç için günde 10 dakika bile yeterli olabilir. Süreyi, pratik türünü ve haftalık yoğunluğu mevcut deneyimine ve günlük hayatına göre birlikte belirleriz.',
   },
   {
-    question: 'Zamanım kısıtlı, programı sürdürebilir miyim?',
+    question: 'Pratik saatlerini sonradan değiştirebilir miyiz?',
     answer:
-      'Program, günlük 10-15 dakikalık pratiklerle sürdürülebilir bir şekilde tasarlanmıştır. Pratiğin yoğunluğunu ve süresini kendi ihtiyaçlarına göre ayarlayabilirsin.',
+      'Evet. Takvim sabit bir programa bağlı değildir. Belirlediğimiz saat gerçek hayatına uymuyorsa sonraki planı daha uygun gün ve saatlere göre yeniden düzenleriz.',
+  },
+  {
+    question: 'Bir gün pratik yapamazsam ne olur?',
+    answer:
+      '“Yapamadım” cevabı da sürecin anlamlı bir parçasıdır. Amaç kusursuz bir seri oluşturmak değil, pratiğin nerede zorlandığını görmek ve planı sürdürülebilir hâle getirmektir.',
+  },
+  {
+    question: 'Refleksiyon bırakmak zorunlu mu?',
+    answer:
+      'Hayır. Bazı günler yalnızca “Yaptım” veya “Yapamadım” olarak check-in yapman yeterlidir. Paylaşmak istediğin bir deneyim ya da soru olduğunda refleksiyon bırakabilirsin.',
+  },
+  {
+    question: 'Sesli refleksiyon gönderebilir miyim?',
+    answer:
+      'Evet. Meditasyonunun nasıl geçtiğini kısa bir metinle yazabilir veya sesli mesaj olarak paylaşabilirsin.',
+  },
+  {
+    question: 'Görüşmeler arasında paylaştıklarımı takip ediyor musun?',
+    answer:
+      'Evet. Günlük pratik durumlarını ve bıraktığın refleksiyonları takip ediyorum. Tekrarlayan bir güçlük görürsem gerektiğinde bir sonraki görüşmeyi beklemeden kısa bir yönlendirme yapabiliyorum.',
+  },
+  {
+    question: 'Pratik bana uygun gelmezse değiştirilebilir mi?',
+    answer:
+      'Evet. Bir sonraki görüşmede gerçek deneyimin üzerinden geçer; süreyi, tekniği veya haftalık ritmi derinleştirir, sadeleştirir ya da tamamen değiştiririz.',
+  },
+  {
+    question: 'Daha önce hiç meditasyon yapmadıysam katılabilir miyim?',
+    answer:
+      'Evet. Görüşmede pratiğin nasıl yapılacağını adım adım açıklıyor ve birlikte uyguluyoruz. Süreç başlangıç seviyene göre oluşturulur.',
   },
 ] as const;
