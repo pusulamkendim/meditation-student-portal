@@ -40,7 +40,7 @@ RUN --mount=type=cache,id=meditation-pnpm-store,target=/pnpm/store,sharing=locke
 FROM node:22.12.0-bookworm-slim AS api
 ENV CI=true
 RUN apt-get update \
-  && apt-get install --yes --no-install-recommends curl openssl \
+  && apt-get install --yes --no-install-recommends curl openssl wget \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app/apps/api
 COPY --from=api-build /out/api ./
