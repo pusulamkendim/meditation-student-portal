@@ -1,20 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('page_view analytics delivery', () => {
-  const location = { pathname: '/oku/nefes', search: '' };
+  const location = { hostname: 'sakinzihin.com', pathname: '/oku/nefes', search: '' };
   const sendBeacon = vi.fn();
   const fetch = vi.fn();
 
   beforeEach(() => {
     vi.resetModules();
-    const storage = new Map<string, string>();
+    const sessionStorage = new Map<string, string>();
+    const localStorage = new Map<string, string>();
+    location.hostname = 'sakinzihin.com';
     location.pathname = '/oku/nefes';
     location.search = '?utm_source=google&utm_medium=organic&utm_campaign=nefes';
     vi.stubGlobal('window', {
       location,
       sessionStorage: {
-        getItem: (key: string) => storage.get(key) ?? null,
-        setItem: (key: string, value: string) => storage.set(key, value),
+        getItem: (key: string) => sessionStorage.get(key) ?? null,
+        setItem: (key: string, value: string) => sessionStorage.set(key, value),
+      },
+      localStorage: {
+        getItem: (key: string) => localStorage.get(key) ?? null,
+        setItem: (key: string, value: string) => localStorage.set(key, value),
+        removeItem: (key: string) => localStorage.delete(key),
       },
     });
     vi.stubGlobal('document', { referrer: 'https://www.google.com/search?q=nefes#top' });
@@ -74,5 +81,35 @@ describe('page_view analytics delivery', () => {
       event: 'page_view',
       pathname: '/oku/nefes',
     });
+  });
+
+  it.each(['localhost', '127.0.0.1', '::1', 'sakinzihin.local'])(
+    'does not send local analytics from %s',
+    async (hostname) => {
+      location.hostname = hostname;
+      const { initializeAnalytics, track } = await import('./client');
+      initializeAnalytics();
+      track('page_view');
+
+      expect(sendBeacon).not.toHaveBeenCalled();
+      expect(fetch).not.toHaveBeenCalled();
+    },
+  );
+
+  it('persists an analytics opt-out for personal testing until it is enabled again', async () => {
+    const { initializeAnalytics, track } = await import('./client');
+    initializeAnalytics();
+
+    location.search = '?analytics=off';
+    track('page_view');
+    location.search = '';
+    track('page_view');
+
+    expect(sendBeacon).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+
+    location.search = '?analytics=on';
+    track('page_view');
+    expect(sendBeacon).toHaveBeenCalledTimes(1);
   });
 });

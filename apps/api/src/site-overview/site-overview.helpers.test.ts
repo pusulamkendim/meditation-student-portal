@@ -31,10 +31,16 @@ describe('site overview helpers', () => {
 
   it('prioritizes UTM source and falls back to the referrer hostname', () => {
     expect(normalizeTrafficSource('instagram', 'https://google.com/search')).toBe('Instagram');
+    expect(normalizeTrafficSource('ig', null)).toBe('Instagram');
     expect(normalizeTrafficSource(null, 'https://l.instagram.com/somewhere')).toBe('Instagram');
     expect(normalizeTrafficSource(null, 'https://www.google.com.tr/search')).toBe('Google');
     expect(normalizeTrafficSource(null, 'https://wa.me/905551112233')).toBe('WhatsApp');
+    expect(normalizeTrafficSource(null, 'https://www.reddit.com/r/Meditation')).toBe('Reddit');
+    expect(normalizeTrafficSource('direct', 'https://www.reddit.com/r/Meditation')).toBe('Reddit');
+    expect(normalizeTrafficSource(null, 'https://www.linkedin.com/feed')).toBe('LinkedIn');
+    expect(normalizeTrafficSource(null, 'http://m.facebook.com/story.php')).toBe('Facebook');
     expect(normalizeTrafficSource(null, null)).toBe('Direkt');
+    expect(normalizeTrafficSource(null, 'https://example.com/article')).toBe('Diğer');
     expect(normalizeTrafficSource('newsletter', null)).toBe('newsletter');
   });
 });

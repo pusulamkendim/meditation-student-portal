@@ -34,6 +34,7 @@ type AnalyticsAttribution = {
 
 const analyticsEndpoint = apiUrl('/v1/public/analytics/events');
 const attributionStorageKey = 'sakinzihin-analytics-attribution';
+const analyticsOptOutStorageKey = 'sakinzihin-analytics-opt-out';
 const sessionStorageKey = 'sakinzihin-analytics-session';
 const maxQueuedEvents = 50;
 let queuedEvents: QueuedAnalyticsEvent[] = [];
@@ -64,6 +65,14 @@ export function track(event: AnalyticsEventName, properties: AnalyticsProperties
 function safeSessionStorage(): Storage | undefined {
   try {
     return window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+function safeLocalStorage(): Storage | undefined {
+  try {
+    return window.localStorage;
   } catch {
     return undefined;
   }
@@ -173,7 +182,40 @@ function buildPayload(event: AnalyticsEventName, properties: AnalyticsProperties
   };
 }
 
+function isLocalAnalyticsHost(hostname: string): boolean {
+  const value = hostname.trim().toLocaleLowerCase('en-US');
+  return (
+    value === 'localhost' ||
+    value === '127.0.0.1' ||
+    value === '0.0.0.0' ||
+    value === '::1' ||
+    value === '[::1]' ||
+    value.endsWith('.localhost') ||
+    value.endsWith('.local')
+  );
+}
+
+function isAnalyticsDisabledForBrowser(): boolean {
+  const storage = safeLocalStorage();
+  const preference = new URLSearchParams(window.location.search).get('analytics');
+
+  try {
+    if (preference === 'off') {
+      storage?.setItem(analyticsOptOutStorageKey, '1');
+      return true;
+    }
+    if (preference === 'on') {
+      storage?.removeItem(analyticsOptOutStorageKey);
+      return false;
+    }
+    return storage?.getItem(analyticsOptOutStorageKey) === '1';
+  } catch {
+    return preference === 'off';
+  }
+}
+
 function send(event: AnalyticsEventName, properties: AnalyticsProperties = {}): void {
+  if (isLocalAnalyticsHost(window.location.hostname) || isAnalyticsDisabledForBrowser()) return;
   const body = JSON.stringify(buildPayload(event, properties));
   try {
     if (

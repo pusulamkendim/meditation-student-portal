@@ -43,7 +43,12 @@ function referrerHostname(referrer: string | null | undefined) {
 }
 
 function isInstagram(value: string) {
-  return value === 'instagram' || value === 'instagram.com' || value.endsWith('.instagram.com');
+  return (
+    value === 'ig' ||
+    value === 'instagram' ||
+    value === 'instagram.com' ||
+    value.endsWith('.instagram.com')
+  );
 }
 
 function isGoogle(value: string) {
@@ -59,17 +64,51 @@ function isWhatsApp(value: string) {
   );
 }
 
+function isReddit(value: string) {
+  return (
+    value === 'reddit' ||
+    value === 'reddit.com' ||
+    value === 'redd.it' ||
+    value.endsWith('.reddit.com')
+  );
+}
+
+function isLinkedIn(value: string) {
+  return value === 'linkedin' || value === 'linkedin.com' || value.endsWith('.linkedin.com');
+}
+
+function isFacebook(value: string) {
+  return (
+    value === 'facebook' ||
+    value === 'facebook.com' ||
+    value === 'fb.com' ||
+    value.endsWith('.facebook.com')
+  );
+}
+
+function knownSourceLabel(value: string) {
+  if (isInstagram(value)) return 'Instagram';
+  if (isGoogle(value)) return 'Google';
+  if (isWhatsApp(value)) return 'WhatsApp';
+  if (isReddit(value)) return 'Reddit';
+  if (isLinkedIn(value)) return 'LinkedIn';
+  if (isFacebook(value)) return 'Facebook';
+  return undefined;
+}
+
 export function normalizeTrafficSource(
   source: string | null | undefined,
   referrer: string | null | undefined,
 ): string {
   const sourceValue = source ? normalized(source) : '';
   const referrerValue = referrerHostname(referrer) ?? '';
-  const candidate = sourceValue || referrerValue;
+  const sourceIsDirect = !sourceValue || sourceValue === 'direct' || sourceValue === 'none';
+  const sourceLabel = sourceIsDirect ? undefined : knownSourceLabel(sourceValue);
+  const referrerLabel = knownSourceLabel(referrerValue);
 
-  if (!candidate || candidate === 'direct' || candidate === 'none') return 'Direkt';
-  if (isInstagram(candidate)) return 'Instagram';
-  if (isGoogle(candidate)) return 'Google';
-  if (isWhatsApp(candidate)) return 'WhatsApp';
-  return source?.trim() || 'Diğer';
+  if (sourceLabel) return sourceLabel;
+  if (sourceIsDirect && referrerLabel) return referrerLabel;
+  if (!sourceIsDirect) return source?.trim() || 'Diğer';
+  if (referrerValue) return 'Diğer';
+  return 'Direkt';
 }
