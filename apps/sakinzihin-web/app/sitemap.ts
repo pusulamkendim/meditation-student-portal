@@ -11,6 +11,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${siteConfig.siteUrl}/pratik`, changeFrequency: 'daily', priority: 0.9 },
     { url: `${siteConfig.siteUrl}/hakkimda`, changeFrequency: 'monthly', priority: 0.6 },
     { url: `${siteConfig.siteUrl}/birebir-meditasyon`, changeFrequency: 'weekly', priority: 0.9 },
+    {
+      url: `${siteConfig.siteUrl}/kurumlar-icin-mindfulness`,
+      changeFrequency: 'monthly',
+      priority: 0.85,
+    },
+    { url: `${siteConfig.siteUrl}/gizlilik`, changeFrequency: 'yearly', priority: 0.3 },
   ];
 
   const readingRoutes = (catalog?.readings ?? [])

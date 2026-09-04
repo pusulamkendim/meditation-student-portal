@@ -14,6 +14,7 @@ const navigation = [
   { label: 'Okumalar', href: publicRoutes.readings },
   { label: 'Hakkımda', href: publicRoutes.about },
   { label: 'Birebir Çalışma', href: publicRoutes.oneToOne },
+  { label: 'Kurumlar İçin', href: publicRoutes.corporate },
 ] as const;
 
 export function SiteHeader() {

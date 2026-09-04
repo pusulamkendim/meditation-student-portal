@@ -204,6 +204,13 @@ enum NotificationChannel {
   ADMIN_PANEL
 }
 
+enum CorporateInquiryStatus {
+  NEW
+  CONTACTED
+  CLOSED
+  SPAM
+}
+
 enum MessageAudience {
   STUDENT
   ADMIN
@@ -1613,6 +1620,40 @@ model PublicAnalyticsEvent {
   @@index([sessionId, createdAt])
   @@index([createdAt])
   @@map("public_analytics_events")
+}
+
+model CorporateInquiry {
+  id                       String                 @id @default(uuid()) @db.Uuid
+  status                   CorporateInquiryStatus @default(NEW)
+  firstNameEncrypted       Bytes?                 @map("first_name_encrypted")
+  firstNameKeyId           String?                @map("first_name_key_id")
+  lastNameEncrypted        Bytes?                 @map("last_name_encrypted")
+  lastNameKeyId            String?                @map("last_name_key_id")
+  emailEncrypted           Bytes?                 @map("email_encrypted")
+  emailKeyId               String?                @map("email_key_id")
+  emailHmac                String?                @map("email_hmac")
+  companyEncrypted         Bytes?                 @map("company_encrypted")
+  companyKeyId             String?                @map("company_key_id")
+  noteEncrypted            Bytes?                 @map("note_encrypted")
+  noteKeyId                String?                @map("note_key_id")
+  sourceIpHmac             String?                @map("source_ip_hmac")
+  sessionId                String?                @map("session_id")
+  source                   String?
+  medium                   String?
+  campaign                 String?
+  privacyNoticeVersion     String                 @map("privacy_notice_version")
+  privacyNoticeAcceptedAt  DateTime               @map("privacy_notice_accepted_at")
+  lastActivityAt           DateTime               @default(now()) @map("last_activity_at")
+  retentionDeleteAt        DateTime?               @map("retention_delete_at")
+  personalDataDeletedAt    DateTime?               @map("personal_data_deleted_at")
+  createdAt                DateTime               @default(now()) @map("created_at")
+  updatedAt                DateTime               @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([emailHmac, createdAt])
+  @@index([sourceIpHmac, createdAt])
+  @@index([retentionDeleteAt])
+  @@map("corporate_inquiries")
 }
 
 model MeditationAudioAsset {

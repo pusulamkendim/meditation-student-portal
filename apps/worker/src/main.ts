@@ -30,6 +30,10 @@ import { AdminPanelNotificationProcessor } from './admin-panel-notification.js';
 import { MeditationAudioRenderProcessor } from './meditation-audio-render.js';
 import { VoiceMessageProcessor } from './voice-message.js';
 import {
+  CorporateInquiryEmailProcessor,
+  purgeExpiredCorporateInquiryData,
+} from './corporate-inquiry-email.js';
+import {
   configureResponsiveQueue,
   OUTBOX_POLL_INTERVAL_MS,
   RESPONSIVE_WORK_OPTIONS,
@@ -58,6 +62,7 @@ async function bootstrap(): Promise<void> {
   const adminPanelNotifications = new AdminPanelNotificationProcessor(prisma);
   const meditationAudioRender = new MeditationAudioRenderProcessor(prisma, config);
   const voiceMessages = new VoiceMessageProcessor(prisma, config, systemClock);
+  const corporateInquiryEmails = new CorporateInquiryEmailProcessor(prisma, config, systemClock);
   boss.on('error', (error) => logger.error({ errorCode: error.name }, 'pg-boss error'));
   await syncSystemEventRegistry(prisma);
   await syncDefaultRegistrationMessages(prisma);
@@ -159,6 +164,7 @@ async function bootstrap(): Promise<void> {
                 'llm.weekly-summary',
                 'llm.student-report',
                 'admin.notifications',
+                'corporate.inquiry-email',
                 'meditation.audio-render',
                 'media.voice-inbound',
               ],
@@ -191,6 +197,7 @@ async function bootstrap(): Promise<void> {
             renderId?: string;
             reportId?: string;
             operationId?: string;
+            inquiryId?: string;
           };
           let queueName: string;
           let data: Record<string, string | undefined>;
@@ -227,6 +234,10 @@ async function bootstrap(): Promise<void> {
               queueName = 'admin.notification';
               data = { outboxEventId: event.id };
               break;
+            case 'corporate.inquiry-email':
+              queueName = 'corporate.inquiry-email';
+              data = { inquiryId: payload.inquiryId };
+              break;
             case 'meditation.audio-render':
               queueName = 'meditation.audio-render';
               data = { renderId: payload.renderId };
@@ -248,7 +259,12 @@ async function bootstrap(): Promise<void> {
               break;
           }
           if (!Object.values(data)[0]) continue;
-          const jobId = await boss.send(queueName, data, { id: event.id });
+          const jobId = await boss.send(queueName, data, {
+            id: event.id,
+            ...(queueName === 'corporate.inquiry-email'
+              ? { retryLimit: 4, retryBackoff: true, retryDelay: 60 }
+              : {}),
+          });
           if (jobId)
             await prisma.outboxEvent.update({
               where: { id: event.id },
@@ -380,6 +396,17 @@ async function bootstrap(): Promise<void> {
     for (const job of jobs)
       if (job.data.outboxEventId) await adminPanelNotifications.process(job.data.outboxEventId);
   });
+  await boss.createQueue('corporate.inquiry-email');
+  await boss.work<{ inquiryId: string }>('corporate.inquiry-email', async (jobs) => {
+    for (const job of jobs)
+      if (job.data.inquiryId) await corporateInquiryEmails.process(job.data.inquiryId);
+  });
+  await boss.createQueue('corporate.inquiry-retention');
+  await boss.work('corporate.inquiry-retention', async () => {
+    const purged = await purgeExpiredCorporateInquiryData(prisma, systemClock);
+    if (purged) logger.info({ purged }, 'Expired corporate inquiry personal data deleted');
+  });
+  await boss.schedule('corporate.inquiry-retention', '15 3 * * *', {});
   await boss.createQueue('meditation.audio-render');
   await boss.work<{ renderId: string }>('meditation.audio-render', async (jobs) => {
     for (const job of jobs)
@@ -415,6 +442,7 @@ async function bootstrap(): Promise<void> {
 
   const shutdown = async () => {
     clearInterval(outboxPoller);
+    corporateInquiryEmails.destroy();
     await boss.stop({ graceful: true, timeout: 30_000 });
     await prisma.$disconnect();
     process.exit(0);

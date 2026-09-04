@@ -124,6 +124,7 @@ describe('AdminDashboardController', () => {
       },
       handoff: { findMany: vi.fn().mockResolvedValue([]) },
       weeklyMeeting: { findMany: vi.fn().mockResolvedValue([]) },
+      corporateInquiry: { count: vi.fn().mockResolvedValue(0) },
       readingAssignment: { groupBy: vi.fn().mockResolvedValue([]) },
       readingPublicVisit: {
         aggregate: vi.fn().mockResolvedValue({

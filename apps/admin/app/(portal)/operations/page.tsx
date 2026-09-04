@@ -64,6 +64,9 @@ const eventLabels: Record<string, string> = {
   MESSAGE_RECEIVED: 'Öğrenci mesajı alındı',
   ADMIN_HANDOFF_REQUIRED: 'Admin yanıtı gerekiyor',
   CalendarDiscrepancy: 'Google Calendar ile görüşme saati uyuşmuyor',
+  CORPORATE_INQUIRY_RECEIVED: 'Kurumsal mindfulness talebi alındı',
+  CORPORATE_INQUIRY_ADMIN_EMAIL: 'Kurumsal talep yönetici e-postası',
+  CORPORATE_INQUIRY_ACK_EMAIL: 'Kurumsal talep alındı e-postası',
 };
 const reasonLabels: Record<string, string> = {
   WHATSAPP_TEMPLATE_REQUIRED: 'WhatsApp 24 saat penceresi kapalı; onaylı template gerekli.',

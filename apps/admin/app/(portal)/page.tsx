@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowUpRight,
   CalendarDays,
+  Building2,
   CheckCircle2,
   CircleDollarSign,
   LifeBuoy,
@@ -52,6 +53,7 @@ type DashboardData = {
     failedMessages: number;
     openHandoffs: number;
     todayMeetings: number;
+    corporateInquiries: number;
   };
   dailyCheckIns: {
     responded: number;
@@ -353,6 +355,7 @@ export default function HomePage() {
     ? data.counts.paymentReviews +
       data.counts.openHandoffs +
       data.counts.failedMessages +
+      data.counts.corporateInquiries +
       checkInAlertCount
     : 0;
 
@@ -691,6 +694,16 @@ export default function HomePage() {
                   <em>Bugün</em>
                 </a>
               ) : null}
+              {data.counts.corporateInquiries ? (
+                <a className="studio-attention-row" href="/corporate-inquiries">
+                  <Building2 />
+                  <span>
+                    <strong>Yeni kurumsal talep</strong>
+                    <small>{data.counts.corporateInquiries} başvuru inceleme bekliyor.</small>
+                  </span>
+                  <em>Yeni</em>
+                </a>
+              ) : null}
               {data.handoffs.slice(0, 3).map((handoff) => (
                 <a
                   className="studio-attention-row"
@@ -730,6 +743,7 @@ export default function HomePage() {
                 </div>
               ))}
               {!data.counts.paymentReviews &&
+              !data.counts.corporateInquiries &&
               !data.handoffs.length &&
               !data.failedMessages.length ? (
                 <EmptyState icon={CheckCircle2} title="Aksiyon kuyruğu temiz" />

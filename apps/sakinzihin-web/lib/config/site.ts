@@ -31,4 +31,6 @@ export const publicRoutes = {
   meditations: '/pratik',
   about: '/hakkimda',
   oneToOne: '/birebir-meditasyon',
+  corporate: '/kurumlar-icin-mindfulness',
+  privacy: '/gizlilik',
 } as const;

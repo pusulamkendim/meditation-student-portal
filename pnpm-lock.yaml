@@ -182,6 +182,9 @@ importers:
       '@aws-sdk/client-s3':
         specifier: ^3.1085.0
         version: 3.1085.0
+      '@aws-sdk/client-sesv2':
+        specifier: ^3.1084.0
+        version: 3.1084.0
       '@meditation/core':
         specifier: workspace:*
         version: link:../../packages/core

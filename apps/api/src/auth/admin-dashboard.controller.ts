@@ -98,6 +98,7 @@ export class AdminDashboardController {
       failedIntentCount,
       openHandoffs,
       meetings,
+      corporateInquiryCount,
     ] = await Promise.all([
       this.prisma.student.findMany({
         where: { status: 'ACTIVE' },
@@ -218,6 +219,7 @@ export class AdminDashboardController {
           },
         },
       }),
+      this.prisma.corporateInquiry.count({ where: { status: 'NEW' } }),
     ]);
 
     const namedStudents = students.map((student) => ({
@@ -463,6 +465,7 @@ export class AdminDashboardController {
         failedMessages: failedIntentCount,
         openHandoffs: openHandoffs.length,
         todayMeetings: meetings.length,
+        corporateInquiries: corporateInquiryCount,
       },
       dailyCheckIns: {
         responded: dailyCheckIns.reduce((total, student) => total + student.responded, 0),

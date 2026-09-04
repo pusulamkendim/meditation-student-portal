@@ -7,6 +7,7 @@ import {
   AudioLines,
   BookOpen,
   BrainCircuit,
+  Building2,
   BookMarked,
   CalendarDays,
   ChartNoAxesCombined,
@@ -29,6 +30,7 @@ const navigationGroups: Array<{ label: string; items: NavigationItem[] }> = [
       { href: '/', label: 'Bugünün ritmi', icon: LayoutDashboard },
       { href: '/students', label: 'Öğrenciler', icon: Users },
       { href: '/conversations', label: 'Konuşmalar', icon: MessageSquareText },
+      { href: '/corporate-inquiries', label: 'Kurumsal Talepler', icon: Building2 },
     ],
   },
   {

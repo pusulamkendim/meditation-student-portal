@@ -34,6 +34,321 @@
   --header-max-width: 1320px;
 }
 
+/* Corporate mindfulness */
+.corporate-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.75fr);
+  gap: clamp(50px, 8vw, 120px);
+  align-items: center;
+  padding-block: clamp(90px, 10vw, 150px);
+}
+.corporate-hero h1 {
+  max-width: 850px;
+  margin: 20px 0 28px;
+  font-size: clamp(3.3rem, 6vw, 6.5rem);
+  line-height: 0.92;
+}
+.corporate-hero > div:first-child > p {
+  max-width: 720px;
+  font-size: 1.15rem;
+  line-height: 1.75;
+}
+.corporate-summary {
+  font-weight: 700;
+  color: var(--text);
+}
+.corporate-summary span {
+  color: var(--gold);
+  padding-inline: 8px;
+}
+.corporate-program-card {
+  padding: clamp(30px, 4vw, 56px);
+  border-radius: 34px;
+  color: #f5efe4;
+  background: linear-gradient(145deg, #123f35, #06251f);
+  box-shadow: 0 28px 70px rgba(8, 38, 31, 0.2);
+}
+.corporate-program-card > span {
+  color: #d4a64f;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-size: 0.72rem;
+}
+.corporate-program-card h2 {
+  margin: 18px 0 30px;
+  font-size: clamp(2rem, 3.2vw, 3.5rem);
+}
+.corporate-program-card ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+.corporate-program-card li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 15px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.corporate-program-card svg {
+  width: 18px;
+  color: #d4a64f;
+}
+.corporate-story,
+.corporate-program-section,
+.corporate-privacy,
+.corporate-contact {
+  background: #0b3028;
+  color: #f6f0e5;
+}
+.corporate-story-grid,
+.corporate-principle,
+.corporate-system,
+.corporate-role,
+.corporate-faq,
+.corporate-contact-grid {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: clamp(50px, 9vw, 150px);
+  padding-block: clamp(80px, 10vw, 140px);
+}
+.corporate-story h2,
+.corporate-program-section h2,
+.corporate-privacy h2,
+.corporate-contact h2 {
+  color: #f6f0e5;
+  font-size: clamp(2.8rem, 5vw, 5.4rem);
+}
+.corporate-story p,
+.corporate-contact p {
+  color: rgba(246, 240, 229, 0.76);
+  font-size: 1.08rem;
+  line-height: 1.8;
+}
+.corporate-story strong {
+  color: #f6f0e5;
+}
+.corporate-principle h2,
+.corporate-system h2,
+.corporate-role h2,
+.corporate-faq h2 {
+  font-size: clamp(2.6rem, 4.5vw, 4.8rem);
+}
+.corporate-principle p,
+.corporate-system p,
+.corporate-role p {
+  font-size: 1.08rem;
+  line-height: 1.8;
+}
+.corporate-program-section > .site-shell,
+.corporate-privacy > .site-shell {
+  padding-block: clamp(80px, 10vw, 140px);
+}
+.corporate-section-lead {
+  max-width: 700px;
+  color: rgba(246, 240, 229, 0.72);
+}
+.corporate-phase-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 60px;
+  border-top: 1px solid rgba(255, 255, 255, 0.25);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.25);
+}
+.corporate-phase-grid article {
+  padding: 30px;
+  border-right: 1px solid rgba(255, 255, 255, 0.18);
+}
+.corporate-phase-grid article:last-child {
+  border-right: 0;
+}
+.corporate-phase-grid article > span {
+  color: #d4a64f;
+  font-family: var(--font-serif);
+  font-size: 2.4rem;
+}
+.corporate-phase-grid small {
+  display: block;
+  margin: 20px 0 10px;
+  color: #d4a64f;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.corporate-phase-grid p {
+  color: rgba(246, 240, 229, 0.7);
+  line-height: 1.7;
+}
+.corporate-system ol {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  border-top: 1px solid var(--border);
+}
+.corporate-system li {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  gap: 16px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+.corporate-system li span {
+  color: var(--gold);
+  font-family: var(--serif);
+}
+.corporate-privacy-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 50px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.corporate-privacy-grid article {
+  padding: clamp(28px, 4vw, 52px);
+}
+.corporate-privacy-grid article + article {
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+.corporate-privacy-grid svg {
+  color: #d4a64f;
+}
+.corporate-privacy-grid p {
+  color: rgba(246, 240, 229, 0.7);
+  line-height: 1.7;
+}
+.corporate-role {
+  align-items: center;
+}
+.corporate-role-image {
+  position: relative;
+  min-height: 620px;
+  border-radius: 260px 260px 24px 24px;
+  overflow: hidden;
+}
+.corporate-role-image img {
+  object-fit: cover;
+  object-position: center 28%;
+}
+.corporate-faq {
+  align-items: start;
+}
+.corporate-contact-grid {
+  align-items: start;
+}
+.corporate-form {
+  background: #f4eee3;
+  color: #153c32;
+  padding: clamp(28px, 4vw, 52px);
+  display: grid;
+  gap: 18px;
+}
+.corporate-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+.corporate-form label {
+  display: grid;
+  gap: 8px;
+  font-weight: 700;
+}
+.corporate-form input,
+.corporate-form textarea {
+  width: 100%;
+  border: 1px solid #9f9a8e;
+  background: #fffdf8;
+  padding: 14px;
+  font: inherit;
+}
+.corporate-form textarea {
+  resize: vertical;
+}
+.corporate-consent {
+  grid-template-columns: 20px 1fr !important;
+  align-items: start;
+  font-weight: 400 !important;
+  font-size: 0.9rem;
+}
+.corporate-consent input {
+  width: auto;
+  margin-top: 3px;
+}
+.corporate-honeypot {
+  position: absolute;
+  left: -10000px;
+}
+.corporate-form-error {
+  color: #9b2f29 !important;
+}
+.corporate-form-success {
+  background: #f4eee3;
+  color: #153c32;
+  padding: 60px;
+}
+.privacy-page {
+  max-width: 900px;
+  padding-block: 100px 140px;
+}
+.privacy-page h1 {
+  font-size: clamp(3rem, 6vw, 6rem);
+}
+.privacy-page section {
+  border-top: 1px solid var(--border);
+  padding: 30px 0;
+}
+.privacy-note {
+  color: var(--text-muted);
+}
+.corporate-home-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10vw;
+  padding-block: 80px;
+  border-top: 1px solid var(--border);
+}
+.corporate-home-preview h2 {
+  font-size: clamp(2.5rem, 4vw, 4.5rem);
+}
+@media (max-width: 900px) {
+  .corporate-hero,
+  .corporate-story-grid,
+  .corporate-principle,
+  .corporate-system,
+  .corporate-role,
+  .corporate-faq,
+  .corporate-contact-grid,
+  .corporate-home-preview {
+    grid-template-columns: 1fr;
+  }
+  .corporate-phase-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .corporate-role-image {
+    min-height: 520px;
+  }
+}
+@media (max-width: 600px) {
+  .corporate-hero {
+    padding-top: 65px;
+  }
+  .corporate-hero h1 {
+    font-size: clamp(3rem, 15vw, 4.7rem);
+  }
+  .corporate-phase-grid,
+  .corporate-privacy-grid,
+  .corporate-form-row {
+    grid-template-columns: 1fr;
+  }
+  .corporate-phase-grid article,
+  .corporate-privacy-grid article + article {
+    border-left: 0;
+    border-right: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.18);
+  }
+  .corporate-role-image {
+    min-height: 420px;
+  }
+}
+
 [data-theme='dark'] {
   --bg: #102a23;
   --bg-deep: #0b201b;

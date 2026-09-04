@@ -13,6 +13,7 @@ async function bootstrap(): Promise<void> {
     AppModule,
     new FastifyAdapter({
       logger: false,
+      trustProxy: true,
       bodyLimit: 100 * 1024 * 1024,
       // Signed practice and meditation audio tokens are intentionally bounded at 512 characters.
       maxParamLength: 512,

@@ -27,6 +27,9 @@ const eventNames = [
   'one_to_one_cta_click',
   'whatsapp_click',
   'intro_call_click',
+  'corporate_page_view',
+  'corporate_inquiry_start',
+  'corporate_inquiry_submit',
 ] as const;
 
 const eventSchema = z

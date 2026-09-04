@@ -202,6 +202,24 @@ export function HomePage({ catalog }: { catalog: HubCatalog | null }) {
         <Testimonials />
       </section>
 
+      <section className="corporate-home-preview site-shell" aria-labelledby="corporate-home-title">
+        <div>
+          <span className="eyebrow">Kurumlar için</span>
+          <h2 id="corporate-home-title">
+            Her çalışanın ihtiyacı aynı değil. Pratiği de aynı olmamalı.
+          </h2>
+        </div>
+        <div>
+          <p>
+            Kurumların çalışanlarına sunabileceği, dört bireysel görüşme ve sekiz haftalık kişisel
+            pratik takibinden oluşan mindfulness programı.
+          </p>
+          <Link className="text-link" href={publicRoutes.corporate}>
+            Programı incele <ArrowRight size={17} />
+          </Link>
+        </div>
+      </section>
+
       <section className="home-final-cta">
         <div className="site-shell final-cta-inner">
           <div>

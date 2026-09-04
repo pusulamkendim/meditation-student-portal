@@ -2,10 +2,14 @@ import { ChevronDown } from 'lucide-react';
 
 import { oneToOneFaq } from '../../lib/content/marketing';
 
-export function FAQ() {
+export function FAQ({
+  items = oneToOneFaq,
+}: {
+  items?: ReadonlyArray<{ question: string; answer: string }>;
+}) {
   return (
     <div className="faq-list">
-      {oneToOneFaq.map((item) => (
+      {items.map((item) => (
         <details key={item.question}>
           <summary>
             <span>{item.question}</span>

@@ -11,7 +11,10 @@ export type AnalyticsEventName =
   | 'one_to_one_page_view'
   | 'one_to_one_cta_click'
   | 'whatsapp_click'
-  | 'intro_call_click';
+  | 'intro_call_click'
+  | 'corporate_page_view'
+  | 'corporate_inquiry_start'
+  | 'corporate_inquiry_submit';
 
 export interface AnalyticsProperties {
   slug?: string;
@@ -163,6 +166,22 @@ function readAttribution(): AnalyticsAttribution {
     // Attribution is best effort and never blocks tracking.
   }
   return next;
+}
+
+export function getAnalyticsContext(): {
+  sessionId?: string;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+} {
+  if (typeof window === 'undefined') return {};
+  const attribution = readAttribution();
+  return {
+    sessionId: getSessionId(),
+    ...(attribution.utm_source ? { utm_source: attribution.utm_source } : {}),
+    ...(attribution.utm_medium ? { utm_medium: attribution.utm_medium } : {}),
+    ...(attribution.utm_campaign ? { utm_campaign: attribution.utm_campaign } : {}),
+  };
 }
 
 function buildPayload(event: AnalyticsEventName, properties: AnalyticsProperties) {

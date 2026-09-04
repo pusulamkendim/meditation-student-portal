@@ -283,3 +283,96 @@ export const oneToOneFaq = [
       'Evet. Görüşmede pratiğin nasıl yapılacağını adım adım açıklıyor ve birlikte uyguluyoruz. Süreç başlangıç seviyene göre oluşturulur.',
   },
 ] as const;
+
+export const corporateProgramPhases = [
+  {
+    number: '01',
+    label: 'Başlangıç görüşmesi',
+    title: 'Deneyimi ve gündelik ritmi anlamak',
+    text: 'Dikkat, otomatik pilot ve stres sinyalleri üzerine çalışır; kişiye özel meditasyon ve pratik planını birlikte oluştururuz.',
+  },
+  {
+    number: '02',
+    label: 'Sekiz hafta boyunca',
+    title: 'Pratiği gündelik hayatın içinde takip etmek',
+    text: 'Çalışan Sakin Zihin portalını, hatırlatmaları, sayacı ve check-in sistemini kullanır. Gerektiğinde kısa mesaj desteğiyle planı uygulanabilir tutarız.',
+  },
+  {
+    number: '03',
+    label: 'Üç takip görüşmesi',
+    title: 'Gerçek deneyime göre pratiği uyarlamak',
+    text: 'Düşünceler, duygular ve bedenle ilişkiyi ele alır; süreyi, tekniği ve haftalık ritmi çalışanın deneyimine göre derinleştirir veya sadeleştiririz.',
+  },
+  {
+    number: '04',
+    label: 'Program sonu',
+    title: 'Bireysel değerlendirme ve sürdürülebilir plan',
+    text: 'Sekiz haftayı birlikte değerlendirir, çalışanın tek başına sürdürebileceği bir pratik düzeni oluştururuz.',
+  },
+] as const;
+
+export const corporateSystemSteps = [
+  'Bireysel başlangıç görüşmesi',
+  'Teorik açıklama ve birlikte yapılan pratik',
+  'Kişiye göre gün, saat, süre ve teknik seçimi',
+  'Sekiz hafta boyunca Sakin Zihin portalına erişim',
+  'WhatsApp veya Telegram üzerinden günlük hatırlatma',
+  'Sayaçla pratik ve “Yaptım / Yapamadım” check-in’i',
+  'İsteğe bağlı yazılı veya sesli refleksiyon',
+  'Üç bireysel takip görüşmesi',
+  'Gerektiğinde kısa mesaj ve check-in desteği',
+  'Program sonunda bireysel değerlendirme',
+] as const;
+
+export const corporateFaq = [
+  {
+    question: 'Program grup eğitimi mi?',
+    answer:
+      'Hayır. Kurum programı çalışanlarına sunar; eğitim ve takip her çalışanla birebir yürütülür.',
+  },
+  {
+    question: 'Sekiz hafta nasıl ilerliyor?',
+    answer:
+      'Program bir başlangıç görüşmesiyle başlar. Ardından sekiz haftalık pratik takibi içinde üç takip görüşmesi yapılır; program bireysel değerlendirmeyle tamamlanır.',
+  },
+  {
+    question: 'Daha önce meditasyon yapmış olmak gerekiyor mu?',
+    answer:
+      'Hayır. Teknikler başlangıçtan itibaren açıklanır ve görüşmede birlikte uygulanır. Plan, çalışanın deneyimine göre şekillenir.',
+  },
+  {
+    question: 'Görüşmeler mesai saatleri dışında yapılabilir mi?',
+    answer:
+      'Evet. Kurumun çerçevesi ve çalışanın programı doğrultusunda uygun saatler birlikte belirlenebilir.',
+  },
+  {
+    question: 'Şirket bireysel verileri görebilir mi?',
+    answer:
+      'Hayır. İsimler, görüşme içerikleri, check-in’ler, refleksiyonlar ve kişisel güçlükler kurumla paylaşılmaz. En az beş katılımcı olduğunda yalnızca anonim toplu özet hazırlanabilir.',
+  },
+  {
+    question: 'Refleksiyon bırakmak zorunlu mu?',
+    answer:
+      'Hayır. Çalışan yalnızca “Yaptım” veya “Yapamadım” diyebilir; yazılı ya da sesli refleksiyon tamamen isteğe bağlıdır.',
+  },
+  {
+    question: 'WhatsApp ve Telegram arasında seçim yapılabilir mi?',
+    answer:
+      'Evet. Günlük hatırlatma ve check-in mesajları için çalışan tercih ettiği kanalı kullanabilir.',
+  },
+  {
+    question: 'Program terapi veya psikolojik danışmanlık mı?',
+    answer:
+      'Hayır. Bu çalışma mindfulness ve meditasyon eğitimidir; psikoterapi, klinik değerlendirme veya acil destek hizmeti değildir.',
+  },
+  {
+    question: 'Sekiz haftadan sonra devam edilebilir mi?',
+    answer:
+      'Evet. Program sonu değerlendirmesinde ihtiyaç ve pratik düzeni ele alınarak yeni bir çalışma dönemi planlanabilir.',
+  },
+  {
+    question: 'Aynı anda kaç çalışan katılabilir?',
+    answer:
+      'Birebir görüşme kapasitesi ve kurumun takvimi birlikte değerlendirilir. Formda düşündüğünüz katılımcı sayısını ve zamanlamayı paylaşabilirsiniz.',
+  },
+] as const;
